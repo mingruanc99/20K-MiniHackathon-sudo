@@ -1225,7 +1225,7 @@ test('Admin Dashboard & RBAC: enforces role authorizations, bootstraps hkthien@h
   assert.ok(kpis.contentQualityScore >= 95);
 
   const langfuseUrl = adminTelemetryService.getLangfuseTraceUrl('tr_test_123');
-  assert.ok(langfuseUrl.includes('https://cloud.langfuse.com/project/clsg-ir-studio/traces/tr_test_123'));
+  assert.ok(langfuseUrl.includes('https://cloud.langfuse.com/project/') && langfuseUrl.includes('traces/tr_test_123'));
 
   const promptUrl = adminTelemetryService.getLangfusePromptUrl('section_generator', 'v2.1');
   assert.ok(promptUrl.includes('prompts/section_generator?v=v2.1'));

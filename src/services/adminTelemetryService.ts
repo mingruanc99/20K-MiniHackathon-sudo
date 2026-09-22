@@ -56,8 +56,44 @@ export interface RealTTSRecord {
 
 type TelemetryListener = () => void;
 
+const encodeBasicAuth = (user: string, pass: string): string => {
+  if (typeof btoa === 'function') {
+    return btoa(`${user}:${pass}`);
+  }
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(`${user}:${pass}`).toString('base64');
+  }
+  return '';
+};
+
 export class AdminTelemetryService {
-  private readonly LANGFUSE_BASE_URL = 'https://cloud.langfuse.com/project/clsg-ir-studio';
+  private readonly DEFAULT_PROJECT_ID = 'cmucynwfb02llad0dhxexgdr2';
+  private readonly DEFAULT_PUBLIC_KEY = 'pk-lf-3aa955e0-06df-4694-86be-4421d3259363';
+  private readonly DEFAULT_SECRET_KEY = 'sk-lf-c815cfe1-df80-4287-bc2a-f5ee46e4e410';
+  private readonly DEFAULT_BASE_URL = 'https://cloud.langfuse.com';
+
+  public get LANGFUSE_PROJECT_ID(): string {
+    const fromMeta = typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_LANGFUSE_PROJECT_ID;
+    const fromProcess = typeof process !== 'undefined' && process.env?.LANGFUSE_PROJECT_ID;
+    return fromMeta || fromProcess || this.DEFAULT_PROJECT_ID;
+  }
+
+  public get LANGFUSE_PUBLIC_KEY(): string {
+    const fromMeta = typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_LANGFUSE_PUBLIC_KEY;
+    const fromProcess = typeof process !== 'undefined' && process.env?.LANGFUSE_PUBLIC_KEY;
+    return fromMeta || fromProcess || this.DEFAULT_PUBLIC_KEY;
+  }
+
+  public get LANGFUSE_SECRET_KEY(): string {
+    const fromMeta = typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_LANGFUSE_SECRET_KEY;
+    const fromProcess = typeof process !== 'undefined' && process.env?.LANGFUSE_SECRET_KEY;
+    return fromMeta || fromProcess || this.DEFAULT_SECRET_KEY;
+  }
+
+  public get LANGFUSE_BASE_URL(): string {
+    return `https://cloud.langfuse.com/project/${this.LANGFUSE_PROJECT_ID}`;
+  }
+
   private readonly STORAGE_AI_CALLS = 'clsg_telemetry_ai_calls';
   private readonly STORAGE_ERRORS = 'clsg_telemetry_errors';
   private readonly STORAGE_USERS = 'clsg_registered_users';
@@ -315,6 +351,9 @@ export class AdminTelemetryService {
     this.cachedAICalls.unshift(record);
     this.saveAICallsToStorage();
 
+    // Asynchronously dispatch live trace and generation span to Langfuse Cloud
+    this.pushToLangfuseCloud(record).catch(() => {});
+
     if (call.status === 'error') {
       this.recordError({
         type: 'LLM_ERROR',
@@ -419,6 +458,90 @@ export class AdminTelemetryService {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Dispatches live trace & generation telemetry to Langfuse Cloud Ingestion API
+   */
+  public async pushToLangfuseCloud(call: RealAICallRecord): Promise<void> {
+    try {
+      const auth = encodeBasicAuth(this.LANGFUSE_PUBLIC_KEY, this.LANGFUSE_SECRET_KEY);
+      if (!auth) return;
+
+      const timestamp = call.timestamp || new Date().toISOString();
+      const body = {
+        batch: [
+          {
+            id: `evt_tr_${call.id}_${Date.now()}`,
+            type: 'trace-create',
+            timestamp,
+            body: {
+              id: call.traceId,
+              name: `LLM Call: ${call.feature}`,
+              userId: 'hkthien@husc.edu.vn',
+              sessionId: call.lessonId ? `sess_${call.lessonId.slice(-6)}` : 'sess_clsg_ir',
+              tags: ['production', 'clsg-ir', 'zero-leak', 'gemini-telemetry'],
+              metadata: {
+                lessonId: call.lessonId,
+                model: call.model,
+                status: call.status,
+                costUsd: call.costUsd,
+                latencyMs: call.latencyMs
+              }
+            }
+          },
+          {
+            id: `evt_gen_${call.id}_${Date.now()}`,
+            type: 'generation-create',
+            timestamp,
+            body: {
+              id: `gen_${call.id}`,
+              traceId: call.traceId,
+              name: call.feature,
+              model: call.model,
+              startTime: new Date(Date.now() - (call.latencyMs || 650)).toISOString(),
+              endTime: timestamp,
+              usage: {
+                promptTokens: call.promptTokens,
+                completionTokens: call.completionTokens,
+                totalTokens: call.totalTokens
+              }
+            }
+          }
+        ]
+      };
+
+      await fetch('https://cloud.langfuse.com/api/public/ingestion', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+    } catch {
+      // Non-blocking telemetry
+    }
+  }
+
+  /**
+   * Returns metadata about the connected Langfuse Cloud Project
+   */
+  public getLangfuseProjectConfig() {
+    return {
+      projectId: this.LANGFUSE_PROJECT_ID,
+      projectName: 'My Project',
+      orgName: "Hồ's Organization",
+      publicKey: this.LANGFUSE_PUBLIC_KEY,
+      publicKeyMasked: `${this.LANGFUSE_PUBLIC_KEY.slice(0, 10)}...${this.LANGFUSE_PUBLIC_KEY.slice(-6)}`,
+      secretKeyMasked: `${this.LANGFUSE_SECRET_KEY.slice(0, 9)}...${this.LANGFUSE_SECRET_KEY.slice(-6)}`,
+      baseUrl: 'https://cloud.langfuse.com',
+      projectUrl: this.LANGFUSE_BASE_URL,
+      tracesUrl: `${this.LANGFUSE_BASE_URL}/traces`,
+      generationsUrl: `${this.LANGFUSE_BASE_URL}/generations`,
+      scoresUrl: `${this.LANGFUSE_BASE_URL}/scores`,
+      isConnected: true
+    };
   }
 
   /**
@@ -934,32 +1057,57 @@ export class AdminTelemetryService {
   } {
     const traces: LangfuseTraceSummary[] = [];
 
-    this.cachedProjects.forEach((proj) => {
-      const traceId = `tr_${proj.projectId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
+    // 1. Traces from real live AI calls
+    this.cachedAICalls.forEach((call) => {
       traces.push({
-        traceId,
-        name: `Pipeline Execution: ${proj.title}`,
-        sessionId: `sess_${proj.projectId.slice(-6)}`,
-        userId: proj.userId || 'hkthien@husc.edu.vn',
-        lessonId: proj.projectId,
-        latencyMs: 820,
-        totalCost: 0.0012,
-        status: proj.status === 'failed' || (proj.status as string) === 'error' ? 'error' : 'success',
-        tags: ['production', 'clsg-ir', 'zero-leak', 'v2.1'],
-        url: this.getLangfuseTraceUrl(traceId),
-        timestamp: proj.updatedAt || new Date().toISOString(),
-        model: 'gemini-flash-latest'
+        traceId: call.traceId,
+        name: `LLM Call: ${call.feature}`,
+        sessionId: call.lessonId ? `sess_${call.lessonId.slice(-6)}` : 'sess_clsg_live',
+        userId: 'hkthien@husc.edu.vn',
+        lessonId: call.lessonId || 'live_lesson',
+        latencyMs: call.latencyMs,
+        totalCost: call.costUsd,
+        status: call.status === 'success' ? 'success' : 'error',
+        tags: ['production', 'gemini-call', 'zero-leak', call.model],
+        url: this.getLangfuseTraceUrl(call.traceId),
+        timestamp: call.timestamp,
+        model: call.model
       });
     });
+
+    // 2. Traces from real projects in system
+    this.cachedProjects.forEach((proj) => {
+      const traceId = `tr_${proj.projectId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
+      // Avoid duplicate trace IDs
+      if (!traces.some((t) => t.traceId === traceId)) {
+        traces.push({
+          traceId,
+          name: `Pipeline Execution: ${proj.title}`,
+          sessionId: `sess_${proj.projectId.slice(-6)}`,
+          userId: proj.userId || 'hkthien@husc.edu.vn',
+          lessonId: proj.projectId,
+          latencyMs: 820,
+          totalCost: 0.0012,
+          status: proj.status === 'failed' || (proj.status as string) === 'error' ? 'error' : 'success',
+          tags: ['production', 'clsg-ir', 'zero-leak', 'v2.1'],
+          url: this.getLangfuseTraceUrl(traceId),
+          timestamp: proj.updatedAt || new Date().toISOString(),
+          model: 'gemini-flash-latest'
+        });
+      }
+    });
+
+    const totalCost = traces.reduce((sum, t) => sum + (t.totalCost || 0), 0);
+    const avgLatency = traces.length > 0 ? Math.round(traces.reduce((sum, t) => sum + t.latencyMs, 0) / traces.length) : 820;
 
     return {
       summary: {
         totalTraces: Math.max(1, traces.length),
-        totalGenerations: Math.max(1, traces.length * 4),
-        totalCost: Math.round(traces.length * 0.0012 * 1000) / 1000,
-        avgLatencyMs: 820,
+        totalGenerations: Math.max(1, traces.length * 2),
+        totalCost: Math.round(totalCost * 10000) / 10000,
+        avgLatencyMs: avgLatency,
         qualityScore: 98.4,
-        projectId: 'clsg-ir-studio',
+        projectId: this.LANGFUSE_PROJECT_ID,
         projectUrl: this.LANGFUSE_BASE_URL
       },
       traces

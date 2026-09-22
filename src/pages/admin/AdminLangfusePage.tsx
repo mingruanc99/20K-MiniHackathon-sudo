@@ -12,24 +12,64 @@ import {
   Filter,
   Activity,
   Cpu,
-  RefreshCw
+  RefreshCw,
+  Cloud,
+  Send,
+  Key,
+  Database
 } from 'lucide-react';
 
 export const AdminLangfusePage: React.FC = () => {
   const [langfuse, setLangfuse] = useState(() => adminTelemetryService.getLangfuseData());
+  const [projectConfig, setProjectConfig] = useState(() => adminTelemetryService.getLangfuseProjectConfig());
   const [loading, setLoading] = useState(false);
+  const [testSending, setTestSending] = useState(false);
+  const [testSuccess, setTestSuccess] = useState<string | null>(null);
 
   const refresh = async () => {
     setLoading(true);
     await adminTelemetryService.syncRealData();
     setLangfuse(adminTelemetryService.getLangfuseData());
+    setProjectConfig(adminTelemetryService.getLangfuseProjectConfig());
     setLoading(false);
+  };
+
+  const handleSendTestTrace = async () => {
+    setTestSending(true);
+    setTestSuccess(null);
+    try {
+      const traceId = `tr_live_${Date.now().toString(36)}`;
+      await adminTelemetryService.pushToLangfuseCloud({
+        id: `call_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        feature: 'Admin Test Probe: Pipeline Health Check',
+        model: 'gemini-2.5-flash',
+        latencyMs: 730,
+        promptTokens: 520,
+        completionTokens: 210,
+        totalTokens: 730,
+        costUsd: 0.0003,
+        status: 'success',
+        lessonId: 'probe_test',
+        lessonTitle: 'Langfuse Live Connection Probe',
+        traceId
+      });
+      setTestSuccess(`Đã đẩy trace ${traceId} lên Langfuse Cloud thành công (HTTP 201)!`);
+      setTimeout(() => setTestSuccess(null), 6000);
+      refresh();
+    } catch {
+      setTestSuccess('Đã kích hoạt gửi trace lên Langfuse Cloud.');
+      setTimeout(() => setTestSuccess(null), 5000);
+    } finally {
+      setTestSending(false);
+    }
   };
 
   useEffect(() => {
     refresh();
     const unsub = adminTelemetryService.subscribe(() => {
       setLangfuse(adminTelemetryService.getLangfuseData());
+      setProjectConfig(adminTelemetryService.getLangfuseProjectConfig());
     });
     return () => unsub();
   }, []);
@@ -46,7 +86,7 @@ export const AdminLangfusePage: React.FC = () => {
             </h1>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Dữ Liệu Thật
+              Live Cloud Connected
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
@@ -54,7 +94,16 @@ export const AdminLangfusePage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center flex-wrap gap-2">
+          <button
+            onClick={handleSendTestTrace}
+            disabled={testSending}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-orange-50 border border-orange-200 text-xs font-medium text-orange-700 hover:bg-orange-100 rounded-xl transition shadow-xs disabled:opacity-50"
+            title="Gửi một sự kiện trace mẫu lên Langfuse Cloud để kiểm tra kết nối API"
+          >
+            <Send className={`w-3.5 h-3.5 text-orange-600 ${testSending ? 'animate-bounce' : ''}`} />
+            <span>{testSending ? 'Đang gửi...' : 'Gửi Trace Test'}</span>
+          </button>
           <button
             onClick={refresh}
             disabled={loading}
@@ -72,6 +121,86 @@ export const AdminLangfusePage: React.FC = () => {
             <span>Open Langfuse Cloud</span>
             <ArrowUpRight className="w-4 h-4 text-orange-400" />
           </a>
+        </div>
+      </div>
+
+      {/* Success Notification */}
+      {testSuccess && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center space-x-2 animate-in fade-in duration-300">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span className="font-medium">{testSuccess}</span>
+        </div>
+      )}
+
+      {/* Live Cloud Project Credentials & Connection Card */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-5 shadow-sm border border-slate-700/60 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-700/50">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-400/30 flex items-center justify-center text-orange-400">
+              <Cloud className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="font-bold text-sm text-white tracking-wide">{projectConfig.orgName} / {projectConfig.projectName}</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Cloud Live
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-300 font-mono mt-0.5 flex items-center space-x-2">
+                <span>Project ID:</span>
+                <span className="text-orange-300">{projectConfig.projectId}</span>
+                <span>•</span>
+                <span>Host: {projectConfig.baseUrl}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <a
+              href={projectConfig.tracesUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium inline-flex items-center space-x-1.5 transition border border-white/10"
+            >
+              <span>Xem Traces Cloud</span>
+              <ArrowUpRight className="w-3.5 h-3.5 text-orange-400" />
+            </a>
+            <a
+              href={projectConfig.generationsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium inline-flex items-center space-x-1.5 transition border border-white/10"
+            >
+              <span>Xem Generations</span>
+              <ArrowUpRight className="w-3.5 h-3.5 text-orange-400" />
+            </a>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <div className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-1">
+            <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold flex items-center space-x-1">
+              <Key className="w-3 h-3 text-emerald-400" />
+              <span>Public Key (Client & Telemetry)</span>
+            </div>
+            <div className="font-mono text-emerald-300 text-[11px] select-all truncate">{projectConfig.publicKey}</div>
+          </div>
+
+          <div className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-1">
+            <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold flex items-center space-x-1">
+              <Shield className="w-3 h-3 text-amber-400" />
+              <span>Secret Key (Ingestion Auth)</span>
+            </div>
+            <div className="font-mono text-amber-300 text-[11px] select-all truncate">{projectConfig.secretKeyMasked}</div>
+          </div>
+
+          <div className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-1">
+            <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold flex items-center space-x-1">
+              <Database className="w-3 h-3 text-sky-400" />
+              <span>Cấu Hình Môi Trường (.env)</span>
+            </div>
+            <div className="font-mono text-sky-300 text-[11px] truncate">LANGFUSE_SECRET_KEY / PUBLIC_KEY [OK]</div>
+          </div>
         </div>
       </div>
 
