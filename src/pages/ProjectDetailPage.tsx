@@ -19,8 +19,6 @@ import { CLSGIRInspector } from '../components/pipeline/CLSGIRInspector';
 import { VideoPreview } from '../components/pipeline/VideoPreview';
 import { DecisionTrace } from '../components/pipeline/DecisionTrace';
 import { technicalTerminologyService } from '../pipeline/services/technicalTerminologyService';
-import { ApiKeyModal } from '../components/common/ApiKeyModal';
-import { apiKeyService } from '../services/llm/apiKeyService';
 import {
   Sparkles,
   Play,
@@ -30,8 +28,7 @@ import {
   AlertCircle,
   FileText,
   Clock,
-  Layers,
-  KeyRound
+  Layers
 } from 'lucide-react';
 
 export const ProjectDetailPage: React.FC = () => {
@@ -46,7 +43,6 @@ export const ProjectDetailPage: React.FC = () => {
   const [pipelineError, setPipelineError] = useState<string>('');
   const [progressMsg, setProgressMsg] = useState('');
   const [traceLogs, setTraceLogs] = useState<ExecutionTraceLog[]>([]);
-  const [showKeyModal, setShowKeyModal] = useState(false);
 
   useEffect(() => {
     if (user && id) {
@@ -141,12 +137,6 @@ export const ProjectDetailPage: React.FC = () => {
   const runPipeline = async (targetProject?: Project) => {
     const proj = targetProject || project;
     if (!proj) return;
-
-    if (!apiKeyService.hasApiKey()) {
-      setShowKeyModal(true);
-      setPipelineError('Ứng dụng đang hoạt động ở chế độ Trực tuyến (Online LLM). Vui lòng cấu hình Gemini API Key để thực thi.');
-      return;
-    }
 
     try {
       setPipelineError('');
@@ -253,15 +243,6 @@ export const ProjectDetailPage: React.FC = () => {
         {/* Action Controls */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowKeyModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition"
-            title="Cấu hình Google Gemini API Key"
-          >
-            <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="hidden sm:inline">Cài đặt API Key</span>
-          </button>
-
-          <button
             onClick={() => runPipeline()}
             disabled={pipelineRunning}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition disabled:opacity-50"
@@ -357,16 +338,6 @@ export const ProjectDetailPage: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* API Key Modal */}
-      <ApiKeyModal
-        isOpen={showKeyModal}
-        onClose={() => setShowKeyModal(false)}
-        onSaved={() => {
-          setShowKeyModal(false);
-          runPipeline();
-        }}
-      />
     </div>
   );
 };

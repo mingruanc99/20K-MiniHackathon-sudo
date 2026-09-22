@@ -2,21 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { BookOpen, LogOut, Plus, ShieldCheck, Sparkles, User as UserIcon, UploadCloud, KeyRound } from 'lucide-react';
-import { ApiKeyModal } from '../common/ApiKeyModal';
-import { apiKeyService } from '../../services/llm/apiKeyService';
+import { BookOpen, LogOut, Plus, ShieldCheck, Sparkles, User as UserIcon, UploadCloud } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [showKeyModal, setShowKeyModal] = useState(false);
-  const [hasKey, setHasKey] = useState(apiKeyService.hasApiKey());
-
-  useEffect(() => {
-    return apiKeyService.subscribe((k) => {
-      setHasKey(!!k);
-    });
-  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -56,22 +46,11 @@ export const Navbar: React.FC = () => {
 
         {/* Right Actions */}
         <div className="flex items-center gap-3">
-          {/* Online LLM Status & Key Config */}
-          <button
-            onClick={() => setShowKeyModal(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition cursor-pointer shadow-2xs ${
-              hasKey
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100'
-                : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100 animate-pulse'
-            }`}
-            title="Nhấn để cấu hình Google Gemini API Key"
-          >
-            <span className={`w-2 h-2 rounded-full ${hasKey ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
-            <span className="font-semibold">
-              {hasKey ? 'LLM Trực Tuyến: Gemini' : 'Chưa có Gemini API Key'}
-            </span>
-            <KeyRound className="w-3.5 h-3.5 ml-0.5 opacity-70" />
-          </button>
+          {/* Active AI Status Pill (No interactive prompt/button) */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span className="font-semibold">AI Engine: Gemini 2.5 Flash</span>
+          </div>
 
           {/* User Profile */}
           {user ? (
@@ -108,9 +87,6 @@ export const Navbar: React.FC = () => {
           )}
         </div>
       </div>
-
-      {/* API Key Configuration Modal */}
-      <ApiKeyModal isOpen={showKeyModal} onClose={() => setShowKeyModal(false)} />
     </header>
   );
 };
