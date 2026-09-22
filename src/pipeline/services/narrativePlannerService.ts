@@ -62,10 +62,14 @@ export class NarrativePlannerService {
     const cumulativeExplainedConcepts = new Set<string>();
 
     // Pass 1: Infer Slide Analysis with Content Filtering & Core Message for every section
+    let hasEncounteredHook = false;
     sections.forEach((sec, idx) => {
       const docSec = docMap.get(sec.section_id);
       const effectiveOrder = sec.order || idx + 1;
-      const analysis = this.analyzeSlide(sec, docSec, effectiveOrder, total);
+      const analysis = this.analyzeSlide(sec, docSec, effectiveOrder, total, hasEncounteredHook);
+      if (analysis.slide_role === 'HOOK') {
+        hasEncounteredHook = true;
+      }
       analyses.set(sec.section_id, analysis);
     });
 
@@ -204,6 +208,13 @@ export class NarrativePlannerService {
           return 'Đặt ra vấn đề về việc xác định keypoint và pose từ một góc nhìn cụ thể.';
         }
         return `Đặt ra vấn đề về ${t} qua tình huống thực tế để khơi gợi tư duy.`;
+      case 'THINK':
+      case 'QUESTION':
+        return `Kích thích suy luận và đặt câu hỏi tại sao việc xác định ${t} lại là một thách thức lớn.`;
+      case 'MECHANISM':
+        return `Giải thích cơ chế mô hình giải quyết thách thức của ${t} thông qua các mối quan hệ không gian.`;
+      case 'TECHNICAL':
+        return `Phân tích sâu về mặt kỹ thuật thuật toán vận hành của ${t}.`;
       case 'CORE_CONCEPT':
         return `${t} là khái niệm nền tảng xác định cách mô hình biểu diễn dữ liệu.`;
       case 'KEY_EXPLANATION':
@@ -233,7 +244,8 @@ export class NarrativePlannerService {
     sec: SectionPlan,
     docSec: DocumentSection | undefined,
     order: number,
-    total: number
+    total: number,
+    hasPriorHook: boolean = false
   ): SlideAnalysis {
     const title = (sec.title || '').trim();
     const titleLower = title.toLowerCase();
@@ -273,9 +285,59 @@ export class NarrativePlannerService {
         instructionalText.toLowerCase().includes('vô-lăng') ||
         (instructionalText.includes('?') && !instructionalText.toLowerCase().includes('what is cnn') && !isDefinitional));
 
-    if (isQuestionOrHook && order <= 4) {
-      role = 'HOOK';
+    // 1. Mechanism / Model Solution
+    if (
+      titleLower.includes('mechanism') ||
+      titleLower.includes('cơ chế') ||
+      cleanCombined.includes('mối quan hệ không gian') ||
+      cleanCombined.includes('đồ thị khung xương') ||
+      (order >= 4 && cleanCombined.includes('giải quyết vấn đề')) ||
+      (order >= 4 && cleanCombined.includes('học mối quan hệ'))
+    ) {
+      role = 'MECHANISM';
+      importance = 'high';
+      instructionalVal = 'high';
+      contentType = 'mechanism';
+    }
+    // 2. Example / Case Study / Concrete scenario
+    else if (
+      titleLower.includes('example') ||
+      titleLower.includes('ví dụ') ||
+      titleLower.includes('walkthrough') ||
+      titleLower.includes('case study') ||
+      titleLower.includes('concrete') ||
+      cleanCombined.includes('cánh tay bị che') ||
+      cleanCombined.includes('bị che một phần') ||
+      cleanCombined.includes('occlu') ||
+      (order === 3 && (cleanCombined.includes('trong hình') || cleanCombined.includes('ảnh này') || cleanCombined.includes('tình huống')))
+    ) {
+      role = 'EXAMPLE';
       importance = 'medium';
+      instructionalVal = 'high';
+      contentType = 'example';
+    }
+    // 3. Think / Question / Cognitive reflection (S2 or challenge prompt)
+    else if (
+      titleLower.includes('hãy suy nghĩ') ||
+      titleLower.includes('suy nghĩ') ||
+      titleLower.includes('think') ||
+      titleLower.includes('puzzle') ||
+      titleLower.includes('thử thách') ||
+      (hasPriorHook && isQuestionOrHook) ||
+      (order === 2 && isQuestionOrHook && (titleLower.includes('suy nghĩ') || cleanCombined.includes('xác định được đâu là')))
+    ) {
+      role = hasPriorHook ? 'THINK' : 'HOOK';
+      importance = 'high';
+      instructionalVal = 'high';
+      contentType = 'question';
+    }
+    // 4. Hook / Curiosity (S1 or first curiosity challenge)
+    else if (
+      (order === 1 && (isQuestionOrHook || titleLower.includes('hook') || cleanCombined.includes('tài xế') || cleanCombined.includes('tay trái'))) ||
+      (!hasPriorHook && isQuestionOrHook && order <= 2)
+    ) {
+      role = 'HOOK';
+      importance = 'high';
       instructionalVal = 'high';
       contentType = 'question';
     }
@@ -473,6 +535,13 @@ export class NarrativePlannerService {
         return 'Short Orientation (1–2 sentences, no theoretical dump)';
       case 'HOOK':
         return 'Curiosity Prompt / Question (1–3 sentences, no immediate technical explanation)';
+      case 'THINK':
+      case 'QUESTION':
+        return 'Cognitive Challenge & Reflection (1–2 questions exploring why this is hard)';
+      case 'MECHANISM':
+        return 'System Resolution & Spatial/Structural Causal Logic (2–4 sentences)';
+      case 'TECHNICAL':
+        return 'Algorithmic Mechanics & Component Implementation (2–5 sentences)';
       case 'CORE_CONCEPT':
         return 'Intuition → Definition → Significance (2–4 sentences)';
       case 'KEY_EXPLANATION':
@@ -500,9 +569,13 @@ export class NarrativePlannerService {
     switch (role) {
       case 'INTRODUCTION':
       case 'HOOK':
+      case 'THINK':
+      case 'QUESTION':
         return 'INTRODUCE';
       case 'CORE_CONCEPT':
       case 'PROCESS':
+      case 'MECHANISM':
+      case 'TECHNICAL':
         return 'EXPLAIN';
       case 'KEY_EXPLANATION':
         return 'ELABORATE';
@@ -538,6 +611,20 @@ export class NarrativePlannerService {
       };
     }
 
+    if (currRole === 'THINK' || currRole === 'QUESTION') {
+      return {
+        type: 'INTRODUCES',
+        reason: `Đặt câu hỏi kích thích suy luận kết nối từ vấn đề thực tế sang cơ chế giải quyết.`
+      };
+    }
+
+    if (currRole === 'MECHANISM') {
+      return {
+        type: 'EXPLAINS',
+        reason: `Giải thích cơ chế giải quyết vấn đề đã được đặt ra ở các phân cảnh trước.`
+      };
+    }
+
     if (currRole === 'EXAMPLE') {
       return {
         type: 'ILLUSTRATES',
@@ -569,7 +656,21 @@ export class NarrativePlannerService {
     if (currRole === 'EVIDENCE') {
       return {
         type: 'PROVIDES_EVIDENCE_FOR',
-        reason: `Slide ${currPlan.section_id} đưa ra số liệu thực nghiệm minh chứng cho hiệu năng.`
+        reason: `Slide ${currPlan.section_id} đưa ra bằng chứng thực nghiệm củng cố lý thuyết trước đó.`
+      };
+    }
+
+    if (currRole === 'CORE_CONCEPT' && prevRole === 'CORE_CONCEPT') {
+      return {
+        type: 'CONTINUES',
+        reason: `Phát triển tiếp hệ thống khái niệm liên quan.`
+      };
+    }
+
+    if (currRole === 'KEY_EXPLANATION' && (prevRole === 'CORE_CONCEPT' || prevRole === 'INTRODUCTION')) {
+      return {
+        type: 'DEEPENS',
+        reason: `Đi sâu vào cơ chế chi tiết từ khái niệm nền tảng ban đầu.`
       };
     }
 
@@ -594,7 +695,7 @@ export class NarrativePlannerService {
 
     return {
       type: 'CONTINUES',
-      reason: `Slide ${currPlan.section_id} nối tiếp tiến trình sư phạm từ slide trước.`
+      reason: `Nối tiếp mạch bài học một cách tự nhiên.`
     };
   }
 
@@ -611,6 +712,18 @@ export class NarrativePlannerService {
       return {
         type: 'DEEPENS',
         reason: `Sau câu hỏi khơi gợi, slide kế tiếp sẽ phân tích cơ chế kỹ thuật.`
+      };
+    }
+    if (currRole === 'THINK' || currRole === 'QUESTION') {
+      return {
+        type: 'ILLUSTRATES',
+        reason: `Sau câu hỏi tư duy, phân cảnh tiếp theo sẽ minh họa ví dụ cụ thể hoặc giải thích cơ chế.`
+      };
+    }
+    if (currRole === 'MECHANISM') {
+      return {
+        type: 'DEEPENS',
+        reason: `Sau khi giải thích cơ chế nền tảng, phân cảnh kế tiếp sẽ đi sâu vào chi tiết kỹ thuật.`
       };
     }
     if (nextRole === 'EXAMPLE') {
@@ -647,16 +760,19 @@ export class NarrativePlannerService {
     if (order === 1 || analysis.slide_role === 'INTRODUCTION') {
       return 'DIRECT';
     }
-    if (analysis.slide_role === 'HOOK') {
+    if (analysis.slide_role === 'HOOK' || analysis.slide_role === 'THINK' || analysis.slide_role === 'QUESTION') {
       return 'QUESTION';
     }
     if (analysis.slide_role === 'EXAMPLE') {
       return 'EXAMPLE_INTRODUCTION';
     }
+    if (analysis.slide_role === 'MECHANISM' || analysis.slide_role === 'TECHNICAL') {
+      return 'DIRECT';
+    }
     if (analysis.slide_role === 'SUMMARY') {
       return 'SUMMARY_RECALL';
     }
-    if (relType === 'DEEPENS' || relType === 'CONTINUES' || relType === 'APPLIES') {
+    if (relType === 'DEEPENS') {
       return 'BRIDGE_FROM_PREVIOUS';
     }
     return 'DIRECT';

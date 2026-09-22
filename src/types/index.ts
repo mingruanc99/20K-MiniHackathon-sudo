@@ -93,6 +93,10 @@ export type PedagogicalRole = 'hook' | 'definition' | 'mechanism' | 'example' | 
 export type SlideRole =
   | 'INTRODUCTION'
   | 'HOOK'
+  | 'THINK'
+  | 'QUESTION'
+  | 'MECHANISM'
+  | 'TECHNICAL'
   | 'CORE_CONCEPT'
   | 'KEY_EXPLANATION'
   | 'PROCESS'
@@ -103,6 +107,33 @@ export type SlideRole =
   | 'SUMMARY'
   | 'TRANSITION'
   | 'DECORATIVE';
+
+export interface SectionSummaryInfo {
+  id: string;
+  title: string;
+  type: SlideRole;
+  narration: string;
+  opening_phrase?: string;
+  core_question?: string;
+}
+
+export interface GlobalNarrativeContext {
+  lesson_topic: string;
+  previous_sections: SectionSummaryInfo[];
+  current_section: {
+    id: string;
+    type: SlideRole;
+    title: string;
+  };
+  next_section?: {
+    id: string;
+    type: SlideRole;
+    title: string;
+  };
+  used_phrases: string[];
+  used_openings: string[];
+  used_concepts: string[];
+}
 
 export type ImportanceLevel = 'high' | 'medium' | 'low';
 export type InstructionalValue = 'high' | 'medium' | 'low';

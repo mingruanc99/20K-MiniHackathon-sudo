@@ -110,8 +110,11 @@ export class InstructionalPlanner {
         if (narrativePlan && matchingUnit.learning_need) {
           narrativePlan.learning_need = matchingUnit.learning_need;
         }
-        if (analysis && matchingUnit.stage === 'HOOK') {
-          analysis.slide_role = 'HOOK';
+        // Only mark the first slide of a HOOK unit as HOOK if it doesn't already have a more specific role
+        if (analysis && matchingUnit.stage === 'HOOK' && matchingUnit.slide_ids[0] === plan.section_id) {
+          if (analysis.slide_role !== 'INTRODUCTION' && analysis.slide_role !== 'THINK' && analysis.slide_role !== 'EXAMPLE' && analysis.slide_role !== 'MECHANISM') {
+            analysis.slide_role = 'HOOK';
+          }
         }
       }
 

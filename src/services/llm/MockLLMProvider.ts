@@ -467,8 +467,8 @@ export class MockLLMProvider implements ILLMProvider {
     // Keypoint & Pose Golden Cases
     if (titleLower.includes('khởi đầu') || titleLower.includes('hook') || focusLower.includes('tài xế')) {
       return isVi
-        ? 'Chào mừng các bạn đến với bài học về Keypoint & Pose. Trước khi đi vào phần kỹ thuật, hãy thử suy nghĩ một chút: nếu chỉ nhìn ảnh chụp một người từ bên phải khi đang lái xe, bạn có xác định được tay đang cầm vô-lăng là tay trái hay tay phải không?'
-        : 'Welcome to the lecture on Keypoint & Pose. Before diving into technical mechanics, consider a simple thought experiment: looking at a driver from the side, can you distinguish whether they are gripping the steering wheel with their left or right hand?';
+        ? 'Chào mừng các bạn đến với bài học về Keypoint & Pose. Bạn hãy thử nhìn một người từ góc này: liệu mô hình có thể xác định chính xác đâu là tay trái và tay phải?'
+        : 'Welcome to the lesson on Keypoint & Pose. Try looking at a person from this angle: can the model accurately distinguish between their left hand and right hand?';
     }
 
     if (titleLower.includes('bản chất của keypoint') || focusLower.includes('định nghĩa keypoint')) {

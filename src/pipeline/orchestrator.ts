@@ -12,7 +12,9 @@ import {
   CLSGScene,
   VerifiedCLSG_IR,
   QualityReport,
-  ExecutionTraceLog
+  ExecutionTraceLog,
+  GlobalNarrativeContext,
+  SectionSummaryInfo
 } from '../types';
 import { extractDocument } from './module1_extractor/extractorFactory';
 import { InstructionalPlanner } from './module2_planner/instructionalPlanner';
@@ -89,19 +91,66 @@ export class PipelineOrchestrator {
     const t4 = performance.now();
     const docMap = new Map(docTree.sections.map((s) => [s.section_id, s]));
 
-    const draftScenes: CLSGScene[] = blueprint.sections.map((plan, idx) => {
+    const draftScenes: CLSGScene[] = [];
+    const generatedHistory: SectionSummaryInfo[] = [];
+    const usedOpenings = new Set<string>();
+    const usedPhrases = new Set<string>();
+    const usedConcepts = new Set<string>();
+
+    for (let idx = 0; idx < blueprint.sections.length; idx++) {
+      const plan = blueprint.sections[idx];
       const docSec = docMap.get(plan.section_id);
       const prevPlan = idx > 0 ? blueprint.sections[idx - 1] : undefined;
       const nextPlan = idx < blueprint.sections.length - 1 ? blueprint.sections[idx + 1] : undefined;
       const matchingUnit = blueprint.teaching_units?.find((u) => u.slide_ids.includes(plan.section_id));
 
-      // 3A: Knowledge-Driven Narration Script
+      const globalContext: GlobalNarrativeContext = {
+        lesson_topic: blueprint.lecture_title || docTree.title,
+        previous_sections: [...generatedHistory],
+        current_section: {
+          id: plan.section_id,
+          type: plan.slide_analysis?.slide_role || (plan.pedagogical_function as any) || 'KEY_EXPLANATION',
+          title: plan.title
+        },
+        next_section: nextPlan ? {
+          id: nextPlan.section_id,
+          type: nextPlan.slide_analysis?.slide_role || (nextPlan.pedagogical_function as any) || 'KEY_EXPLANATION',
+          title: nextPlan.title
+        } : undefined,
+        used_phrases: Array.from(usedPhrases),
+        used_openings: Array.from(usedOpenings),
+        used_concepts: Array.from(usedConcepts)
+      };
+
+      // 3A: Knowledge-Driven Narration Script with Global Narrative Context
       const narrationText = this.narrationGen.generateNarration(plan, config, docSec?.raw_text, {
         previousPlan: prevPlan,
         nextPlan: nextPlan,
         lessonModel: blueprint.lesson_model,
-        teachingUnit: matchingUnit
+        teachingUnit: matchingUnit,
+        globalContext,
+        usedOpenings,
+        usedPhrases
       });
+
+      // Track opening sentence to prevent future sections from repeating it
+      const firstSentence = narrationText.split(/[.!?\n]/)[0]?.trim();
+      if (firstSentence && firstSentence.length > 5) {
+        usedOpenings.add(firstSentence.toLowerCase());
+        usedPhrases.add(firstSentence);
+      }
+
+      // Track key concepts
+      plan.key_concepts?.forEach((c) => usedConcepts.add(c.toLowerCase()));
+
+      generatedHistory.push({
+        id: plan.section_id,
+        title: plan.title,
+        type: plan.slide_analysis?.slide_role || 'KEY_EXPLANATION',
+        narration: narrationText,
+        opening_phrase: firstSentence
+      });
+
       const wordCount = narrationText.split(/\s+/).length;
 
       // 3B: Prosody & Pause Planning (Pre-TTS Intent)
@@ -110,7 +159,7 @@ export class PipelineOrchestrator {
       // 3C: Visual Intent Cues (13 Taxonomies)
       const visualCues = this.visualGen.generateVisualCues(plan, prosodyPlan, config);
 
-      return {
+      draftScenes.push({
         section_id: plan.section_id,
         topic: plan.title,
         order: plan.order,
@@ -129,8 +178,8 @@ export class PipelineOrchestrator {
         scene_start_time_sec: 0,
         scene_end_time_sec: prosodyPlan.effective_scene_duration_sec,
         scene_duration_sec: prosodyPlan.effective_scene_duration_sec
-      };
-    });
+      });
+    }
 
     const t5 = performance.now();
     traceLogs.push({

@@ -626,9 +626,9 @@ test('Natural & Focused Narration Upgrade: S1 Title Slide & S2 Hook Slide (Probl
   const s2Plan = { ...sections[1], slide_analysis: s2Analysis, narrative_plan: plans.get('S2') };
   const s2Narration = narrationGen.generateNarration(s2Plan, config, docs[1].raw_text);
 
-  // Assert S2 Narration is an open curiosity question, not an immediate mechanism answer
-  assert.ok(s2Narration.includes('Trước khi đi vào phần kỹ thuật, hãy thử suy nghĩ một chút'));
-  assert.ok(s2Narration.includes('tay trái và tay phải'));
+  // Assert S2 Narration is an open curiosity question, without mechanical template repetitions
+  assert.ok(!s2Narration.includes('Trước khi đi vào phần kỹ thuật'));
+  assert.ok(s2Narration.includes('tay trái') && s2Narration.includes('tay phải'));
   assert.ok(!s2Narration.includes('Từ nền tảng này, chúng ta sẽ tiếp tục khám phá'));
   assert.ok(!s2Narration.includes('Đồng thời'));
 });
@@ -833,4 +833,275 @@ test('LLM Router and Cache: online router and cache hit validation', async () =>
 
   assert.deepEqual(res1, res2);
   assert.ok(elapsed < 10, 'Cache hit should take under 10ms');
+});
+
+test('Anti-Repetition & 4-Stage Narrative Flow: S1 (Hook) -> S2 (Think) -> S3 (Example) -> S4 (Mechanism)', async () => {
+  const { narrativePlannerService } = await import('../../src/pipeline/services/narrativePlannerService.ts');
+  const narrationGen = new NarrationGenerator();
+  const sections = [
+    {
+      section_id: 'S1',
+      title: 'Nhận diện tư thế người',
+      order: 1,
+      pedagogical_function: 'hook',
+      bloom_level: 'Remember',
+      target_duration_sec: 25,
+      target_word_budget: 30,
+      key_concepts: ['Keypoint', 'Pose Estimation'],
+      instructional_goal: 'Đặt vấn đề và tạo sự tò mò'
+    },
+    {
+      section_id: 'S2',
+      title: 'HÃY SUY NGHĨ...',
+      order: 2,
+      pedagogical_function: 'explanation',
+      bloom_level: 'Understand',
+      target_duration_sec: 25,
+      target_word_budget: 30,
+      key_concepts: ['Occlusion', 'Symmetry'],
+      instructional_goal: 'Kích thích tư duy về độ khó'
+    },
+    {
+      section_id: 'S3',
+      title: 'Trường hợp thực tế',
+      order: 3,
+      pedagogical_function: 'example',
+      bloom_level: 'Apply',
+      target_duration_sec: 25,
+      target_word_budget: 30,
+      key_concepts: ['Che khuất', 'Keypoint xung quanh'],
+      instructional_goal: 'Minh họa ví dụ cụ thể'
+    },
+    {
+      section_id: 'S4',
+      title: 'Cơ chế giải quyết',
+      order: 4,
+      pedagogical_function: 'mechanism',
+      bloom_level: 'Analyze',
+      target_duration_sec: 30,
+      target_word_budget: 35,
+      key_concepts: ['Mối quan hệ không gian', 'Đồ thị khung xương'],
+      instructional_goal: 'Giải thích cơ chế giải quyết'
+    }
+  ];
+
+  const docSections = [
+    {
+      section_id: 'S1',
+      title: 'Nhận diện tư thế người',
+      order: 1,
+      elements: [],
+      raw_text: 'Nhận diện tư thế người\nảnh chụp tài xế từ bên phải, góc nhìn nghiêng'
+    },
+    {
+      section_id: 'S2',
+      title: 'HÃY SUY NGHĨ...',
+      order: 2,
+      elements: [],
+      raw_text: 'HÃY SUY NGHĨ...\nảnh chụp tài xế từ bên phải, bạn có xác định được đâu là tay trái và tay phải không?'
+    },
+    {
+      section_id: 'S3',
+      title: 'Trường hợp thực tế',
+      order: 3,
+      elements: [],
+      raw_text: 'Trường hợp thực tế\nTrong hình này, cánh tay bị che một phần khi vô-lăng chắn tầm nhìn'
+    },
+    {
+      section_id: 'S4',
+      title: 'Cơ chế giải quyết',
+      order: 4,
+      elements: [],
+      raw_text: 'Cơ chế giải quyết\nĐể giải quyết vấn đề này, mô hình học mối quan hệ không gian giữa các keypoint'
+    }
+  ];
+
+  // 1. Narrative Planner
+  const { analyses, plans } = narrativePlannerService.planNarrative(sections, docSections);
+
+  assert.equal(analyses.get('S1').slide_role, 'HOOK', 'S1 must be classified as HOOK');
+  assert.equal(analyses.get('S2').slide_role, 'THINK', 'S2 must be classified as THINK');
+  assert.equal(analyses.get('S3').slide_role, 'EXAMPLE', 'S3 must be classified as EXAMPLE');
+  assert.equal(analyses.get('S4').slide_role, 'MECHANISM', 'S4 must be classified as MECHANISM');
+
+  // 2. Sequential Generator with GlobalNarrativeContext
+  const config = {
+    language: 'vi',
+    narration_language: 'vi',
+    learnerLevel: 'undergraduate',
+    priorKnowledge: 'Linear algebra',
+    targetDurationSeconds: 120,
+    targetWpm: 140,
+    narrationStyle: 'academic',
+    visualDensity: 'balanced'
+  };
+
+  const generatedNarrations = [];
+  const usedOpenings = new Set();
+  const usedPhrases = new Set();
+  const usedConcepts = new Set();
+
+  for (let i = 0; i < sections.length; i++) {
+    const sec = sections[i];
+    const docSec = docSections[i];
+    const analysis = analyses.get(sec.section_id);
+    const plan = plans.get(sec.section_id);
+
+    const prevSectionsInfo = sections.slice(0, i).map((s, idx) => ({
+      section_id: s.section_id,
+      title: s.title,
+      role: analyses.get(s.section_id)?.slide_role || 'KEY_EXPLANATION',
+      core_message: analyses.get(s.section_id)?.core_message,
+      opening_used: generatedNarrations[idx]?.split(/[.?!]/)[0]?.trim()
+    }));
+
+    const globalContext = {
+      lesson_topic: 'Keypoint & Pose Estimation',
+      previous_sections: prevSectionsInfo,
+      current_section: {
+        id: sec.section_id,
+        type: analysis.slide_role
+      },
+      next_section: i < sections.length - 1 ? {
+        id: sections[i + 1].section_id,
+        type: analyses.get(sections[i + 1].section_id)?.slide_role || 'KEY_EXPLANATION'
+      } : undefined,
+      used_phrases: Array.from(usedPhrases),
+      used_concepts: Array.from(usedConcepts),
+      used_openings: Array.from(usedOpenings)
+    };
+
+    const narrationContext = {
+      previousPlan: i > 0 ? { ...sections[i - 1], slide_analysis: analyses.get(sections[i - 1].section_id) } : undefined,
+      nextPlan: i < sections.length - 1 ? { ...sections[i + 1], slide_analysis: analyses.get(sections[i + 1].section_id) } : undefined,
+      globalContext,
+      usedOpenings,
+      usedPhrases,
+      usedConcepts
+    };
+
+    const sPlan = { ...sec, slide_analysis: analysis, narrative_plan: plan };
+    const narration = narrationGen.generateNarration(sPlan, config, docSec.raw_text, narrationContext);
+    generatedNarrations.push(narration);
+
+    const firstSentence = narration.split(/[.?!]/)[0]?.trim();
+    if (firstSentence) usedOpenings.add(firstSentence.toLowerCase());
+  }
+
+  // 3. Assertions on Content Uniqueness & Flow
+  const [s1Text, s2Text, s3Text, s4Text] = generatedNarrations;
+
+  // Rule: NO repeated "Trước khi đi vào phần kỹ thuật"
+  for (let i = 0; i < generatedNarrations.length; i++) {
+    const text = generatedNarrations[i];
+    assert.ok(
+      !text.includes('Trước khi đi vào phần kỹ thuật'),
+      `Section S${i + 1} must NOT contain 'Trước khi đi vào phần kỹ thuật'`
+    );
+    assert.ok(
+      !text.includes('Sau khi đã nắm vững'),
+      `Section S${i + 1} must NOT contain 'Sau khi đã nắm vững'`
+    );
+  }
+
+  // Rule: Distinct openings across all 4 sections
+  const openings = generatedNarrations.map((t) => t.split(/[.?!]/)[0]?.trim().toLowerCase());
+  const uniqueOpenings = new Set(openings);
+  assert.equal(
+    uniqueOpenings.size,
+    openings.length,
+    'All section openings must be distinct; no mechanical templates copied'
+  );
+
+  // S1: Hook creates curiosity
+  assert.ok(
+    s1Text.includes('Bạn thử nhìn một người từ góc này') || s1Text.includes('xác định chính xác'),
+    'S1 must pose curiosity question'
+  );
+
+  // S2: Think stimulates reasoning
+  assert.ok(
+    s2Text.includes('Nếu chỉ nhìn một người từ góc này') || s2Text.includes('xác định được đâu là'),
+    'S2 must stimulate reflection'
+  );
+
+  // S3: Example gives concrete case
+  assert.ok(
+    s3Text.includes('cánh tay bị che một phần') || s3Text.includes('khớp khuỷu tay'),
+    'S3 must illustrate with a concrete case study'
+  );
+
+  // S4: Mechanism explains how model resolves problem
+  assert.ok(
+    s4Text.includes('mối quan hệ không gian') || s4Text.includes('giải quyết vấn đề này'),
+    'S4 must explain resolution mechanism'
+  );
+
+  // 4. Quality Guard anti-repetition audit passes with 0 violations
+  const guard = new QualityVisualGuard();
+  const bp = {
+    blueprint_id: 'bp_test_narrative',
+    lecture_title: 'Keypoint & Pose',
+    total_target_duration_sec: 100,
+    total_word_budget: 120,
+    sections: sections.map((s) => ({
+      ...s,
+      slide_analysis: analyses.get(s.section_id),
+      narrative_plan: plans.get(s.section_id)
+    }))
+  };
+
+  const draftScenes = generatedNarrations.map((n, idx) => {
+    const sec = sections[idx];
+    const wordCount = n.split(/\s+/).length;
+    return {
+      section_id: sec.section_id,
+      topic: sec.title,
+      order: sec.order,
+      pedagogical_function: sec.pedagogical_function,
+      learning_goal: sec.instructional_goal,
+      slide_analysis: analyses.get(sec.section_id),
+      narrative_plan: plans.get(sec.section_id),
+      narration: {
+        text: n,
+        word_count: wordCount,
+        sentences: [{ id: `s${idx}_1`, text: n, prosody: { pause_after_ms: 300, pause_type: 'semantic', rate: 'medium', energy: 'medium', emphasis: [] } }]
+      },
+      prosody_plan: {
+        sentences: [{ id: `s${idx}_1`, text: n, prosody: { pause_after_ms: 300, pause_type: 'semantic', rate: 'medium', energy: 'medium', emphasis: [] } }],
+        total_speaking_sec: 22,
+        total_pause_sec: 3,
+        effective_scene_duration_sec: 25,
+        ssml_full: `<speak>${n}</speak>`
+      },
+      visual_cues: [],
+      section_summary: sec.title,
+      scene_start_time_sec: idx * 25,
+      scene_end_time_sec: (idx + 1) * 25,
+      scene_duration_sec: 25
+    };
+  });
+
+  const docTree = {
+    document_id: 'doc_test_narrative',
+    source_type: 'pptx',
+    source_filename: 'pose_lesson.pptx',
+    title: 'Keypoint & Pose',
+    total_sections: 4,
+    extraction_time_ms: 5,
+    sections: docSections
+  };
+
+  const { qualityReport, verifiedIr } = guard.validateAndCertify(draftScenes, bp, docTree, config);
+  assert.ok(qualityReport.overall_quality_score >= 0.80, `Quality score should be >= 0.80 (got ${qualityReport.overall_quality_score})`);
+  assert.equal(
+    verifiedIr.scenes.every((s) => !s.narration.text.includes('Trước khi đi vào phần kỹ thuật')),
+    true,
+    'Repaired scenes must not inject hardcoded templates'
+  );
+  assert.equal(
+    verifiedIr.scenes.every((s) => !s.narration.text.includes('Sau khi đã nắm vững')),
+    true,
+    'Repaired scenes must not inject hardcoded bridge templates'
+  );
 });

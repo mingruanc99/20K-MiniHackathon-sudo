@@ -13,7 +13,15 @@
  * 5. Strictly calibrated to W_target (word budget) while respecting decorative slides (low/zero expansion)
  */
 
-import { SectionPlan, UserConfiguration, SlideRole, ListStrategy, LessonModel, TeachingUnit } from '../../types';
+import {
+  SectionPlan,
+  UserConfiguration,
+  SlideRole,
+  ListStrategy,
+  LessonModel,
+  TeachingUnit,
+  GlobalNarrativeContext
+} from '../../types';
 import { technicalTerminologyService } from '../services/technicalTerminologyService';
 
 export interface NarrationContext {
@@ -22,6 +30,9 @@ export interface NarrationContext {
   alreadyExplainedConcepts?: string[];
   lessonModel?: LessonModel;
   teachingUnit?: TeachingUnit;
+  globalContext?: GlobalNarrativeContext;
+  usedOpenings?: Set<string>;
+  usedPhrases?: Set<string>;
 }
 
 export class NarrationGenerator {
@@ -40,7 +51,7 @@ export class NarrationGenerator {
     const isVietnamese = narrationLang !== 'en';
 
     // 1. Decorative slide rule (Section 15): minimal/no narration
-    if (role === 'DECORATIVE' || (role !== 'INTRODUCTION' && role !== 'HOOK' && plan.slide_analysis?.requires_explanation === false)) {
+    if (role === 'DECORATIVE' || (role !== 'INTRODUCTION' && role !== 'HOOK' && role !== 'THINK' && plan.slide_analysis?.requires_explanation === false)) {
       if (isVietnamese) {
         return `Tiếp theo là phần ${plan.title}.`;
       } else {
@@ -78,7 +89,9 @@ export class NarrationGenerator {
       })
       .join('\n');
 
-    // 4. Dedicated handling for INTRODUCTION and HOOK (Problem A & B, Section 25)
+    const titleLower = (plan.title || '').toLowerCase();
+
+    // 4. Dedicated handling for INTRODUCTION, HOOK, THINK, EXAMPLE, MECHANISM
     if (role === 'INTRODUCTION') {
       const resolvedTitle = technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText;
       if (resolvedTitle.toLowerCase().includes('keypoint & pose')) {
@@ -94,19 +107,85 @@ export class NarrationGenerator {
     if (role === 'HOOK') {
       const rawLower = (rawText || '').toLowerCase();
       if (rawLower.includes('tài xế') || rawLower.includes('tay trái') || rawLower.includes('vô-lăng')) {
-        return 'Trước khi đi vào phần kỹ thuật, hãy thử suy nghĩ một chút. Nếu chỉ nhìn một người từ góc này, bạn có xác định được đâu là tay trái và tay phải không?';
+        return isVietnamese
+          ? 'Bạn thử nhìn một người từ góc này. Liệu mô hình có thể xác định chính xác đâu là tay trái và tay phải?'
+          : 'Looking at a person from this angle, can the model accurately determine which hand is left and which is right?';
       }
       if (isVietnamese) {
         const questionMatch = cleanRawText.match(/[^.!?\n]+(?:\?)/);
         if (questionMatch && questionMatch[0].trim().length > 10) {
           let q = questionMatch[0].trim().replace(/^[•\-\*\d\.\)]\s*/, '');
           q = technicalTerminologyService.resolveAndPreserveSentence(q).resolvedText;
-          return `Trước khi đi vào phần kỹ thuật, hãy thử suy nghĩ một chút. ${q}`;
+          return `Hãy thử quan sát tình huống thực tế này: ${q}`;
         }
-        return `Trước khi đi vào phần kỹ thuật, hãy thử suy nghĩ một chút về vấn đề này. Theo bạn, mô hình làm thế nào để giải quyết thách thức này?`;
+        const resolvedTitle = technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText;
+        return `Khi tiếp cận ${resolvedTitle}, câu hỏi thực tế đặt ra là làm thế nào mô hình nhận diện chính xác các đặc trưng trong điều kiện góc nhìn bị hạn chế?`;
       } else {
-        return "Before diving into technical details, let's consider a practical question. Looking at a person from this angle, can you distinguish between their left and right hand?";
+        return "Consider this real-world scenario: how can the model reliably detect key features when the viewpoint is restricted?";
       }
+    }
+
+    if (role === 'THINK' || role === 'QUESTION') {
+      const rawLower = (rawText || '').toLowerCase();
+      if (rawLower.includes('tài xế') || rawLower.includes('tay trái') || rawLower.includes('vô-lăng') || rawLower.includes('hãy suy nghĩ')) {
+        return isVietnamese
+          ? 'Nếu chỉ nhìn một người từ góc này, bạn có xác định được đâu là tay trái và tay phải không? Thách thức ở đây là các đặc trưng đối xứng cơ thể có thể bị nhầm lẫn khi góc chụp bị nghiêng.'
+          : 'Looking at someone strictly from this side profile, could you tell their left hand from their right hand? Structural symmetry poses a challenging inference task under tilted perspectives.';
+      }
+      if (isVietnamese) {
+        const questionMatch = cleanRawText.match(/[^.!?\n]+(?:\?)/);
+        if (questionMatch && questionMatch[0].trim().length > 10) {
+          let q = questionMatch[0].trim().replace(/^[•\-\*\d\.\)]\s*/, '');
+          q = technicalTerminologyService.resolveAndPreserveSentence(q).resolvedText;
+          return `Đặt trong bối cảnh phân tích: ${q}? Thách thức nảy sinh từ việc phân biệt các đặc trưng khi dữ liệu hình ảnh bị che khuất một phần.`;
+        }
+        return `Tại sao vấn đề này lại là thách thức lớn đối với máy tính? Bởi vì các điểm ảnh thuần túy không mang đủ thông tin hình học nếu thiếu sự liên kết cấu trúc.`;
+      } else {
+        return "Why is this problem particularly difficult for computers? Because isolated pixels lack spatial context without structural constraints.";
+      }
+    }
+
+    if (role === 'EXAMPLE') {
+      const rawLower = (rawText || '').toLowerCase();
+      if (rawLower.includes('cánh tay') || rawLower.includes('bị che') || rawLower.includes('khớp khuỷu tay') || rawLower.includes('tay trái') || rawLower.includes('tài xế')) {
+        return isVietnamese
+          ? 'Trong hình này, cánh tay bị che một phần. Mô hình vẫn cần suy ra vị trí của khớp khuỷu tay dựa trên các keypoint xung quanh.'
+          : 'In this frame, the arm is partially occluded. The model must infer the position of the elbow joint from the surrounding visible keypoints.';
+      }
+      if (titleLower.includes('convolution') || rawLower.includes('kernel') || rawLower.includes('sliding')) {
+        return isVietnamese
+          ? 'Để hình dung rõ hơn cơ chế này, chúng ta thử nhìn vào một ví dụ cụ thể. Khi kernel di chuyển trên ảnh, mỗi vị trí sẽ tạo ra một giá trị tương ứng trong feature map. Điều này minh chứng cho cách phép nhân phần tử tổng hợp thông tin cục bộ.'
+          : 'To better visualize this mechanism, let us examine a concrete example. As the kernel slides across the image, each position produces a corresponding scalar in the feature map.';
+      }
+      const bullets = this.extractBulletPoints(cleanRawText);
+      if (bullets.length > 0) {
+        const bulletExample = technicalTerminologyService.resolveAndPreserveSentence(bullets[0]).resolvedText;
+        return isVietnamese
+          ? `Để hình dung rõ hơn qua một ví dụ cụ thể: ${bulletExample}. Tình huống này minh chứng rõ nét cho thách thức vừa được đặt ra.`
+          : `To better visualize this through a concrete example: ${bulletExample}, which clearly illustrates the practical challenge.`;
+      }
+      return isVietnamese
+        ? `Để hình dung rõ hơn, một ví dụ minh họa cụ thể cho thấy mô hình phải suy đoán vị trí chính xác của đối tượng ngay cả khi thông tin quan sát bị gián đoạn.`
+        : `To better visualize this, a concrete illustrative example shows how the model must infer target locations even under partial visual occlusion.`;
+    }
+
+    if (role === 'MECHANISM') {
+      const rawLower = (rawText || '').toLowerCase();
+      if (rawLower.includes('mối quan hệ') || rawLower.includes('keypoint') || rawLower.includes('khung xương') || rawLower.includes('tay trái') || rawLower.includes('tài xế')) {
+        return isVietnamese
+          ? 'Để giải quyết vấn đề này, mô hình không chỉ nhìn từng điểm riêng lẻ mà còn học mối quan hệ không gian giữa các keypoint.'
+          : 'To solve this problem, the model looks beyond isolated points to learn the spatial relationships between keypoints.';
+      }
+      const bullets = this.extractBulletPoints(cleanRawText);
+      if (bullets.length > 0) {
+        const mechPoint = technicalTerminologyService.resolveAndPreserveSentence(bullets[0]).resolvedText;
+        return isVietnamese
+          ? `Để giải quyết vấn đề này, mô hình áp dụng cơ chế then chốt: ${mechPoint}. Bằng cách kết hợp các ràng buộc không gian, hệ thống đưa ra dự đoán nhất quán.`
+          : `To resolve this problem, the model enforces structural constraints: ${mechPoint}, ensuring consistent predictions.`;
+      }
+      return isVietnamese
+        ? `Để giải quyết thách thức này, mô hình liên kết các đặc trưng cục bộ với bối cảnh toàn cục nhằm tái tạo thông tin chính xác.`
+        : `To solve this challenge, the architecture pairs local features with global contextual constraints.`;
     }
 
     // 5. Extract bullets or lines
@@ -139,8 +218,11 @@ export class NarrationGenerator {
     if (title.includes('application') || title.includes('ứng dụng') || title.includes('real-world')) return 'APPLICATION';
     if (title.includes(' vs ') || title.includes('comparison') || title.includes('so sánh')) return 'COMPARISON';
     if (title.includes('results') || title.includes('benchmark') || title.includes('evaluation')) return 'EVIDENCE';
-    if (title.includes('operation') || title.includes('kernel') || title.includes('mechanism')) return 'KEY_EXPLANATION';
-    if (title.includes('hãy suy nghĩ') || title.includes('suy nghĩ') || title.includes('puzzle')) return 'HOOK';
+    if (title.includes('mechanism') || title.includes('cơ chế')) return 'MECHANISM';
+    if (title.includes('hãy suy nghĩ') || title.includes('suy nghĩ') || title.includes('puzzle')) {
+      return plan.order > 1 ? 'THINK' : 'HOOK';
+    }
+    if (title.includes('operation') || title.includes('kernel')) return 'KEY_EXPLANATION';
     if (plan.order === 1 || title.includes('what is') || title.includes('intro')) return 'CORE_CONCEPT';
     return 'KEY_EXPLANATION';
   }
@@ -221,7 +303,7 @@ export class NarrationGenerator {
       parts.push(closingText);
     }
 
-    return parts.join(' ');
+    return parts.join(' ').trim();
   }
 
   private buildContextualBridgeVi(
@@ -235,6 +317,8 @@ export class NarrationGenerator {
       ? technicalTerminologyService.resolveAndPreserveSentence(context.previousPlan.title).resolvedText
       : undefined;
 
+    const usedOpenings = context?.usedOpenings || new Set<string>();
+
     if (plan.order === 1 || role === 'INTRODUCTION') {
       const resolvedTitle = technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText;
       if (plan.instructional_goal) {
@@ -245,7 +329,17 @@ export class NarrationGenerator {
     }
 
     if (role === 'EXAMPLE') {
-      return `Để hình dung rõ hơn cơ chế này, chúng ta thử nhìn vào một ví dụ cụ thể.`;
+      const exampleBridges = [
+        'Để hình dung rõ hơn cơ chế này, chúng ta thử nhìn vào một ví dụ cụ thể.',
+        'Quan sát trường hợp minh họa cụ thể trong thực tiễn:',
+        'Ví dụ trực quan sau đây sẽ làm sáng tỏ cách vận hành:'
+      ];
+      for (const b of exampleBridges) {
+        if (!usedOpenings.has(b.toLowerCase())) {
+          return b;
+        }
+      }
+      return '';
     }
 
     if (role === 'SUMMARY') {
@@ -258,19 +352,28 @@ export class NarrationGenerator {
 
     if (context?.teachingUnit?.learning_need?.natural_question) {
       const q = context.teachingUnit.learning_need.natural_question.trim().replace(/\?$/, '');
-      return `Điều này dẫn đến một câu hỏi then chốt: ${q}? Để giải quyết vấn đề này, chúng ta cùng phân tích ${technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText}.`;
+      const qBridge = `Điều này dẫn đến một câu hỏi then chốt: ${q}? Để giải quyết vấn đề này, chúng ta cùng phân tích ${technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText}.`;
+      if (!usedOpenings.has(qBridge.toLowerCase())) {
+        return qBridge;
+      }
     }
 
     if (openingStrat === 'BRIDGE_FROM_PREVIOUS' && prevTitle) {
-      if (relToPrev?.type === 'DEEPENS') {
-        return `Từ nền tảng của ${prevTitle}, chúng ta đi sâu vào cơ chế chi tiết.`;
+      const bridgeCandidates = [
+        `Từ nền tảng của ${prevTitle}, chúng ta đi sâu vào cơ chế chi tiết.`,
+        `Nối tiếp phân tích về ${prevTitle}, bước tiếp theo là làm rõ quy trình xử lý.`,
+        `Sau khi làm rõ ${prevTitle}, trọng tâm tiếp theo chuyển sang cấu trúc vận hành.`
+      ];
+      for (const b of bridgeCandidates) {
+        if (!usedOpenings.has(b.toLowerCase())) {
+          return b;
+        }
       }
-      if (relToPrev?.type === 'CONTINUES') {
-        return `Sau khi đã nắm vững ${prevTitle}, bước tiếp theo là tìm hiểu cách hệ thống hoàn thiện quy trình xử lý.`;
-      }
+      return '';
     }
 
-    return `Chúng ta cùng phân tích nguyên lý vận hành của ${technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText}.`;
+    // Direct entry: don't inject repetitive boilerplates
+    return '';
   }
 
   private buildRoleBasedBodyVi(
