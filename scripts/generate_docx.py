@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import docx
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
@@ -302,7 +303,11 @@ def main():
         p_img.paragraph_format.space_before = Pt(8)
         p_img.paragraph_format.space_after = Pt(4)
         run_img = p_img.add_run()
-        run_img.add_picture(r"c:\Users\KIM THIEN\Desktop\T032\clsg_pipeline_architecture.png", width=Inches(6.5))
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        img_path = os.path.join(root_dir, "docs", "assets", "clsg_pipeline_architecture.png")
+        if not os.path.exists(img_path):
+            img_path = os.path.join(root_dir, "clsg_pipeline_architecture.png")
+        run_img.add_picture(img_path, width=Inches(6.5))
 
         p_cap = doc.add_paragraph()
         p_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -384,7 +389,8 @@ def main():
         "của EduCraft, mở đường cho việc tự động hóa sản xuất video giáo dục chất lượng cao ở quy mô lớn."
     )
 
-    output_filename = r"c:\Users\KIM THIEN\Desktop\T032\Bao_Cao_Phuong_Phap_De_Xuat_CLSG.docx"
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    output_filename = os.path.join(root_dir, "docs", "reports", "Bao_Cao_Phuong_Phap_De_Xuat_CLSG.docx")
     doc.save(output_filename)
     print(f"Document successfully created at: {output_filename}")
 

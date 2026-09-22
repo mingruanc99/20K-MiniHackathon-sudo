@@ -4,6 +4,7 @@ CLSG-IR TECHNICAL PIPELINE & SYSTEM ARCHITECTURE DIAGRAM
 Senior Software Architect & Information Designer Implementation
 High-Resolution (32x18 @ 300 DPI), Strict Orthogonal Routing, Zero-Crossing Architecture
 """
+import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
@@ -572,7 +573,8 @@ def generate_architecture_diagram():
             ax.add_patch(arrow_p)
 
     plt.tight_layout()
-    output_path = r"c:\Users\KIM THIEN\Desktop\T032\clsg_pipeline_architecture.png"
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    output_path = os.path.join(root_dir, "docs", "assets", "clsg_pipeline_architecture.png")
     plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor=fig.get_facecolor())
     plt.close()
     print(f"Professional architecture diagram generated successfully at: {output_path}")

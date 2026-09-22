@@ -63,7 +63,7 @@ Mọi đề xuất minh họa bắt buộc phải thuộc một trong 13 phân l
 
 ## 3. KIẾN TRÚC HỆ THỐNG ĐỀ XUẤT (SYSTEM ARCHITECTURE & PIPELINE)
 
-![CLSG Pipeline Architecture](file:///c:/Users/KIM%20THIEN/Desktop/T032/clsg_pipeline_architecture.png)
+![CLSG Pipeline Architecture](../assets/clsg_pipeline_architecture.png)
 
 ### 3.1. Sơ đồ dòng chảy dữ liệu hoàn chỉnh (Data Flow Pipeline)
 

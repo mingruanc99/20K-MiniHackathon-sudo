@@ -127,14 +127,67 @@ npm run build
 
 ---
 
+---
+
+## 📁 Repository Directory Structure
+
+```
+T032/
+├── app/                  # FastAPI Python backend (endpoints & microservices)
+├── app.py                # Single-command Python backend launcher
+├── config/               # Shared domain configuration (technical_terms.json)
+├── data/                 # Sample presentations and demo test assets
+│   └── demo/             # CNN slide deck and demo JSON
+├── docs/                 # Comprehensive documentation categorized by topic
+│   ├── architecture/     # System architecture, schemas, and end-to-end data flow
+│   ├── audits/           # Technical audits (architecture, focus, narrative)
+│   ├── guides/           # Setup, deployment, demo, and hackathon playbooks
+│   ├── specs/            # API contracts, database, evaluation benchmarks
+│   ├── assets/           # Diagrams, architecture posters, and media
+│   └── reports/          # Formal proposal deliverables & Word documents
+├── references/           # Academic research papers (EduCraft, Prosodic)
+├── scripts/              # Automation tools (diagram rendering, report compilation)
+├── src/                  # React 18 + TypeScript Web Studio & Pipeline
+│   ├── components/       # UI components & Admin Control Center modules
+│   ├── contexts/         # Authentication & state management
+│   ├── pages/            # Studio, Dashboard, Player, Admin pages
+│   ├── pipeline/         # 4-stage CLSG-IR generation & purification engine
+│   ├── services/         # Firebase, Cloudinary, Gemini, Admin Telemetry
+│   └── types/            # TypeScript interfaces & CLSG-IR schemas
+├── tests/                # Automated test suites (Python unit tests & 19 TS tests)
+│   └── ts/pipeline.test.js
+├── README.md             # Project overview & local runbook
+└── package.json, vite.config.ts, tsconfig.json, tailwind.config.js
+```
+
+---
+
 ## 📚 Technical Documentation
 
-- 🔄 [Luồng Dữ Liệu Toàn Hệ Thống (System Data Flow)](docs/SYSTEM_DATA_FLOW.md)
-- 🏛️ [Architecture Audit & Migration Plan](docs/ARCHITECTURE_AUDIT.md)
-- 📐 [System Architecture Specification](docs/ARCHITECTURE.md)
-- 🔌 [API Documentation](docs/API.md)
-- 🗄️ [Database & Firestore Security Rules](docs/DATABASE.md)
-- 🚀 [Deployment Guide (Vercel + Firebase + Cloudinary)](docs/DEPLOYMENT.md)
-- 🕹️ [Presentation & Pitch Script Guide](docs/DEMO.md)
-- 🔬 [Research Positioning & Scientific Grounding](docs/RESEARCH_POSITIONING.md)
-- 📊 [Benchmark Evaluation & DAR-P Metrics](docs/EVALUATION.md)
+### 📐 Architecture & Data Flow
+- 🔄 [Luồng Dữ Liệu Toàn Hệ Thống (System Data Flow)](docs/architecture/SYSTEM_DATA_FLOW.md)
+- 📊 [Ví Dụ Dữ Liệu End-to-End (Data Flow Example)](docs/architecture/END_TO_END_DATA_FLOW_EXAMPLE.md)
+- 🏛️ [Phương Pháp Đề Xuất Toàn Diện (Proposed Method)](docs/architecture/PROPOSED_METHOD.md)
+- 📐 [System Architecture Specification](docs/architecture/ARCHITECTURE.md)
+- 📜 [CLSG-IR Schema Specification](docs/architecture/CLSG_IR_SCHEMA.md)
+
+### 🔍 Technical Audits
+- 🛡️ [Architecture Audit & Migration Plan](docs/audits/ARCHITECTURE_AUDIT.md)
+- 🎯 [Narration Focus & Anti-Leak Audit](docs/audits/NARRATION_FOCUS_AUDIT.md)
+- 📖 [Context-Aware Narrative Planning Audit](docs/audits/NARRATIVE_PLANNING_AUDIT.md)
+
+### 🚀 Guides & Operations
+- ⚡ [Quickstart & Local Setup Guide](docs/guides/SETUP.md)
+- 🏆 [Hackathon Master Playbook](docs/guides/HACKATHON_PLAYBOOK.md)
+- 🕹️ [Presentation & Pitch Script Guide](docs/guides/DEMO.md)
+- 🎬 [Interactive Studio Walkthrough Guide](docs/guides/DEMO_GUIDE.md)
+- 🌐 [Deployment Guide (Vercel + Firebase + Cloudinary)](docs/guides/DEPLOYMENT.md)
+
+### 🔌 Specifications & Research
+- 🔌 [API Documentation](docs/specs/API.md)
+- 🗄️ [Database & Firestore Security Rules](docs/specs/DATABASE.md)
+- 🔬 [Research Positioning & Scientific Grounding](docs/specs/RESEARCH_POSITIONING.md)
+- 📊 [Benchmark Evaluation & DAR-P Metrics](docs/specs/EVALUATION.md)
+- 📋 [Module Contracts](docs/specs/MODULE_CONTRACTS.md)
+- 📄 [Báo Cáo Kỹ Thuật Đề Xuất (.docx)](docs/reports/Bao_Cao_Phuong_Phap_De_Xuat_CLSG.docx)
+
