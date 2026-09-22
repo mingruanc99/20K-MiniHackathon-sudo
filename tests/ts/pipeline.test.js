@@ -9,6 +9,7 @@ import { VisualIntentGenerator } from '../../src/pipeline/module3_generator/visu
 import { QualityVisualGuard } from '../../src/pipeline/module4_guard/qualityGuard.ts';
 import { PipelineOrchestrator } from '../../src/pipeline/orchestrator.ts';
 import { technicalTerminologyService } from '../../src/pipeline/services/technicalTerminologyService.ts';
+import { contentPurifierService } from '../../src/pipeline/services/contentPurifierService.ts';
 import { llmRouter } from '../../src/services/llm/LLMRouter.ts';
 import { MockLLMProvider } from '../../src/services/llm/MockLLMProvider.ts';
 
@@ -1105,3 +1106,35 @@ test('Anti-Repetition & 4-Stage Narrative Flow: S1 (Hook) -> S2 (Think) -> S3 (E
     'Repaired scenes must not inject hardcoded bridge templates'
   );
 });
+
+test('Content Purification Engine: strictly separates Learning Content from Metadata, Labels, Pagination, and Fillers', () => {
+  // 1. User's exact problematic test case:
+  const rawInput =
+    'Từ nền tảng của HÃY SUY NGHĨ, chúng ta đi sâu vào cơ chế chi tiết. Nội dung bài học. Qua đó, mô hình đọc pose thế nào, giúp đi sâu vào kiến trúc pose estimators và. chuẩn bị dữ liệu pose và kiểm tra chất lượng và giảng viên (thành phần chuyên sâu ở các phần cảnh sau) aicb · 1 / 52. chúng ta sẽ tiếp tục khám phá các bước tiếp theo trong bài giảng.';
+
+  const result = contentPurifierService.purifyNarration(rawInput, {
+    title: 'Cơ chế Pose Estimators',
+    role: 'MECHANISM'
+  });
+
+  const cleaned = result.cleanedText;
+
+  // Assertions against all forbidden elements
+  assert.ok(!cleaned.includes('HÃY SUY NGHĨ'), 'Must NOT contain section label HÃY SUY NGHĨ');
+  assert.ok(!cleaned.includes('Nội dung bài học'), 'Must NOT contain agenda header Nội dung bài học');
+  assert.ok(!cleaned.includes('giảng viên'), 'Must NOT contain instructor notes prefix');
+  assert.ok(!cleaned.includes('thành phần chuyên sâu'), 'Must NOT contain parenthetical developer notes');
+  assert.ok(!cleaned.includes('aicb'), 'Must NOT contain course code aicb');
+  assert.ok(!cleaned.includes('1 / 52'), 'Must NOT contain pagination 1 / 52');
+  assert.ok(!cleaned.includes('chúng ta sẽ tiếp tục khám phá các bước tiếp theo'), 'Must NOT contain mechanical filler closing');
+  assert.ok(!cleaned.includes('và.'), 'Must NOT contain broken dangling syntax và.');
+
+  // Verify it passes all 8 validation checks
+  const validation = contentPurifierService.validateNarration(cleaned);
+  assert.equal(validation.isValid, true, `Purified output must pass all 8 validation checks, failures: ${validation.failures.join(', ')}`);
+
+  // Verify teacher speech authenticity
+  assert.ok(cleaned.length > 30, 'Cleaned text must maintain substantial instructional content');
+  assert.ok(cleaned.toLowerCase().includes('mô hình') && cleaned.toLowerCase().includes('pose'), 'Must preserve key domain terminology');
+});
+

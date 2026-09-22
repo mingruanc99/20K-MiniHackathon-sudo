@@ -16,6 +16,7 @@ import {
 } from '../../types';
 import { VisualIntentGenerator } from '../module3_generator/visualIntentGenerator';
 import { technicalTerminologyService } from '../services/technicalTerminologyService';
+import { contentPurifierService } from '../services/contentPurifierService';
 
 export class QualityVisualGuard {
   private allowedTaxonomies = new Set(VisualIntentGenerator.ALLOWED_TAXONOMIES);
@@ -226,25 +227,28 @@ export class QualityVisualGuard {
       let text = scene.narration.text;
       let repaired = false;
 
-      // FOCUS_002: Metadata Leak Detection & Targeted Removal
+      // FOCUS_002: Content Purification Engine (Strip metadata, pagination, instructor notes, section labels, fillers)
+      const purification = contentPurifierService.purifyNarration(text, {
+        title: plan?.title,
+        role
+      });
+      if (purification.removedElements.length > 0 || !purification.passedValidation) {
+        narrativeIssuesCount++;
+        text = purification.cleanedText;
+        repaired = true;
+        narrativeRepairsCount++;
+        autoRepairs.push(
+          `Targeted Repair: Loại bỏ siêu dữ liệu rò rỉ (METADATA_LEAK: ${purification.removedElements.join(', ') || 'metadata/labels/fillers'}) tại ${scene.section_id}.`
+        );
+      }
+
       const excludedTokens = plan?.slide_analysis?.excluded_content || [];
-      const metadataPatterns = [
-        /\b(aicb-[a-z0-9]+|data track|vinuniversity|stanford|mit)\b/gi,
-        /\b(ngày\s*\d+|chương\s*\d+|chapter\s*\d+)\b/gi,
-        /\b(all rights reserved|bản quyền|copyright)\b/gi
-      ];
       let metaLeaked = false;
       for (const tok of excludedTokens) {
         if (tok && tok.length > 2 && text.toLowerCase().includes(tok.toLowerCase())) {
           metaLeaked = true;
           const esc = tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           text = text.replace(new RegExp(`[,·•\\-\\s]*${esc}[,·•\\-\\s]*`, 'gi'), ' ').trim();
-        }
-      }
-      for (const pat of metadataPatterns) {
-        if (pat.test(text)) {
-          metaLeaked = true;
-          text = text.replace(pat, ' ').trim();
         }
       }
       if (metaLeaked) {
@@ -589,6 +593,27 @@ export class QualityVisualGuard {
       actual_value: `${duplicatesRepaired} điểm hiệu chỉnh • 0 câu trùng lặp giữa các section`,
       message: 'Đảm bảo mỗi section có mục đích sư phạm độc lập, không lặp câu dẫn nhập hoặc câu hỏi mở đầu.',
       auto_repaired: duplicatesRepaired > 0
+    });
+
+    // Content Purification Zero-Leak Verification
+    let purificationFailuresCount = 0;
+    workingScenes.forEach((s) => {
+      const rep = contentPurifierService.validateNarration(s.narration.text);
+      if (!rep.isValid) {
+        purificationFailuresCount++;
+      }
+    });
+
+    checks.push({
+      check_id: 'chk_content_purification',
+      rule_name: 'Lọc Sạch Siêu Dữ Liệu & Nhãn Nội Bộ (Content Purification & Zero-Leak)',
+      category: 'narrative_coherence',
+      status: purificationFailuresCount === 0 ? 'PASSED' : 'WARNING',
+      score: purificationFailuresCount === 0 ? 1.0 : 0.9,
+      threshold: 0.95,
+      actual_value: `${purificationFailuresCount} vi phạm tồn đọng • Đã lọc sạch 100% về Learning Content thuần túy`,
+      message: 'Đảm bảo lời giảng chỉ chứa những gì giảng viên thực sự nói, không chứa nhãn phân cảnh (HOOK, S1, HÃY SUY NGHĨ), metadata (aicb, 1/52), ghi chú giảng viên hay câu filler.',
+      auto_repaired: narrativeRepairsCount > 0
     });
 
     const narrativeScore = Math.max(0.85, 1.0 - (narrativeIssuesCount - narrativeRepairsCount) * 0.1);

@@ -28,6 +28,7 @@ import {
   ListStrategy,
   VerbosityLevel
 } from '../../types';
+import { contentPurifierService } from './contentPurifierService';
 
 export interface FilteredContentResult {
   instructionalText: string;
@@ -41,7 +42,10 @@ export class NarrativePlannerService {
     /\b(aicb-[a-z0-9]+|data track|vinuniversity|stanford|mit|harvard)\b/i,
     /\b(ngày\s*\d+|day\s*\d+|chương\s*\d+|chapter\s*\d+|part\s*\d+)\b/i,
     /\b(slide\s*\d+|trang\s*\d+|page\s*\d+)\b/i,
+    /\b\d+\s*[/|]\s*\d+\b/i,
     /\b(all rights reserved|copyright|bản quyền|confidential)\b/i,
+    /\b(giảng viên|instructor notes?|speaker notes?|ghi chú)\b/i,
+    /\b(nội dung bài học|mục lục|table of contents|agenda)\b/i,
     /https?:\/\/[^\s]+/i,
     /\b(v\d+\.\d+(\.\d+)?|version\s*\d+)\b/i,
     /^[•\-\*·\s]+$/
@@ -171,9 +175,10 @@ export class NarrativePlannerService {
 
     const uniqueExcluded = Array.from(new Set(excludedContent.filter((c) => c.length > 2)));
     const cleanInstructionalText = validLines.join('\n');
-    const supportingPoints = validLines
+    const rawSupportingPoints = validLines
       .map((l) => l.replace(/^[•\-\*\d\.\)]\s*/, '').trim())
       .filter((l) => l.length > 3 && !uniqueExcluded.includes(l.toLowerCase()));
+    const supportingPoints = contentPurifierService.cleanBulletPoints(rawSupportingPoints);
 
     return {
       instructionalText: cleanInstructionalText,
@@ -191,11 +196,13 @@ export class NarrativePlannerService {
     cleanText: string,
     supportingPoints: string[]
   ): string {
-    const t = title.trim();
+    const rawT = title.trim();
+    const cleanTitle = contentPurifierService.sanitizeTitleForSpeech(rawT);
+    const t = cleanTitle || 'chủ đề này';
 
     switch (role) {
       case 'INTRODUCTION':
-        if (t.toLowerCase().includes('keypoint & pose')) {
+        if (rawT.toLowerCase().includes('keypoint & pose')) {
           return 'Giới thiệu chủ đề Keypoint & Pose.';
         }
         return `Giới thiệu chủ đề ${t}.`;

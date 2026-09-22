@@ -6,6 +6,7 @@
  */
 import JSZip from 'jszip';
 import { CanonicalDocumentTree, DocumentSection, ContentElement } from '../../types';
+import { contentPurifierService } from '../services/contentPurifierService';
 
 export class PPTXExtractor {
   async extract(fileData: ArrayBuffer | Blob, filename: string): Promise<CanonicalDocumentTree> {
@@ -86,14 +87,21 @@ export class PPTXExtractor {
           });
           rawTexts.push(pText);
         } else {
+          if (contentPurifierService.isMetadataOrInstructionLine(pText)) {
+            continue;
+          }
+          const cleanText = contentPurifierService.cleanLine(pText);
+          if (!cleanText || cleanText.length < 3) {
+            continue;
+          }
           const isBullet = pText.startsWith('•') || pText.startsWith('-') || pText.startsWith('*');
           elements.push({
             element_id: `${secId}_el_${String(elIdx++).padStart(2, '0')}`,
             type: isBullet ? 'bullet_point' : 'paragraph',
-            text: pText,
+            text: cleanText,
             level: 2
           });
-          rawTexts.push(pText);
+          rawTexts.push(cleanText);
         }
       }
 

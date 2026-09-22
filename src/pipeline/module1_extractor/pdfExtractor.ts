@@ -7,6 +7,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.js?url';
 import { CanonicalDocumentTree, DocumentSection, ContentElement } from '../../types';
+import { contentPurifierService } from '../services/contentPurifierService';
 
 // Configure worker for Vite and fallback to reliable CDN if needed
 if (typeof window !== 'undefined') {
@@ -95,7 +96,7 @@ export class PDFExtractor {
           }
         }
 
-        // Generate content elements
+        // Generate content elements with content purification
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
           if (i === titleIdx) {
@@ -107,14 +108,22 @@ export class PDFExtractor {
             });
             rawTexts.push(line);
           } else {
+            // Check if line is purely metadata/pagination/instructor note
+            if (contentPurifierService.isMetadataOrInstructionLine(line)) {
+              continue;
+            }
+            const cleanText = contentPurifierService.cleanLine(line);
+            if (!cleanText || cleanText.length < 3) {
+              continue;
+            }
             const isBullet = /^([-*+•]|\d+\.|\([a-z0-9]+\))\s+/i.test(line);
             elements.push({
               element_id: `${secId}_el_${String(elIdx++).padStart(2, '0')}`,
               type: isBullet ? 'bullet_point' : 'paragraph',
-              text: line.replace(/^[-*+•]\s*/, ''),
+              text: cleanText,
               level: 2
             });
-            rawTexts.push(line);
+            rawTexts.push(cleanText);
           }
         }
       }

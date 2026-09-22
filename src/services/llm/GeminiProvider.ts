@@ -17,6 +17,7 @@ import {
 import { ILLMProvider, NarrationContext } from './LLMProvider';
 import { apiKeyService } from './apiKeyService';
 import { MockLLMProvider } from './MockLLMProvider';
+import { contentPurifierService } from '../../pipeline/services/contentPurifierService';
 
 export class GeminiProvider implements ILLMProvider {
   readonly providerId = 'gemini';
@@ -321,11 +322,17 @@ Return a JSON array of Teaching Units:
     config: UserConfiguration
   ): Promise<string> {
     const prompt = `Generate natural, concise, knowledge-driven Vietnamese lecture narration for this Teaching Unit.
-Do NOT read bullet points mechanically.
-Do NOT mention slide numbers ("Ở slide này", "Slide tiếp theo").
-Do NOT enumerate ("Thứ nhất", "Thứ hai") unless strictly necessary.
-Preserve English technical terms (CNN, kernel, feature map, bounding box, etc.).
-Omit noise items: ${unit.omitted_details.join(', ')}.
+CRITICAL RULES FOR SPOKEN CONTENT:
+- Return ONLY "WHAT THE TEACHER WOULD ACTUALLY SAY" to students.
+- Absolutely NO section badges or internal labels (HOOK, THINK, MECHANISM, EXAMPLE, TECHNICAL, S1, S2, HÃY SUY NGHĨ).
+- Absolutely NO administrative metadata, course codes, footers, pagination (aicb, 1/52, ngày 04).
+- Absolutely NO instructor notes, speaker directions, or parenthetical annotations.
+- Absolutely NO agenda headers ("Nội dung bài học", "Mục lục").
+- Absolutely NO low-density boilerplate fillers ("chúng ta sẽ tiếp tục khám phá các bước tiếp theo...").
+- Do NOT read bullet points mechanically.
+- Do NOT mention slide numbers ("Ở slide này", "Slide tiếp theo").
+- Preserve English technical terms (CNN, kernel, feature map, bounding box, etc.).
+- Omit noise items: ${unit.omitted_details.join(', ')}.
 
 Unit Title: "${unit.title}" (${unit.stage})
 Slides in Unit: ${unit.slide_ids.join(', ')}
@@ -343,7 +350,8 @@ Return JSON: { "narration": "Natural Vietnamese spoken lecture text" }`;
         prompt,
         'You are an inspiring university AI lecturer speaking fluent, natural Vietnamese.'
       );
-      return res.narration;
+      const purification = contentPurifierService.purifyNarration(res.narration);
+      return purification.cleanedText;
     } catch (err) {
       console.warn('Gemini narration failed after retries, using resilient fallback:', err);
       return this.fallbackMock.generateNarration(unit, lessonModel, context, config);

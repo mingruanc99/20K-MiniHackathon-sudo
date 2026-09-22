@@ -23,6 +23,7 @@ import {
   GlobalNarrativeContext
 } from '../../types';
 import { technicalTerminologyService } from '../services/technicalTerminologyService';
+import { contentPurifierService } from '../services/contentPurifierService';
 
 export interface NarrationContext {
   previousPlan?: SectionPlan;
@@ -205,7 +206,14 @@ export class NarrationGenerator {
       script = repairedText;
     }
 
-    // 8. Calibrate to word budget, respecting slide role
+    // 8. Content Purification Pipeline (Strip metadata, pagination, instructor notes, section labels)
+    const purification = contentPurifierService.purifyNarration(script, {
+      title: plan.title,
+      role
+    });
+    script = purification.cleanedText;
+
+    // 9. Calibrate to word budget, respecting slide role
     script = this.calibrateToWordBudget(script, targetWords, isVietnamese, plan, role);
 
     return script.trim();
@@ -229,12 +237,13 @@ export class NarrationGenerator {
 
   private extractBulletPoints(rawText?: string): string[] {
     if (!rawText) return [];
-    return rawText
+    const lines = rawText
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 3)
       .map((line) => line.replace(/^[•\-\*\d\.\)]\s*/, ''))
       .filter((line) => !line.toLowerCase().startsWith('slide ') && !line.toLowerCase().startsWith('[note:'));
+    return contentPurifierService.cleanBulletPoints(lines);
   }
 
   /**
@@ -313,9 +322,10 @@ export class NarrationGenerator {
     relToPrev: { type: string; reason: string } | undefined,
     context?: NarrationContext
   ): string {
-    const prevTitle = context?.previousPlan?.title
+    const rawPrevTitle = context?.previousPlan?.title
       ? technicalTerminologyService.resolveAndPreserveSentence(context.previousPlan.title).resolvedText
       : undefined;
+    const cleanPrevTitle = contentPurifierService.sanitizeTitleForSpeech(rawPrevTitle);
 
     const usedOpenings = context?.usedOpenings || new Set<string>();
 
@@ -358,18 +368,25 @@ export class NarrationGenerator {
       }
     }
 
-    if (openingStrat === 'BRIDGE_FROM_PREVIOUS' && prevTitle) {
-      const bridgeCandidates = [
-        `Từ nền tảng của ${prevTitle}, chúng ta đi sâu vào cơ chế chi tiết.`,
-        `Nối tiếp phân tích về ${prevTitle}, bước tiếp theo là làm rõ quy trình xử lý.`,
-        `Sau khi làm rõ ${prevTitle}, trọng tâm tiếp theo chuyển sang cấu trúc vận hành.`
-      ];
+    if (openingStrat === 'BRIDGE_FROM_PREVIOUS') {
+      const bridgeCandidates = cleanPrevTitle
+        ? [
+            `Nối tiếp phân tích về ${cleanPrevTitle}, bước tiếp theo là làm rõ quy trình xử lý.`,
+            `Sau khi làm rõ ${cleanPrevTitle}, trọng tâm tiếp theo chuyển sang cấu trúc vận hành.`,
+            `Từ các kết luận về ${cleanPrevTitle}, chúng ta đi sâu vào cơ chế chi tiết.`
+          ]
+        : [
+            'Tiếp theo, chúng ta đi sâu vào cơ chế chi tiết của mô hình.',
+            'Sau khi phân tích vấn đề đặt ra, bước tiếp theo là làm rõ quy trình xử lý.',
+            'Trọng tâm tiếp theo chuyển sang cấu trúc vận hành của mô hình.'
+          ];
+
       for (const b of bridgeCandidates) {
         if (!usedOpenings.has(b.toLowerCase())) {
           return b;
         }
       }
-      return '';
+      return cleanPrevTitle ? `Tiếp theo, chúng ta cùng phân tích ${technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText}.` : '';
     }
 
     // Direct entry: don't inject repetitive boilerplates
@@ -383,8 +400,9 @@ export class NarrationGenerator {
     listStrategy: ListStrategy,
     resolvedTitle: string
   ): string {
-    // Sanitize bullets through terminology service
-    const resolvedBullets = bullets.map((b) => {
+    // Sanitize bullets through terminology service and content purifier
+    const sanitizedBullets = contentPurifierService.cleanBulletPoints(bullets);
+    const resolvedBullets = sanitizedBullets.map((b) => {
       const clean = b.replace(/\.+$/, '');
       return technicalTerminologyService.resolveAndPreserveSentence(clean).resolvedText;
     });
@@ -433,14 +451,14 @@ export class NarrationGenerator {
 
     // DEFAULT (list_strategy === 'NONE'): Synthesize fluidly without "Thứ nhất, Thứ hai"!
     if (resolvedBullets.length > 0) {
-      // Connect bullets with natural transitions instead of numbered list
+      // Connect bullets with natural transitions instead of numbered list or broken dangling syntax
       if (resolvedBullets.length === 1) {
         return `${resolvedBullets[0]}.`;
       }
       if (resolvedBullets.length === 2) {
-        return `${resolvedBullets[0]}, qua đó ${resolvedBullets[1].toLowerCase()}.`;
+        return `${resolvedBullets[0]}, đồng thời ${resolvedBullets[1].toLowerCase()}.`;
       }
-      return `${resolvedBullets[0]}. Qua đó, ${resolvedBullets[1].toLowerCase()}, giúp ${resolvedBullets.slice(2).join(' và ').toLowerCase()}.`;
+      return `${resolvedBullets[0]}. Cụ thể, ${resolvedBullets[1].toLowerCase()}, kết hợp cùng ${resolvedBullets.slice(2).join(', ').toLowerCase()}.`;
     }
 
     // Fallback using core message if available
@@ -461,9 +479,7 @@ export class NarrationGenerator {
     if (role === 'INTRODUCTION' || role === 'HOOK' || role === 'DECORATIVE') {
       return ``;
     }
-    if (closingStrat === 'TRANSITION_TO_NEXT') {
-      return `Từ nền tảng này, chúng ta sẽ tiếp tục khám phá các bước tiếp theo trong bài giảng.`;
-    }
+    // Eliminate low-density filler boilerplate like "Từ nền tảng này, chúng ta sẽ tiếp tục khám phá các bước tiếp theo trong bài giảng"
     return ``;
   }
 
