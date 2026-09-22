@@ -1,5 +1,4 @@
-// src/pages/admin/AdminEvaluationPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import { CompactChart } from '../../components/admin/CompactChart';
 import {
@@ -13,12 +12,29 @@ import {
   Sliders,
   ShieldCheck,
   TrendingUp,
-  Brain
+  Brain,
+  RefreshCw
 } from 'lucide-react';
 
 export const AdminEvaluationPage: React.FC = () => {
-  const evalData = adminTelemetryService.getEvaluationData();
-  const [evaluatorType, setEvaluatorType] = useState<'llm_judge' | 'rule_based' | 'human'>('llm_judge');
+  const [evalData, setEvalData] = useState(() => adminTelemetryService.getEvaluationData());
+  const [evaluatorType, setEvaluatorType] = useState<'llm_judge' | 'rule_based' | 'human'>('rule_based');
+  const [loading, setLoading] = useState(false);
+
+  const refresh = async () => {
+    setLoading(true);
+    await adminTelemetryService.syncRealData();
+    setEvalData(adminTelemetryService.getEvaluationData());
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refresh();
+    const unsub = adminTelemetryService.subscribe(() => {
+      setEvalData(adminTelemetryService.getEvaluationData());
+    });
+    return () => unsub();
+  }, []);
 
   const dimensionCards = [
     { title: 'Relevance (Sự liên quan)', score: evalData.metrics.relevance, desc: 'Bám sát nội dung slide gốc' },
@@ -34,38 +50,47 @@ export const AdminEvaluationPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">AI Evaluation & Benchmark</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">AI Evaluation & Benchmark</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Đánh Giá Thật
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-1">
-            Đánh giá chất lượng sư phạm theo 6 chiều chuẩn hoá (LLM-as-a-Judge, Rule-based Validator, Human Feedback).
+            Đánh giá chất lượng sư phạm theo 6 chiều chuẩn hoá (LLM-as-a-Judge, Rule-based Validator, Human Feedback) từ các bài học trong hệ thống.
           </p>
         </div>
 
-        {/* Evaluator Selector */}
-        <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-xs text-xs font-medium">
+        <div className="flex items-center space-x-2">
           <button
-            onClick={() => setEvaluatorType('llm_judge')}
-            className={`px-3 py-1.5 rounded-lg transition ${
-              evaluatorType === 'llm_judge' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600 hover:text-slate-900'
-            }`}
+            onClick={refresh}
+            disabled={loading}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition shadow-xs disabled:opacity-50"
           >
-            LLM-as-a-Judge
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <span>{loading ? 'Đang chấm điểm...' : 'Đánh Giá Lại'}</span>
           </button>
-          <button
-            onClick={() => setEvaluatorType('rule_based')}
-            className={`px-3 py-1.5 rounded-lg transition ${
-              evaluatorType === 'rule_based' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Rule-based Guard
-          </button>
-          <button
-            onClick={() => setEvaluatorType('human')}
-            className={`px-3 py-1.5 rounded-lg transition ${
-              evaluatorType === 'human' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Human Feedback
-          </button>
+
+          {/* Evaluator Selector */}
+          <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-xs text-xs font-medium">
+            <button
+              onClick={() => setEvaluatorType('rule_based')}
+              className={`px-3 py-1.5 rounded-lg transition ${
+                evaluatorType === 'rule_based' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Rule-based
+            </button>
+            <button
+              onClick={() => setEvaluatorType('llm_judge')}
+              className={`px-3 py-1.5 rounded-lg transition ${
+                evaluatorType === 'llm_judge' ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              LLM Judge
+            </button>
+          </div>
         </div>
       </div>
 

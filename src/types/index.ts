@@ -455,9 +455,12 @@ export interface Project {
   configuration: UserConfiguration;
   status: ProjectProcessingStatus;
   canonicalDocument?: CanonicalDocumentTree;
+  documentTree?: CanonicalDocumentTree;
   lessonBlueprint?: LessonBlueprint;
+  blueprint?: LessonBlueprint;
   clsgIr?: VerifiedCLSG_IR;
   qualityReport?: QualityReport;
+  executionLogs?: ExecutionTraceLog[];
   createdAt: string;
   updatedAt: string;
 }
@@ -639,5 +642,42 @@ export interface AdminOverviewKPIs {
   avgLatencyMs: number;
   errorRate: number;
   contentQualityScore: number;
+}
+
+export interface LessonAdminItem {
+  id: string;
+  title: string;
+  author: string;
+  authorEmail: string;
+  sectionsCount: number;
+  status: 'Published' | 'Draft' | 'Generating' | 'Failed' | 'Archived';
+  qualityScore: number;
+  aiCost: number;
+  latencyMs: number;
+  model: string;
+  promptVersion: string;
+  traceId: string;
+  lastUpdated: string;
+  sections: {
+    id: string;
+    title: string;
+    role: string;
+    narration: string;
+    durationSec: number;
+  }[];
+}
+
+export interface UserAdminRecord {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  lessonsCount: number;
+  activityStatus: 'active' | 'idle' | 'offline';
+  aiRequestsCount: number;
+  ttsRequestsCount: number;
+  lastActive: string;
+  totalCost: number;
+  recentActivity: string[];
 }
 

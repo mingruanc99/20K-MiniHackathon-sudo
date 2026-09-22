@@ -18,6 +18,7 @@ import { ILLMProvider, NarrationContext } from './LLMProvider';
 import { apiKeyService } from './apiKeyService';
 import { MockLLMProvider } from './MockLLMProvider';
 import { contentPurifierService } from '../../pipeline/services/contentPurifierService';
+import { adminTelemetryService } from '../adminTelemetryService';
 
 export class GeminiProvider implements ILLMProvider {
   readonly providerId = 'gemini';
@@ -49,10 +50,20 @@ export class GeminiProvider implements ILLMProvider {
   private async callGeminiJson<T>(
     model: string,
     prompt: string,
-    systemInstruction: string = ''
+    systemInstruction: string = '',
+    featureName: string = 'Gemini Generation'
   ): Promise<T> {
     const key = this.getActiveApiKey();
     if (!key) {
+      adminTelemetryService.recordError({
+        type: 'LLM_ERROR',
+        lessonId: 'gemini_session',
+        lessonTitle: 'Online LLM Service',
+        sectionId: featureName,
+        model,
+        severity: 'high',
+        message: 'Chưa cấu hình Gemini API Key'
+      });
       throw new Error(
         'Chưa cấu hình Gemini API Key. Vui lòng nhấn vào biểu tượng API Key trên thanh điều hướng để nhập mã khóa của bạn.'
       );
@@ -74,6 +85,7 @@ export class GeminiProvider implements ILLMProvider {
 
     for (const currentModel of uniqueModels) {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${key}`;
+      const tStart = performance.now();
 
       const body = {
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -101,6 +113,20 @@ export class GeminiProvider implements ILLMProvider {
 
         if (!res.ok) {
           const errText = await res.text();
+          const latencyMs = Math.round(performance.now() - tStart);
+
+          // Record telemetry error
+          adminTelemetryService.recordAICall({
+            model: currentModel,
+            feature: featureName,
+            promptTokens: Math.round((prompt.length + (systemInstruction?.length || 0)) / 4),
+            completionTokens: 0,
+            totalTokens: Math.round((prompt.length + (systemInstruction?.length || 0)) / 4),
+            costUsd: 0,
+            latencyMs,
+            status: 'error',
+            errorMessage: `${res.status}: ${errText.slice(0, 150)}`
+          });
 
           // 503 / 502 / 500: Model high demand or server busy -> automatic failover to next model!
           if (res.status === 503 || res.status === 502 || res.status === 500) {
@@ -125,10 +151,31 @@ export class GeminiProvider implements ILLMProvider {
         }
 
         const data = await res.json();
+        const latencyMs = Math.round(performance.now() - tStart);
         const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!candidateText) {
           throw new Error('Không nhận được nội dung phản hồi từ mô hình Gemini.');
         }
+
+        // Record successful call with real token usage
+        const usage = data.usageMetadata || {};
+        const promptTokens = usage.promptTokenCount || Math.round((prompt.length + (systemInstruction?.length || 0)) / 4);
+        const completionTokens = usage.candidatesTokenCount || Math.round(candidateText.length / 4);
+        const totalTokens = promptTokens + completionTokens;
+        const costUsd = currentModel.includes('pro')
+          ? (promptTokens * 0.0000035 + completionTokens * 0.0000105)
+          : (promptTokens * 0.000000075 + completionTokens * 0.00000030);
+
+        adminTelemetryService.recordAICall({
+          model: currentModel,
+          feature: featureName,
+          promptTokens,
+          completionTokens,
+          totalTokens,
+          costUsd: Math.round(costUsd * 100000) / 100000,
+          latencyMs,
+          status: 'success'
+        });
 
         // Clean possible markdown code fences if LLM wrapped in ```json
         const cleanedJson = candidateText.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
@@ -215,7 +262,8 @@ Return a valid JSON object strictly adhering to this schema:
       return await this.callGeminiJson<LessonModel>(
         this.primaryModel,
         prompt,
-        'You are an expert AI EdTech instructional designer.'
+        'You are an expert AI EdTech instructional designer.',
+        'Module 2: Whole-Lesson Model'
       );
     } catch (err) {
       console.warn('Gemini online calls failed after all retries, using resilient fallback:', err);
@@ -259,7 +307,8 @@ Return a valid JSON object matching:
       return await this.callGeminiJson<ContentPrioritization>(
         this.primaryModel,
         prompt,
-        'You are an instructional content filtering system.'
+        'You are an instructional content filtering system.',
+        'Module 2: Content Prioritization'
       );
     } catch (err) {
       console.warn('Gemini prioritization failed after retries, using resilient fallback:', err);
@@ -307,7 +356,8 @@ Return a JSON array of Teaching Units:
       return await this.callGeminiJson<TeachingUnit[]>(
         this.primaryModel,
         prompt,
-        'You are a master curriculum and instructional designer.'
+        'You are a master curriculum and instructional designer.',
+        'Module 2: Teaching Plan'
       );
     } catch (err) {
       console.warn('Gemini teaching plan failed after retries, using resilient fallback:', err);
@@ -348,7 +398,8 @@ Return JSON: { "narration": "Natural Vietnamese spoken lecture text" }`;
       const res = await this.callGeminiJson<{ narration: string }>(
         this.lightModel,
         prompt,
-        'You are an inspiring university AI lecturer speaking fluent, natural Vietnamese.'
+        'You are an inspiring university AI lecturer speaking fluent, natural Vietnamese.',
+        'Module 3A: Narration Generation'
       );
       const purification = contentPurifierService.purifyNarration(res.narration);
       return purification.cleanedText;
@@ -391,7 +442,8 @@ Return JSON:
       return await this.callGeminiJson<SemanticCritiqueReport>(
         this.lightModel,
         prompt,
-        'You are an instructional quality guard critic.'
+        'You are an instructional quality guard critic.',
+        'Module 4: Quality Guard Critique'
       );
     } catch (err) {
       return this.fallbackMock.semanticCritique(scenes, lessonModel, units);

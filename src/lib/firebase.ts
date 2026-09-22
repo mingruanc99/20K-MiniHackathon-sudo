@@ -28,19 +28,32 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDemoKeyMockForLocalDevOnly',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'clsg-ir-demo.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'clsg-ir-demo',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'clsg-ir-demo.appspot.com',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '1234567890',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:1234567890:web:abcdef123456'
+const getEnvVar = (key: string): string | undefined => {
+  if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+    return (import.meta as any).env[key];
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[key];
+  }
+  return undefined;
 };
 
+const firebaseConfig = {
+  apiKey: getEnvVar('VITE_FIREBASE_API_KEY') || 'AIzaSyDemoKeyMockForLocalDevOnly',
+  authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN') || 'clsg-ir-demo.firebaseapp.com',
+  projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID') || 'clsg-ir-demo',
+  storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET') || 'clsg-ir-demo.appspot.com',
+  messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID') || '1234567890',
+  appId: getEnvVar('VITE_FIREBASE_APP_ID') || '1:1234567890:web:abcdef123456'
+};
+
+const envApiKey = getEnvVar('VITE_FIREBASE_API_KEY');
+const envProjId = getEnvVar('VITE_FIREBASE_PROJECT_ID');
+
 export const isFirebaseConfigured = Boolean(
-  import.meta.env.VITE_FIREBASE_API_KEY &&
-  import.meta.env.VITE_FIREBASE_PROJECT_ID &&
-  !import.meta.env.VITE_FIREBASE_API_KEY.includes('Demo')
+  envApiKey &&
+  envProjId &&
+  !envApiKey.includes('Demo')
 );
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();

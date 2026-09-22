@@ -1,5 +1,5 @@
 // src/pages/admin/AdminContentQualityPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import { ContentQualityIssue, QualityIssueType, ErrorSeverity } from '../../types';
 import { CompactChart } from '../../components/admin/CompactChart';
@@ -16,15 +16,32 @@ import {
   ShieldCheck,
   SplitSquareVertical,
   Layers,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 
 export const AdminContentQualityPage: React.FC = () => {
-  const data = adminTelemetryService.getContentQualityData();
+  const [data, setData] = useState(() => adminTelemetryService.getContentQualityData());
   const [selectedIssue, setSelectedIssue] = useState<ContentQualityIssue | null>(null);
   const [filterType, setFilterType] = useState<string>('all');
   const [filterSeverity, setFilterSeverity] = useState<string>('all');
   const [search, setSearch] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+
+  const refresh = async () => {
+    setLoading(true);
+    await adminTelemetryService.syncRealData();
+    setData(adminTelemetryService.getContentQualityData());
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refresh();
+    const unsub = adminTelemetryService.subscribe(() => {
+      setData(adminTelemetryService.getContentQualityData());
+    });
+    return () => unsub();
+  }, []);
 
   const qualityRateCards = [
     { label: 'Overall Quality Score', value: `${data.qualityMetrics.overallQualityScore}/100`, status: 'safe', target: 'Target > 95' },
@@ -56,22 +73,38 @@ export const AdminContentQualityPage: React.FC = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Content Quality Center</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Content Quality Center</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Dữ Liệu Thật (Purifier Real Audit)
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-1">
-            Theo dõi tỷ lệ trùng lặp, rò rỉ metadata (aicb, 1/52), ký tự ô vuông đen (■), lỗi định dạng (1^-4) và vi phạm vai trò sư phạm.
+            Giám sát chất lượng sư phạm, phát hiện rò rỉ metadata, chuẩn hóa ký tự ■ và bảo vệ Zero-Leak cho mọi bài giảng.
           </p>
         </div>
 
-        <a
-          href={adminTelemetryService.getLangfuseTraceUrl()}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition shadow-xs self-start sm:self-auto"
-        >
-          <Flame className="w-3.5 h-3.5" />
-          <span>Langfuse Quality Traces</span>
-          <ArrowUpRight className="w-3.5 h-3.5" />
-        </a>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition shadow-xs disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <span>{loading ? 'Đang quét...' : 'Quét Lại'}</span>
+          </button>
+          <a
+            href={adminTelemetryService.getLangfuseTraceUrl()}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition shadow-xs self-start sm:self-auto"
+          >
+            <Flame className="w-3.5 h-3.5" />
+            <span>Langfuse Quality Traces</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </a>
+        </div>
       </div>
 
       {/* KPI Metric Cards */}

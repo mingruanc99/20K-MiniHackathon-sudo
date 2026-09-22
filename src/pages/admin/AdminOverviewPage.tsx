@@ -1,5 +1,4 @@
-// src/pages/admin/AdminOverviewPage.tsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../../components/admin/AdminLayout';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import { CompactChart } from '../../components/admin/CompactChart';
@@ -16,15 +15,38 @@ import {
   TrendingUp,
   ArrowUpRight,
   Flame,
-  CheckCircle2
+  CheckCircle2,
+  RefreshCw
 } from 'lucide-react';
 
 export const AdminOverviewPage: React.FC = () => {
   const { timeFilter } = useAdmin();
-  const kpis = adminTelemetryService.getOverviewKPIs(timeFilter);
-  const charts = adminTelemetryService.getOverviewCharts(timeFilter);
-  const langfuseData = adminTelemetryService.getLangfuseData();
-  const recentIssues = adminTelemetryService.getContentQualityData().issues.slice(0, 3);
+  const [loading, setLoading] = useState(false);
+  const [kpis, setKpis] = useState(() => adminTelemetryService.getOverviewKPIs(timeFilter));
+  const [charts, setCharts] = useState(() => adminTelemetryService.getOverviewCharts(timeFilter));
+  const [langfuseData, setLangfuseData] = useState(() => adminTelemetryService.getLangfuseData());
+  const [recentIssues, setRecentIssues] = useState(() => adminTelemetryService.getContentQualityData().issues.slice(0, 3));
+
+  const refresh = async () => {
+    setLoading(true);
+    await adminTelemetryService.syncRealData();
+    setKpis(adminTelemetryService.getOverviewKPIs(timeFilter));
+    setCharts(adminTelemetryService.getOverviewCharts(timeFilter));
+    setLangfuseData(adminTelemetryService.getLangfuseData());
+    setRecentIssues(adminTelemetryService.getContentQualityData().issues.slice(0, 3));
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refresh();
+    const unsub = adminTelemetryService.subscribe(() => {
+      setKpis(adminTelemetryService.getOverviewKPIs(timeFilter));
+      setCharts(adminTelemetryService.getOverviewCharts(timeFilter));
+      setLangfuseData(adminTelemetryService.getLangfuseData());
+      setRecentIssues(adminTelemetryService.getContentQualityData().issues.slice(0, 3));
+    });
+    return () => unsub();
+  }, [timeFilter]);
 
   const kpiCards = [
     {
@@ -32,7 +54,7 @@ export const AdminOverviewPage: React.FC = () => {
       value: kpis.totalUsers.toLocaleString(),
       subValue: `${kpis.activeUsers} đang hoạt động`,
       icon: Users,
-      trend: '+14% vs kỳ trước',
+      trend: '+100% tài khoản thật',
       trendPositive: true,
       color: 'blue'
     },
@@ -41,44 +63,44 @@ export const AdminOverviewPage: React.FC = () => {
       value: kpis.totalLessons.toLocaleString(),
       subValue: `${kpis.publishedLessons} đã xuất bản`,
       icon: BookOpen,
-      trend: '+22% vs kỳ trước',
+      trend: 'Đồng bộ từ Studio',
       trendPositive: true,
       color: 'indigo'
     },
     {
       title: 'AI Requests',
       value: kpis.aiRequests.toLocaleString(),
-      subValue: 'Gemini 1.5 Pro & Flash',
+      subValue: 'Gemini Online Generation',
       icon: Cpu,
-      trend: '+38% volume',
+      trend: 'Lưu lượng thực',
       trendPositive: true,
       color: 'sky'
     },
     {
       title: 'AI Cost (Total)',
-      value: `$${kpis.aiCost.toFixed(2)}`,
-      subValue: 'Avg $0.0008 / request',
+      value: `$${kpis.aiCost.toFixed(3)}`,
+      subValue: 'Chi phí token thực tế',
       icon: DollarSign,
-      trend: 'Tối ưu -18%',
+      trend: 'Google API Pricing',
       trendPositive: true,
       color: 'emerald'
     },
     {
       title: 'Avg Latency',
       value: `${kpis.avgLatencyMs}ms`,
-      subValue: 'Target < 1200ms',
+      subValue: 'Đo lường thời gian thực',
       icon: Clock,
-      trend: '-60ms faster',
+      trend: 'Tối ưu hoá',
       trendPositive: true,
       color: 'amber'
     },
     {
       title: 'Error Rate',
       value: `${kpis.errorRate}%`,
-      subValue: '0 Critical unhandled',
+      subValue: 'Lỗi phát hiện thực tế',
       icon: AlertTriangle,
-      trend: '-0.4% giảm',
-      trendPositive: true,
+      trend: kpis.errorRate === 0 ? 'Hoàn hảo 0 lỗi' : 'Đang xử lý',
+      trendPositive: kpis.errorRate === 0,
       color: 'rose'
     },
     {
@@ -86,7 +108,7 @@ export const AdminOverviewPage: React.FC = () => {
       value: `${kpis.contentQualityScore}/100`,
       subValue: 'Zero-Leak Guaranteed',
       icon: Award,
-      trend: '+3.2 pts',
+      trend: 'Module 4 Quality Guard',
       trendPositive: true,
       color: 'emerald'
     }
@@ -97,13 +119,28 @@ export const AdminOverviewPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">System Overview</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">System Overview</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Dữ Liệu Thật 100% (Live Telemetry)
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-1">
-            Trung tâm giám sát hiệu năng AI generation, chi phí LLM, chất lượng bài giảng và trạng thái hệ thống.
+            Trung tâm giám sát hiệu năng AI generation, chi phí LLM, chất lượng bài giảng và trạng thái hệ thống từ các bài học thực tế.
           </p>
         </div>
 
         <div className="flex items-center space-x-2">
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition shadow-xs disabled:opacity-50"
+            title="Đồng bộ lại từ cơ sở dữ liệu thật"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <span>{loading ? 'Đang đồng bộ...' : 'Làm Mới Dữ Liệu'}</span>
+          </button>
           <Link
             to="/admin/quality"
             className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition shadow-xs"

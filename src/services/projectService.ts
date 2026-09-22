@@ -80,6 +80,65 @@ export class ProjectService {
     return merged;
   }
 
+  async listAllProjects(): Promise<Project[]> {
+    const projectMap = new Map<string, Project>();
+
+    // 1. Read all localStorage keys starting with clsg_projects_
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('clsg_projects_')) {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const list: Project[] = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                list.forEach((p) => {
+                  if (p && p.projectId) {
+                    const existing = projectMap.get(p.projectId);
+                    if (!existing || new Date(p.updatedAt || 0).getTime() >= new Date(existing.updatedAt || 0).getTime()) {
+                      projectMap.set(p.projectId, p);
+                    }
+                  }
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Error reading local projects for admin:', err);
+      }
+    }
+
+    // 2. Read all Firestore projects if connected
+    if (this.canUseFirestore()) {
+      try {
+        const snap = await getDocs(collection(db, 'projects'));
+        snap.forEach((d) => {
+          const p = d.data() as Project;
+          if (p && p.projectId) {
+            const existing = projectMap.get(p.projectId);
+            if (!existing || new Date(p.updatedAt || 0).getTime() >= new Date(existing.updatedAt || 0).getTime()) {
+              projectMap.set(p.projectId, p);
+            }
+          }
+        });
+      } catch (err) {
+        console.warn('Admin Firestore list all projects notice:', err);
+      }
+    }
+
+    // 3. If empty, ensure default CNN project is present
+    if (projectMap.size === 0) {
+      const defaultProj = this.getBuiltinCnnProject('admin_hkthien_husc');
+      projectMap.set(defaultProj.projectId, defaultProj);
+    }
+
+    const merged = Array.from(projectMap.values());
+    merged.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+    return merged;
+  }
+
   async getProject(projectId: string, userId: string): Promise<Project | null> {
     // 1. First check local store for the latest customized configuration
     if (typeof window !== 'undefined' && window.localStorage) {

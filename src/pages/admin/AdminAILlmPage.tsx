@@ -1,5 +1,4 @@
-// src/pages/admin/AdminAILlmPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import { CompactChart } from '../../components/admin/CompactChart';
 import {
@@ -12,34 +11,67 @@ import {
   Flame,
   ArrowUpRight,
   TrendingUp,
-  Activity
+  Activity,
+  RefreshCw
 } from 'lucide-react';
 
 export const AdminAILlmPage: React.FC = () => {
-  const data = adminTelemetryService.getAILlmData();
+  const [data, setData] = useState(() => adminTelemetryService.getAILlmData());
   const [activeTab, setActiveTab] = useState<'byModel' | 'byFeature' | 'byPrompt'>('byModel');
+  const [loading, setLoading] = useState(false);
+
+  const refresh = async () => {
+    setLoading(true);
+    await adminTelemetryService.syncRealData();
+    setData(adminTelemetryService.getAILlmData());
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refresh();
+    const unsub = adminTelemetryService.subscribe(() => {
+      setData(adminTelemetryService.getAILlmData());
+    });
+    return () => unsub();
+  }, []);
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">AI & LLM Analytics</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">AI & LLM Analytics</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Lưu Lượng Thật
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-1">
-            Theo dõi chi tiết mức tiêu thụ token, chi phí API, độ trễ và phân tích hiệu năng theo mô hình, tính năng và phiên bản prompt.
+            Theo dõi chi tiết mức tiêu thụ token, chi phí API, độ trễ và phân tích hiệu năng theo mô hình, tính năng và phiên bản prompt thực tế.
           </p>
         </div>
 
-        <a
-          href={adminTelemetryService.getLangfuseTraceUrl()}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition shadow-xs self-start sm:self-auto"
-        >
-          <Flame className="w-3.5 h-3.5" />
-          <span>Langfuse LLM Telemetry</span>
-          <ArrowUpRight className="w-3.5 h-3.5" />
-        </a>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition shadow-xs disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <span>{loading ? 'Đang đồng bộ...' : 'Làm Mới'}</span>
+          </button>
+          <a
+            href={adminTelemetryService.getLangfuseTraceUrl()}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition shadow-xs self-start sm:self-auto"
+          >
+            <Flame className="w-3.5 h-3.5" />
+            <span>Langfuse LLM Telemetry</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </a>
+        </div>
       </div>
 
       {/* Top Metrics Row */}

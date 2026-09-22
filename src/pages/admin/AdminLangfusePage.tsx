@@ -1,5 +1,4 @@
-// src/pages/admin/AdminLangfusePage.tsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import {
   Flame,
@@ -12,35 +11,68 @@ import {
   Search,
   Filter,
   Activity,
-  Cpu
+  Cpu,
+  RefreshCw
 } from 'lucide-react';
 
 export const AdminLangfusePage: React.FC = () => {
-  const langfuse = adminTelemetryService.getLangfuseData();
+  const [langfuse, setLangfuse] = useState(() => adminTelemetryService.getLangfuseData());
+  const [loading, setLoading] = useState(false);
+
+  const refresh = async () => {
+    setLoading(true);
+    await adminTelemetryService.syncRealData();
+    setLangfuse(adminTelemetryService.getLangfuseData());
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refresh();
+    const unsub = adminTelemetryService.subscribe(() => {
+      setLangfuse(adminTelemetryService.getLangfuseData());
+    });
+    return () => unsub();
+  }, []);
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center space-x-2">
-            <Flame className="w-5 h-5 text-orange-500" />
-            <span>Langfuse AI Observability Hub</span>
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center space-x-2">
+              <Flame className="w-5 h-5 text-orange-500" />
+              <span>Langfuse AI Observability Hub</span>
+            </h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Dữ Liệu Thật
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-1">
-            Trung tâm kết nối và giám sát dấu vết AI (Traces, Generations, Latency, Scores) theo kiến trúc SDK Langfuse chính thống.
+            Trung tâm kết nối và giám sát dấu vết AI (Traces, Generations, Latency, Scores) theo kiến trúc SDK Langfuse chính thống từ các bài giảng thực tế.
           </p>
         </div>
 
-        <a
-          href={langfuse.summary.projectUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center space-x-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl transition shadow-xs self-start sm:self-auto"
-        >
-          <span>Open Langfuse Cloud</span>
-          <ArrowUpRight className="w-4 h-4 text-orange-400" />
-        </a>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition shadow-xs disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <span>{loading ? 'Đang đồng bộ...' : 'Làm Mới'}</span>
+          </button>
+          <a
+            href={langfuse.summary.projectUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center space-x-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl transition shadow-xs self-start sm:self-auto"
+          >
+            <span>Open Langfuse Cloud</span>
+            <ArrowUpRight className="w-4 h-4 text-orange-400" />
+          </a>
+        </div>
       </div>
 
       {/* Summary KPI Bar */}

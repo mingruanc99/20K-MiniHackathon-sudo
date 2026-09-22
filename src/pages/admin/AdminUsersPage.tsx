@@ -1,5 +1,5 @@
-// src/pages/admin/AdminUsersPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { adminTelemetryService } from '../../services/adminTelemetryService';
 import {
   Users,
   Search,
@@ -11,97 +11,41 @@ import {
   Volume2,
   AlertTriangle,
   X,
-  Mail
+  Mail,
+  RefreshCw
 } from 'lucide-react';
-
-interface UserAdminRecord {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'instructor' | 'student' | 'researcher';
-  lessonsCount: number;
-  activityStatus: 'active' | 'idle' | 'offline';
-  aiRequestsCount: number;
-  ttsRequestsCount: number;
-  lastActive: string;
-  totalCost: number;
-  recentActivity: string[];
-}
+import { UserAdminRecord, UserRole } from '../../types';
 
 export const AdminUsersPage: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<UserAdminRecord | null>(null);
   const [search, setSearch] = useState<string>('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [users, setUsers] = useState<UserAdminRecord[]>(() => adminTelemetryService.getUsers());
+  const [loading, setLoading] = useState(false);
 
-  const userList: UserAdminRecord[] = [
-    {
-      id: 'usr_admin_hkthien',
-      name: 'Huỳnh Khắc Thiên',
-      email: 'hkthien@husc.edu.vn',
-      role: 'admin',
-      lessonsCount: 14,
-      activityStatus: 'active',
-      aiRequestsCount: 940,
-      ttsRequestsCount: 520,
-      lastActive: 'Vừa xong',
-      totalCost: 0.84,
-      recentActivity: [
-        'Hiệu chuẩn mô hình sinh Pose Estimation (Module 4 Purifier)',
-        'Kiểm tra và sửa lỗi ký tự ■ và khoảng số 1^-4',
-        'Xuất bản bài giảng Keypoint & Human Pose'
-      ]
-    },
-    {
-      id: 'usr_alex_rivers',
-      name: 'Prof. Alex Rivers',
-      email: 'alex.rivers@stanford.edu',
-      role: 'instructor',
-      lessonsCount: 8,
-      activityStatus: 'active',
-      aiRequestsCount: 680,
-      ttsRequestsCount: 380,
-      lastActive: '15 phút trước',
-      totalCost: 0.52,
-      recentActivity: [
-        'Tạo bài giảng Introduction to Convolutional Neural Networks',
-        'Chạy kiểm thử DAR-P và 13 Taxonomy visual cues'
-      ]
-    },
-    {
-      id: 'usr_minh_nguyen',
-      name: 'Dr. Minh Nguyen',
-      email: 'minh.nguyen@vinuni.edu.vn',
-      role: 'researcher',
-      lessonsCount: 4,
-      activityStatus: 'idle',
-      aiRequestsCount: 340,
-      ttsRequestsCount: 190,
-      lastActive: '2 giờ trước',
-      totalCost: 0.28,
-      recentActivity: [
-        'Tải lên slide Linear Algebra for Deep Learning',
-        'Trích xuất tài liệu dạng PPTX không cần LLM'
-      ]
-    },
-    {
-      id: 'usr_student_01',
-      name: 'Trần Văn Nam',
-      email: 'nam.tv@student.husc.edu.vn',
-      role: 'student',
-      lessonsCount: 1,
-      activityStatus: 'offline',
-      aiRequestsCount: 42,
-      ttsRequestsCount: 28,
-      lastActive: '1 ngày trước',
-      totalCost: 0.04,
-      recentActivity: [
-        'Xem bài giảng Keypoint & Pose Estimation',
-        'Nghe kịch bản giọng đọc Neural2'
-      ]
+  const refresh = async () => {
+    setLoading(true);
+    await adminTelemetryService.syncRealData();
+    setUsers(adminTelemetryService.getUsers());
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refresh();
+    const unsub = adminTelemetryService.subscribe(() => {
+      setUsers(adminTelemetryService.getUsers());
+    });
+    return () => unsub();
+  }, []);
+
+  const handleRoleChange = (userId: string, newRole: UserRole) => {
+    const success = adminTelemetryService.changeUserRole(userId, newRole);
+    if (success && selectedUser && selectedUser.id === userId) {
+      setSelectedUser({ ...selectedUser, role: newRole });
     }
-  ];
+  };
 
-  const filteredUsers = userList.filter((u) => {
+  const filteredUsers = users.filter((u) => {
     if (roleFilter !== 'all' && u.role !== roleFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -115,16 +59,30 @@ export const AdminUsersPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Users Management</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Users Management</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Tài Khoản Thật
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-1">
-            Quản lý tài khoản, theo dõi hạn ngạch AI, lưu lượng TTS và lịch sử hoạt động học tập.
+            Quản lý tài khoản, theo dõi hạn ngạch AI, lưu lượng TTS và lịch sử hoạt động học tập thực tế.
           </p>
         </div>
 
         <div className="flex items-center space-x-2">
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition shadow-xs disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <span>{loading ? 'Đang đồng bộ...' : 'Làm Mới'}</span>
+          </button>
           <span className="text-xs text-slate-500">Đã đăng ký:</span>
           <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-bold text-xs font-mono">
-            {userList.length} người dùng
+            {users.length} người dùng
           </span>
         </div>
       </div>

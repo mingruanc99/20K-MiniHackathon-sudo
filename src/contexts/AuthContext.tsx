@@ -12,6 +12,7 @@ import {
   FirebaseUser
 } from '../lib/firebase';
 import { User } from '../types';
+import { adminTelemetryService } from '../services/adminTelemetryService';
 
 interface AuthContextType {
   user: User | null;
@@ -66,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setUser(liveUser);
           localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(liveUser));
+          adminTelemetryService.registerUser(liveUser);
         } else {
           // If Firebase says no active session, check if we have an explicit demo user in localStorage
           const saved = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
@@ -74,6 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const parsed: User = JSON.parse(saved);
               if (parsed && parsed.uid.startsWith('demo_')) {
                 setUser(parsed);
+                adminTelemetryService.registerUser(parsed);
                 setLoading(false);
                 return;
               }
@@ -91,7 +94,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
       if (saved) {
         try {
-          setUser(JSON.parse(saved));
+          const parsed = JSON.parse(saved);
+          setUser(parsed);
+          adminTelemetryService.registerUser(parsed);
         } catch {
           setUser(null);
         }
@@ -111,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setUser(demoUser);
     localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(demoUser));
+    adminTelemetryService.registerUser(demoUser);
   };
 
   const signInWithGoogle = async () => {
@@ -127,6 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setUser(liveUser);
           localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(liveUser));
+          adminTelemetryService.registerUser(liveUser);
           return;
         }
       } catch (err: any) {
@@ -164,6 +171,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setUser(liveUser);
           localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(liveUser));
+          adminTelemetryService.registerUser(liveUser);
           return;
         }
       } catch (err: any) {
@@ -186,6 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       setUser(demoUser);
       localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(demoUser));
+      adminTelemetryService.registerUser(demoUser);
     }
   };
 
@@ -202,6 +211,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setUser(liveUser);
           localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(liveUser));
+          adminTelemetryService.registerUser(liveUser);
           return;
         }
       } catch (err: any) {
@@ -217,6 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           setUser(localUser);
           localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(localUser));
+          adminTelemetryService.registerUser(localUser);
           return;
         }
         throw err;
@@ -231,6 +242,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       setUser(demoUser);
       localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(demoUser));
+      adminTelemetryService.registerUser(demoUser);
     }
   };
 
@@ -257,6 +269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setUser(adminUser);
     localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(adminUser));
+    adminTelemetryService.registerUser(adminUser);
   };
 
   return (

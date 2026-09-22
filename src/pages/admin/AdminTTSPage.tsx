@@ -1,5 +1,4 @@
-// src/pages/admin/AdminTTSPage.tsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import {
   Volume2,
@@ -10,27 +9,58 @@ import {
   AlertTriangle,
   Play,
   Layers,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 
 export const AdminTTSPage: React.FC = () => {
-  const tts = adminTelemetryService.getTTSData();
+  const [tts, setTts] = useState(() => adminTelemetryService.getTTSData());
+  const [loading, setLoading] = useState(false);
+
+  const refresh = async () => {
+    setLoading(true);
+    await adminTelemetryService.syncRealData();
+    setTts(adminTelemetryService.getTTSData());
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refresh();
+    const unsub = adminTelemetryService.subscribe(() => {
+      setTts(adminTelemetryService.getTTSData());
+    });
+    return () => unsub();
+  }, []);
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center space-x-2">
-            <Volume2 className="w-5 h-5 text-emerald-600" />
-            <span>TTS Speech Synthesis Analytics</span>
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center space-x-2">
+              <Volume2 className="w-5 h-5 text-emerald-600" />
+              <span>TTS Speech Synthesis Analytics</span>
+            </h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Dữ Liệu Thật
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-1">
-            Theo dõi lưu lượng tổng hợp giọng nói AI, thời lượng audio sinh ra, chi phí nhà cung cấp và độ trễ phát âm.
+            Theo dõi lưu lượng tổng hợp giọng nói AI, thời lượng audio sinh ra, chi phí nhà cung cấp và độ trễ phát âm thực tế.
           </p>
         </div>
 
         <div className="flex items-center space-x-2">
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition shadow-xs disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <span>{loading ? 'Đang đồng bộ...' : 'Làm Mới'}</span>
+          </button>
           <span className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200">
             {tts.successRate}% Success Rate
           </span>

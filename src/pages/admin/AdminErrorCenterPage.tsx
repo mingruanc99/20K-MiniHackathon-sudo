@@ -1,5 +1,4 @@
-// src/pages/admin/AdminErrorCenterPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import { ErrorRecord, ErrorSeverity } from '../../types';
 import {
@@ -13,7 +12,8 @@ import {
   ArrowUpRight,
   Check,
   RotateCcw,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 
 export const AdminErrorCenterPage: React.FC = () => {
@@ -22,6 +22,21 @@ export const AdminErrorCenterPage: React.FC = () => {
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+
+  const refresh = async () => {
+    setLoading(true);
+    await adminTelemetryService.syncRealData();
+    setErrors([...adminTelemetryService.getErrorRecords()]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    const unsub = adminTelemetryService.subscribe(() => {
+      setErrors([...adminTelemetryService.getErrorRecords()]);
+    });
+    return () => unsub();
+  }, []);
 
   const handleResolve = (errId: string) => {
     adminTelemetryService.resolveError(errId);

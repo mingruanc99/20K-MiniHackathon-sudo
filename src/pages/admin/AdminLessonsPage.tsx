@@ -1,6 +1,7 @@
 // src/pages/admin/AdminLessonsPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
+import { Link } from 'react-router-dom';
 import {
   BookOpen,
   CheckCircle2,
@@ -13,168 +14,32 @@ import {
   X,
   FileText,
   DollarSign,
-  Cpu
+  Cpu,
+  RefreshCw
 } from 'lucide-react';
-
-interface LessonAdminItem {
-  id: string;
-  title: string;
-  author: string;
-  authorEmail: string;
-  sectionsCount: number;
-  status: 'Published' | 'Draft' | 'Generating' | 'Failed' | 'Archived';
-  qualityScore: number;
-  aiCost: number;
-  latencyMs: number;
-  model: string;
-  promptVersion: string;
-  traceId: string;
-  lastUpdated: string;
-  sections: {
-    id: string;
-    title: string;
-    role: string;
-    narration: string;
-    durationSec: number;
-  }[];
-}
+import { LessonAdminItem } from '../../types';
 
 export const AdminLessonsPage: React.FC = () => {
   const [selectedLesson, setSelectedLesson] = useState<LessonAdminItem | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState<string>('');
+  const [lessons, setLessons] = useState<LessonAdminItem[]>(() => adminTelemetryService.getLessons());
+  const [loading, setLoading] = useState(false);
 
-  const lessons: LessonAdminItem[] = [
-    {
-      id: 'proj_pose_17_keypoints',
-      title: 'Keypoint & Human Pose Estimation',
-      author: 'Huỳnh Khắc Thiên',
-      authorEmail: 'hkthien@husc.edu.vn',
-      sectionsCount: 4,
-      status: 'Published',
-      qualityScore: 99.2,
-      aiCost: 0.0032,
-      latencyMs: 840,
-      model: 'gemini-1.5-pro',
-      promptVersion: 'section_generator:v2.1',
-      traceId: 'tr_lf_pose_s2_0912',
-      lastUpdated: '2026-09-22 22:45',
-      sections: [
-        {
-          id: 'S1',
-          title: 'Giới Thiệu Keypoint & Pose',
-          role: 'INTRODUCTION',
-          narration: 'Chào mừng các bạn đến với bài học về Keypoint & Pose. Trong phần này, chúng ta sẽ tìm hiểu cách mô hình biểu diễn các điểm đặc trưng và tư thế của con người.',
-          durationSec: 18.5
-        },
-        {
-          id: 'S2',
-          title: 'Thách Thức Góc Nhìn',
-          role: 'HOOK',
-          narration: 'Bạn thử nhìn một người từ góc này. Liệu mô hình có thể xác định chính xác đâu là tay trái và tay phải? Cấu trúc đối xứng cơ thể đặt ra bài toán suy luận phức tạp.',
-          durationSec: 22.0
-        },
-        {
-          id: 'S3',
-          title: 'Phân Tích Cánh Tay Bị Che Khuất',
-          role: 'EXAMPLE',
-          narration: 'Trong hình này, cánh tay bị che một phần. Mô hình vẫn cần suy ra vị trí của khớp khuỷu tay dựa trên các keypoint xung quanh.',
-          durationSec: 24.5
-        },
-        {
-          id: 'S4',
-          title: 'Mối Quan Hệ Không Gian Giữa Các Keypoint',
-          role: 'MECHANISM',
-          narration: 'Để giải quyết vấn đề này, mô hình không chỉ nhìn từng điểm riêng lẻ mà còn học mối quan hệ không gian giữa các keypoint.',
-          durationSec: 25.0
-        }
-      ]
-    },
-    {
-      id: 'proj_intro_to_cnn',
-      title: 'Introduction to Convolutional Neural Networks',
-      author: 'Prof. Alex Rivers',
-      authorEmail: 'alex.rivers@stanford.edu',
-      sectionsCount: 5,
-      status: 'Published',
-      qualityScore: 98.8,
-      aiCost: 0.0041,
-      latencyMs: 760,
-      model: 'gemini-1.5-pro',
-      promptVersion: 'section_generator:v2.1',
-      traceId: 'tr_lf_cnn_s3_0772',
-      lastUpdated: '2026-09-22 20:15',
-      sections: [
-        {
-          id: 'S1',
-          title: 'What is CNN?',
-          role: 'CORE_CONCEPT',
-          narration: 'CNN, hay Convolutional Neural Network, là một kiến trúc neural network được thiết kế đặc biệt để xử lý dữ liệu dạng grid như hình ảnh.',
-          durationSec: 20.0
-        },
-        {
-          id: 'S2',
-          title: 'CNN Architecture',
-          role: 'KEY_EXPLANATION',
-          narration: 'Để hiểu cách CNN xử lý ảnh, chúng ta có thể nhìn vào kiến trúc gồm nhiều layer, trong đó mỗi layer đảm nhiệm một vai trò khác nhau.',
-          durationSec: 25.0
-        },
-        {
-          id: 'S3',
-          title: 'Convolution Operation',
-          role: 'KEY_EXPLANATION',
-          narration: 'Ở slide trước, chúng ta đã thấy CNN gồm nhiều layer. CNN dùng kernel để quét qua từng vùng nhỏ của ảnh và tạo ra feature map.',
-          durationSec: 28.0
-        },
-        {
-          id: 'S4',
-          title: 'Convolution Example',
-          role: 'EXAMPLE',
-          narration: 'Để hình dung rõ hơn cơ chế này, chúng ta thử nhìn vào một ví dụ cụ thể. Khi kernel di chuyển trên ảnh, mỗi vị trí sẽ tạo ra một giá trị tương ứng.',
-          durationSec: 26.0
-        },
-        {
-          id: 'S5',
-          title: 'Summary',
-          role: 'SUMMARY',
-          narration: 'Như vậy, convolution giúp trích xuất đặc trưng từ ảnh và pooling giúp giảm kích thước biểu diễn hiệu quả.',
-          durationSec: 22.0
-        }
-      ]
-    },
-    {
-      id: 'proj_linear_algebra_ai',
-      title: 'Eigenvectors & SVD in Deep Learning',
-      author: 'Dr. Minh Nguyen',
-      authorEmail: 'minh.nguyen@vinuni.edu.vn',
-      sectionsCount: 6,
-      status: 'Generating',
-      qualityScore: 94.2,
-      aiCost: 0.0028,
-      latencyMs: 1140,
-      model: 'gemini-1.5-pro',
-      promptVersion: 'section_generator:v2.0',
-      traceId: 'tr_lf_svd_s3_0411',
-      lastUpdated: '2026-09-22 18:30',
-      sections: []
-    },
-    {
-      id: 'proj_vision_transformers',
-      title: 'Vision Transformers (ViT) Architecture',
-      author: 'Le Hoang Nam',
-      authorEmail: 'nam.lh@fpt.edu.vn',
-      sectionsCount: 7,
-      status: 'Draft',
-      qualityScore: 91.0,
-      aiCost: 0.0019,
-      latencyMs: 980,
-      model: 'gemini-1.5-flash',
-      promptVersion: 'section_generator:v2.0',
-      traceId: 'tr_lf_vit_s6_0102',
-      lastUpdated: '2026-09-22 14:10',
-      sections: []
-    }
-  ];
+  const refresh = async () => {
+    setLoading(true);
+    await adminTelemetryService.syncRealData();
+    setLessons(adminTelemetryService.getLessons());
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    refresh();
+    const unsub = adminTelemetryService.subscribe(() => {
+      setLessons(adminTelemetryService.getLessons());
+    });
+    return () => unsub();
+  }, []);
 
   const filteredLessons = lessons.filter((l) => {
     if (statusFilter !== 'all' && l.status !== statusFilter) return false;
@@ -190,13 +55,27 @@ export const AdminLessonsPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Lessons Management</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Lessons Management</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Dữ Liệu Thật
+            </span>
+          </div>
           <p className="text-xs text-slate-500 mt-1">
-            Quản lý toàn bộ bài giảng trong hệ thống, theo dõi chất lượng sư phạm, trạng thái sinh AI và chi phí.
+            Quản lý toàn bộ bài giảng trong hệ thống, theo dõi chất lượng sư phạm, trạng thái sinh AI và chi phí thực tế.
           </p>
         </div>
 
         <div className="flex items-center space-x-2">
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition shadow-xs disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <span>{loading ? 'Đang đồng bộ...' : 'Làm Mới'}</span>
+          </button>
           <span className="text-xs text-slate-500 font-medium">Tổng số:</span>
           <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-bold text-xs font-mono">
             {lessons.length} bài giảng
@@ -410,7 +289,14 @@ export const AdminLessonsPage: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
+            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+              <Link
+                to={`/projects/${selectedLesson.id}`}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-xl transition shadow-xs"
+              >
+                <span>Mở Trong Studio Bài Giảng</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </Link>
               <button
                 onClick={() => setSelectedLesson(null)}
                 className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-medium text-xs rounded-xl hover:bg-slate-100 transition shadow-xs"
