@@ -10,7 +10,7 @@ from typing import Union
 from pathlib import Path
 from pptx import Presentation
 from app.models.document import CanonicalDocumentTree, DocumentSection, ContentElement
-from app.modules.extractor.base import BaseExtractor
+from app.modules.extractor.base import BaseExtractor, normalize_text_and_symbols, BULLET_REGEX_PATTERN
 
 class PPTXExtractor(BaseExtractor):
     def extract(self, source: Union[str, Path, bytes], filename: str) -> CanonicalDocumentTree:
@@ -76,15 +76,24 @@ class PPTXExtractor(BaseExtractor):
                         if is_title_shape and p_idx == 0 and p_text == slide_title:
                             continue
 
-                        el_type = "bullet_point" if paragraph.level > 0 or p_text.startswith(("-", "•", "*")) else "paragraph"
+                        norm_text = normalize_text_and_symbols(p_text)
+                        if not norm_text:
+                            continue
+
+                        is_bullet = (
+                            paragraph.level > 0 or
+                            bool(re.match(rf'^({BULLET_REGEX_PATTERN}|\d+\.|\([a-z0-9]+\))\s*', p_text, re.IGNORECASE))
+                        )
+                        clean_text = re.sub(rf'^({BULLET_REGEX_PATTERN}|\d+\.|\([a-z0-9]+\))\s*', '', norm_text, flags=re.IGNORECASE)
+                        el_type = "bullet_point" if is_bullet else "paragraph"
                         elements.append(ContentElement(
                             element_id=f"{sec_id}_el_{el_idx:02d}",
                             type=el_type,
-                            text=p_text,
+                            text=clean_text or norm_text,
                             level=paragraph.level + 1,
                             metadata={"shape_name": shape.name}
                         ))
-                        raw_texts.append(p_text)
+                        raw_texts.append(norm_text)
                         el_idx += 1
 
                 elif shape.has_table:

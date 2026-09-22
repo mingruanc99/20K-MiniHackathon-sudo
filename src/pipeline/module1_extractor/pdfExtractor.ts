@@ -100,13 +100,14 @@ export class PDFExtractor {
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
           if (i === titleIdx) {
+            const cleanTitle = contentPurifierService.cleanLine(line) || line;
             elements.push({
               element_id: `${secId}_el_${String(elIdx++).padStart(2, '0')}`,
               type: 'title',
-              text: line,
+              text: cleanTitle,
               level: 1
             });
-            rawTexts.push(line);
+            rawTexts.push(cleanTitle);
           } else {
             // Check if line is purely metadata/pagination/instructor note
             if (contentPurifierService.isMetadataOrInstructionLine(line)) {
@@ -116,7 +117,7 @@ export class PDFExtractor {
             if (!cleanText || cleanText.length < 3) {
               continue;
             }
-            const isBullet = /^([-*+•]|\d+\.|\([a-z0-9]+\))\s+/i.test(line);
+            const isBullet = /^([-*+•■□▪▫●◆▶◄►‣⁃∙·\u25A0-\u25FF\uE000-\uF8FF]|\d+\.|\([a-z0-9]+\))\s+/i.test(line);
             elements.push({
               element_id: `${secId}_el_${String(elIdx++).padStart(2, '0')}`,
               type: isBullet ? 'bullet_point' : 'paragraph',

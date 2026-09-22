@@ -616,6 +616,26 @@ export class QualityVisualGuard {
       auto_repaired: narrativeRepairsCount > 0
     });
 
+    // Check 10: Unicode & Glyph Integrity Guard (Zero ■, PUA, or malformed tokens)
+    let glyphLeakCount = 0;
+    workingScenes.forEach((s) => {
+      if (/[■□▪▫▬▭▮▯▲▼▶◄►◆◇●○◉◘◙⦿★☆✦✧✨\u25A0-\u25FF\uE000-\uF8FF\uFFFD]|\b\d+\s*\^[-–—~]\s*\d+\b/.test(s.narration.text)) {
+        glyphLeakCount++;
+      }
+    });
+
+    checks.push({
+      check_id: 'chk_unicode_glyph_integrity',
+      rule_name: 'Bảo Toàn Ký Tự Chuẩn & Loại Bỏ Glyph Lỗi / Ô Vuông Đen (Unicode & Symbol Integrity)',
+      category: 'narrative_coherence',
+      status: glyphLeakCount === 0 ? 'PASSED' : 'FAILED',
+      score: glyphLeakCount === 0 ? 1.0 : 0.0,
+      threshold: 1.0,
+      actual_value: `${glyphLeakCount} glyph lỗi rò rỉ • 100% chuẩn hoá Unicode & định dạng khoảng số`,
+      message: 'Đảm bảo không còn ký tự ô vuông đen (■), ký tự PUA/Wingdings hay lỗi định dạng khoảng số (1^-4) trong nội dung học tập.',
+      auto_repaired: narrativeRepairsCount > 0
+    });
+
     const narrativeScore = Math.max(0.85, 1.0 - (narrativeIssuesCount - narrativeRepairsCount) * 0.1);
     checks.push({
       check_id: 'chk_narrative_coherence',

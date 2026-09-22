@@ -101,9 +101,103 @@ export class ContentPurifierService {
   /**
    * Sanitizes an individual bullet or raw line by removing inline metadata, parentheticals, and pagination.
    */
+  /**
+   * Generalized Unicode Normalization, Control Character Removal,
+   * Geometric Bullet & PUA Symbol Sanitization, and OCR/Caret Range Transformation.
+   * 
+   * Handles:
+   * 1. Preserving valid Markdown and LaTeX expressions ($...$, $$...$$, etc.)
+   * 2. Unicode normalization (NFC) for proper precomposed character rendering
+   * 3. Invisible, control, and zero-width characters (ZWSP, ZWNJ, BOM, etc.)
+   * 4. Private Use Area (PUA \uE000-\uF8FF, Wingdings/Webdings) and replacement chars (\uFFFD)
+   * 5. Converting malformed ranges like "■ 1^-4" or "1^-4" into "1–4:" or "1–4"
+   * 6. Stripping decorative bullet glyphs (■, □, ▪, ▫, ●, ◆, etc.) from learner-facing content
+   */
+  normalizeUnicodeAndSymbols(rawText: string): string {
+    if (!rawText) return '';
+
+    // 1. Stash LaTeX formulas to preserve valid math expressions ($x^2$, $10^{-4}$, etc.)
+    const mathPlaceholders: string[] = [];
+    const mathRegex = /(\$\$[\s\S]*?\$\$|\$[^$\n]+\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g;
+    let text = rawText.replace(mathRegex, (match) => {
+      const placeholder = `__LATEX_MATH_BLOCK_${mathPlaceholders.length}__`;
+      mathPlaceholders.push(match);
+      return placeholder;
+    });
+
+    // 2. Unicode normalization (NFC)
+    text = text.normalize('NFC');
+
+    // 3. Remove invisible, control, and zero-width characters
+    text = text.replace(
+      /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u200B-\u200F\uFEFF\u00AD\uFFFC]/g,
+      ''
+    );
+
+    // 4. Character class for decorative/geometric bullets, PUA symbols, and replacement characters
+    // Matches ■, □, ▪, ▫, ▬, ▭, ▮, ▯, ▲, ▼, ▶, ◄, ►, ◆, ◇, ●, ○, ◉, ◘, ◙, ⦿, ★, ☆, ✦, ✧, ✨, ‣, ⁃, ∙, ·, PUA, \uFFFD
+    const bulletGlyphs =
+      '[■□▪▫▬▭▮▯▲▼▶◄►◆◇●○◉◘◙⦿★☆✦✧✨‣⁃∙·\\u25A0-\\u25FF\\uE000-\\uF8FF\\uFFFD]';
+
+    // 5. Transform malformed superscript ranges with or without bullet prefix (e.g. "■ 1^-4", "■ 5^-10", "1^-4", "1^–4")
+    // When followed by words or at end of group, format nicely as "1–4:"
+    const rangeWithBulletRegex = new RegExp(
+      `(?:${bulletGlyphs}\\s*)?(\\b\\d+)\\s*\\^[-–—~]\\s*(\\d+\\b)(?:\\s*[:\\-])?`,
+      'g'
+    );
+    text = text.replace(rangeWithBulletRegex, '$1–$2:');
+
+    // Also handle simple caret range if not caught: e.g. "1^-4" -> "1–$2"
+    text = text.replace(/(\b\d+)\s*\^[-–—~]\s*(\d+\b)/g, '$1–$2');
+
+    // 6. Transform bullet followed by numeric index or range (e.g. "■ 1.", "■ 1-4", "■ 1:"):
+    // If bullet precedes a number/range followed by text without a colon, add a clean colon
+    const bulletNumberPattern = new RegExp(
+      `(?:^|[.,;:\\n]\\s*)${bulletGlyphs}\\s*(\\b\\d+(?:[–—\\-]\\d+)?)\\s*(?![:\\-])`,
+      'g'
+    );
+    text = text.replace(bulletNumberPattern, (match, num) => {
+      const prefix = match.match(/^[.,;:\n]\s*/)?.[0] || '';
+      return `${prefix}${num}: `;
+    });
+
+    // 7. Strip all remaining geometric bullet shapes, PUA characters, and replacement characters
+    // A. Leading bullets on lines
+    text = text.replace(new RegExp(`^\\s*${bulletGlyphs}+\\s*`, 'gm'), '');
+    // B. Bullets following punctuation (e.g., ", ■ ") -> preserve punctuation, remove bullet
+    text = text.replace(new RegExp(`([,;:.]\\s*)${bulletGlyphs}+\\s*`, 'g'), '$1');
+    // C. Bullets before punctuation (e.g., " ■ ,") -> remove bullet
+    text = text.replace(new RegExp(`\\s*${bulletGlyphs}+\\s*([,;:?.!])`, 'g'), '$1');
+    // D. Isolated inline bullets between words: replace with space (or comma if no punctuation)
+    text = text.replace(new RegExp(`\\s*${bulletGlyphs}+\\s*`, 'g'), ' ');
+
+    // 8. Clean up excessive punctuation and spacing artifacts
+    text = text
+      .replace(/\s*,\s*,+/g, ', ')
+      .replace(/\s*;\s*;+/g, '; ')
+      .replace(/:\s*:+/g, ': ')
+      .replace(/,\s*\./g, '.')
+      .replace(/\s+([.,;:!?])/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // 9. Restore stashed LaTeX math expressions
+    mathPlaceholders.forEach((math, idx) => {
+      text = text.replace(`__LATEX_MATH_BLOCK_${idx}__`, math);
+    });
+
+    return text;
+  }
+
+  /**
+   * Sanitizes an individual bullet or raw line by removing inline metadata, parentheticals, and pagination.
+   */
   cleanLine(line: string): string {
     let text = line.trim();
     if (!text) return '';
+
+    // Step 0: Normalize Unicode, control characters, geometric bullets and ranges
+    text = this.normalizeUnicodeAndSymbols(text);
 
     // Remove parenthetical instructor notes
     for (const pat of this.instructorNotePatterns) {
@@ -126,7 +220,7 @@ export class ContentPurifierService {
     }
 
     // Clean bullets / dashes / numbering prefix
-    text = text.replace(/^[•\-\*·\d\.\)]\s*/, '');
+    text = text.replace(/^[•\-\*·■□▪▫●◆▶◄►‣⁃∙\u25A0-\u25FF\uE000-\uF8FF\uFFFD\d\.\)]\s*/, '');
 
     // Clean up excessive punctuation and spacing
     text = text.replace(/\s+/g, ' ').replace(/\s+([.,;:!?])/g, '$1').trim();
@@ -199,6 +293,16 @@ export class ContentPurifierService {
     const removedElements: string[] = [];
     let text = rawNarration || '';
 
+    // Step 0: Universal Unicode & Symbol Normalization
+    // Fixes black square bullets (■, □, ▪), PUA characters, replacement chars, and caret ranges (1^-4 -> 1–4:)
+    if (/[■□▪▫▬▭▮▯▲▼▶◄►◆◇●○◉◘◙⦿★☆✦✧✨\u25A0-\u25FF\uE000-\uF8FF\uFFFD]/.test(text)) {
+      removedElements.push('DECORATIVE_BULLET_GLYPHS');
+    }
+    if (/\b\d+\s*\^[-–—~]\s*\d+\b/.test(text)) {
+      removedElements.push('MALFORMED_RANGE_TOKENS');
+    }
+    text = this.normalizeUnicodeAndSymbols(text);
+
     // Step 1: Detect and transform broken template bridges like "Từ nền tảng của [LABEL], chúng ta đi sâu..."
     // If the label is an internal badge ("HÃY SUY NGHĨ", "HOOK", "S1"), rewrite gracefully to natural teacher speech.
     const brokenBridgeRegex = /từ nền tảng của\s+(hãy suy nghĩ|hãy thử suy nghĩ|hook|mechanism|example|s[1-9]\d*|slide\s*\d+|chủ đề này)[,.]?\s*(chúng ta đi sâu vào cơ chế chi tiết[.:]?)?/gi;
@@ -265,6 +369,9 @@ export class ContentPurifierService {
     text = text.replace(/\s+([.,;:!?])/g, '$1');
     text = text.replace(/\s+/g, ' ').trim();
 
+    // Re-apply symbol normalization to ensure no dangling bullets remain
+    text = this.normalizeUnicodeAndSymbols(text);
+
     // Ensure proper capitalization of sentences
     text = text
       .split(/(?<=[.!?])\s+/)
@@ -289,7 +396,7 @@ export class ContentPurifierService {
 
   /**
    * VALIDATION SUITE (Section 9 of User Request)
-   * 8 rigorous checks ensuring ONLY pure lecture content reaches the student.
+   * 9 rigorous checks ensuring ONLY pure lecture content reaches the student.
    */
   validateNarration(text: string): ValidationReport {
     const failures: string[] = [];
@@ -349,6 +456,12 @@ export class ContentPurifierService {
     // CHECK 8: Teacher Speech Authenticity (Must not contain dangling syntax or empty sentences)
     if (/\b(?:và\.|giúp\s*\.|qua đó\s*\.)/i.test(text)) {
       failures.push('CHECK_8_DANGLING_CONJUNCTION_SYNTAX');
+    }
+
+    // CHECK 9: Black Square Glyphs, PUA Characters, Replacement Chars, or Malformed Tokens
+    const forbiddenGlyphPattern = /[■□▪▫▬▭▮▯▲▼▶◄►◆◇●○◉◘◙⦿★☆✦✧✨\u25A0-\u25FF\uE000-\uF8FF\uFFFD]|\b\d+\s*\^[-–—~]\s*\d+\b/;
+    if (forbiddenGlyphPattern.test(text)) {
+      failures.push('CHECK_9_GLYPH_OR_MALFORMED_TOKEN_PRESENT');
     }
 
     return {

@@ -1138,3 +1138,48 @@ test('Content Purification Engine: strictly separates Learning Content from Meta
   assert.ok(cleaned.toLowerCase().includes('mô hình') && cleaned.toLowerCase().includes('pose'), 'Must preserve key domain terminology');
 });
 
+test('Black Square Bullet & Malformed Range Normalization: eliminates ■ and converts 1^-4 to clean readable range', () => {
+  // 1. User's exact reported case
+  const userCase = 'nose — mũi, ■ 1^-4 mắt trái, mắt phải, tai trái, tai phải, ■ 5^-10 vai...';
+  const purified = contentPurifierService.normalizeUnicodeAndSymbols(userCase);
+
+  // Assertions
+  assert.ok(!purified.includes('■'), 'Must NOT contain black square character ■');
+  assert.ok(!purified.includes('1^-4'), 'Must NOT contain malformed token 1^-4');
+  assert.ok(!purified.includes('5^-10'), 'Must NOT contain malformed token 5^-10');
+  assert.ok(purified.includes('1–4: mắt trái'), 'Must convert 1^-4 to clean range 1–4:');
+  assert.ok(purified.includes('5–10: vai'), 'Must convert 5^-10 to clean range 5–10:');
+  assert.equal(
+    purified,
+    'nose — mũi, 1–4: mắt trái, mắt phải, tai trái, tai phải, 5–10: vai...'
+  );
+
+  // 2. Full purification pipeline validation
+  const fullResult = contentPurifierService.purifyNarration(userCase);
+  assert.ok(!fullResult.cleanedText.includes('■'), 'Purified narration must not contain ■');
+  assert.ok(!fullResult.cleanedText.includes('1^-4'), 'Purified narration must not contain 1^-4');
+  assert.ok(fullResult.passedValidation, `Validation must pass: ${fullResult.validationIssues.join(', ')}`);
+
+  // 3. LaTeX formula preservation
+  const mathInput = 'Trong công thức $10^{-4}$ và $E = mc^2$, các keypoint gồm ■ 1^-4 mắt trái.';
+  const mathCleaned = contentPurifierService.normalizeUnicodeAndSymbols(mathInput);
+  assert.ok(mathCleaned.includes('$10^{-4}$'), 'Must preserve LaTeX exponent formula $10^{-4}$');
+  assert.ok(mathCleaned.includes('$E = mc^2$'), 'Must preserve LaTeX formula $E = mc^2$');
+  assert.ok(!mathCleaned.includes('■'), 'Must strip ■ even when near math formulas');
+  assert.ok(mathCleaned.includes('1–4: mắt trái'), 'Must convert 1^-4 to 1–4:');
+
+  // 4. Private Use Area (PUA) & Replacement Character (\uFFFD) handling
+  const puaInput = '\uF0A7 1^-4 mắt trái, tai phải \uFFFD 5^-10 vai';
+  const puaCleaned = contentPurifierService.normalizeUnicodeAndSymbols(puaInput);
+  assert.ok(!puaCleaned.includes('\uF0A7'), 'Must strip PUA Wingdings character');
+  assert.ok(!puaCleaned.includes('\uFFFD'), 'Must strip Unicode replacement character');
+  assert.ok(puaCleaned.includes('1–4: mắt trái'), 'Must normalize range with PUA prefix');
+  assert.ok(puaCleaned.includes('5–10: vai'), 'Must normalize range with replacement char');
+
+  // 5. Validation Check 9 catches raw glyphs
+  const badValidation = contentPurifierService.validateNarration('Nội dung có ■ và 1^-4');
+  assert.equal(badValidation.isValid, false);
+  assert.ok(badValidation.failures.includes('CHECK_9_GLYPH_OR_MALFORMED_TOKEN_PRESENT'));
+});
+
+

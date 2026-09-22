@@ -79,13 +79,14 @@ export class PPTXExtractor {
           if (slideNum === 1) overallTitle = pText;
           isFirst = false;
 
+          const cleanTitle = contentPurifierService.cleanLine(pText) || pText;
           elements.push({
             element_id: `${secId}_el_${String(elIdx++).padStart(2, '0')}`,
             type: 'title',
-            text: pText,
+            text: cleanTitle,
             level: 1
           });
-          rawTexts.push(pText);
+          rawTexts.push(cleanTitle);
         } else {
           if (contentPurifierService.isMetadataOrInstructionLine(pText)) {
             continue;
@@ -94,7 +95,8 @@ export class PPTXExtractor {
           if (!cleanText || cleanText.length < 3) {
             continue;
           }
-          const isBullet = pText.startsWith('•') || pText.startsWith('-') || pText.startsWith('*');
+          const isBullet = /^([-*+•■□▪▫●◆▶◄►‣⁃∙·\u25A0-\u25FF\uE000-\uF8FF]|\d+\.|\([a-z0-9]+\))\s+/i.test(pText) ||
+            pText.startsWith('•') || pText.startsWith('-') || pText.startsWith('*') || pText.startsWith('■');
           elements.push({
             element_id: `${secId}_el_${String(elIdx++).padStart(2, '0')}`,
             type: isBullet ? 'bullet_point' : 'paragraph',
@@ -113,7 +115,8 @@ export class PPTXExtractor {
           if (notesFile) {
             const notesXml = await notesFile.async('text');
             const noteTMatches = [...notesXml.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/gi)];
-            const noteText = noteTMatches.map((m) => m[1]).join(' ').trim();
+            const noteRaw = noteTMatches.map((m) => m[1]).join(' ').trim();
+            const noteText = contentPurifierService.cleanLine(noteRaw);
             if (noteText && !noteText.match(/^Slide \d+$/i)) {
               elements.push({
                 element_id: `${secId}_el_${String(elIdx++).padStart(2, '0')}`,

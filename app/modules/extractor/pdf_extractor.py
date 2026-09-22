@@ -10,7 +10,7 @@ from typing import Union
 from pathlib import Path
 import fitz  # PyMuPDF
 from app.models.document import CanonicalDocumentTree, DocumentSection, ContentElement
-from app.modules.extractor.base import BaseExtractor
+from app.modules.extractor.base import BaseExtractor, normalize_text_and_symbols, BULLET_REGEX_PATTERN
 
 class PDFExtractor(BaseExtractor):
     def extract(self, source: Union[str, Path, bytes], filename: str) -> CanonicalDocumentTree:
@@ -57,24 +57,27 @@ class PDFExtractor(BaseExtractor):
                         overall_title = slide_title
 
                 for i, line in enumerate(lines):
+                    norm_line = normalize_text_and_symbols(line)
+                    if not norm_line:
+                        continue
                     if i == title_idx:
                         elements.append(ContentElement(
                             element_id=f"{sec_id}_el_{el_idx:02d}",
                             type="title",
-                            text=line,
+                            text=norm_line,
                             level=1
                         ))
                     else:
-                        is_bullet = line.startswith(("-", "*", "•")) or (len(line) > 2 and line[0].isdigit() and line[1] in [".", ")"])
-                        clean_text = line.lstrip("-*•0123456789. ") if is_bullet else line
+                        is_bullet = bool(re.match(rf'^({BULLET_REGEX_PATTERN}|\d+\.|\([a-z0-9]+\))\s*', line, re.IGNORECASE))
+                        clean_text = re.sub(rf'^({BULLET_REGEX_PATTERN}|\d+\.|\([a-z0-9]+\))\s*', '', norm_line, flags=re.IGNORECASE)
                         elements.append(ContentElement(
                             element_id=f"{sec_id}_el_{el_idx:02d}",
                             type="bullet_point" if is_bullet else "paragraph",
-                            text=clean_text or line,
+                            text=clean_text or norm_line,
                             level=2
                         ))
                     el_idx += 1
-                    raw_texts.append(line)
+                    raw_texts.append(norm_line)
 
             if not elements:
                 elements.append(ContentElement(

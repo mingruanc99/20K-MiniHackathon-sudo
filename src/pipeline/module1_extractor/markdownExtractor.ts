@@ -3,6 +3,7 @@
  * Rule-based Markdown Extractor for CLSG-IR Module 1
  */
 import { CanonicalDocumentTree, DocumentSection, ContentElement } from '../../types';
+import { contentPurifierService } from '../services/contentPurifierService';
 
 export class MarkdownExtractor {
   extract(content: string, filename: string): CanonicalDocumentTree {
@@ -49,7 +50,7 @@ export class MarkdownExtractor {
       const hMatch = stripped.match(/^(#{1,3})\s+(.*)$/);
       if (hMatch) {
         const hLevel = hMatch[1].length;
-        const hText = hMatch[2].trim();
+        const hText = contentPurifierService.cleanLine(hMatch[2]) || hMatch[2].trim();
 
         if (hLevel <= 2 && currentElements.length > 0) {
           sections.push({
@@ -76,22 +77,27 @@ export class MarkdownExtractor {
         continue;
       }
 
-      if (stripped.match(/^([-*+•]|\d+\.)\s+/)) {
-        const bulletText = stripped.replace(/^([-*+•]|\d+\.)\s+/, '');
-        currentElements.push({
-          element_id: `${currentSecId}_el_${String(elIdx++).padStart(2, '0')}`,
-          type: 'bullet_point',
-          text: bulletText,
-          level: 1
-        });
-        rawTexts.push(bulletText);
+      if (stripped.match(/^([-*+•■□▪▫●◆▶◄►‣⁃∙·\u25A0-\u25FF\uE000-\uF8FF]|\d+\.)\s+/)) {
+        const bulletText = contentPurifierService.cleanLine(stripped);
+        if (bulletText) {
+          currentElements.push({
+            element_id: `${currentSecId}_el_${String(elIdx++).padStart(2, '0')}`,
+            type: 'bullet_point',
+            text: bulletText,
+            level: 1
+          });
+          rawTexts.push(bulletText);
+        }
       } else {
-        currentElements.push({
-          element_id: `${currentSecId}_el_${String(elIdx++).padStart(2, '0')}`,
-          type: 'paragraph',
-          text: stripped
-        });
-        rawTexts.push(stripped);
+        const pText = contentPurifierService.cleanLine(stripped);
+        if (pText) {
+          currentElements.push({
+            element_id: `${currentSecId}_el_${String(elIdx++).padStart(2, '0')}`,
+            type: 'paragraph',
+            text: pText
+          });
+          rawTexts.push(pText);
+        }
       }
     }
 
