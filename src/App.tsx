@@ -9,6 +9,21 @@ import { DashboardPage } from './pages/DashboardPage';
 import { NewProjectPage } from './pages/NewProjectPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 
+// Admin Components & Pages
+import { AdminRoute } from './components/admin/AdminRoute';
+import { AdminLayout } from './components/admin/AdminLayout';
+import { AdminOverviewPage } from './pages/admin/AdminOverviewPage';
+import { AdminContentQualityPage } from './pages/admin/AdminContentQualityPage';
+import { AdminLessonsPage } from './pages/admin/AdminLessonsPage';
+import { AdminUsersPage } from './pages/admin/AdminUsersPage';
+import { AdminAILlmPage } from './pages/admin/AdminAILlmPage';
+import { AdminLangfusePage } from './pages/admin/AdminLangfusePage';
+import { AdminEvaluationPage } from './pages/admin/AdminEvaluationPage';
+import { AdminPromptPage } from './pages/admin/AdminPromptPage';
+import { AdminErrorCenterPage } from './pages/admin/AdminErrorCenterPage';
+import { AdminTTSPage } from './pages/admin/AdminTTSPage';
+import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
+
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
 
@@ -67,6 +82,31 @@ export const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
+
+          {/* ========================================================= */}
+          {/* ADMIN DASHBOARD - RBAC PROTECTED                          */}
+          {/* ========================================================= */}
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <AdminLayout />
+              </AdminRoute>
+            }
+          >
+            <Route index element={<AdminOverviewPage />} />
+            <Route path="overview" element={<AdminOverviewPage />} />
+            <Route path="quality" element={<AdminContentQualityPage />} />
+            <Route path="lessons" element={<AdminLessonsPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="ai-analytics" element={<AdminAILlmPage />} />
+            <Route path="langfuse" element={<AdminLangfusePage />} />
+            <Route path="evaluation" element={<AdminEvaluationPage />} />
+            <Route path="prompts" element={<AdminPromptPage />} />
+            <Route path="errors" element={<AdminErrorCenterPage />} />
+            <Route path="tts" element={<AdminTTSPage />} />
+            <Route path="settings" element={<AdminSettingsPage />} />
+          </Route>
 
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

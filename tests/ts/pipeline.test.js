@@ -1182,4 +1182,64 @@ test('Black Square Bullet & Malformed Range Normalization: eliminates ■ and co
   assert.ok(badValidation.failures.includes('CHECK_9_GLYPH_OR_MALFORMED_TOKEN_PRESENT'));
 });
 
+test('Admin Dashboard & RBAC: enforces role authorizations, bootstraps hkthien@husc.edu.vn, and verifies Langfuse integration', async () => {
+  const { rbacService, BOOTSTRAP_ADMIN_EMAIL } = await import('../../src/services/rbacService.ts');
+  const { adminTelemetryService } = await import('../../src/services/adminTelemetryService.ts');
+
+  // 1. Root admin bootstrap verification
+  const adminUser = {
+    uid: 'u_admin_test',
+    email: 'hkthien@husc.edu.vn',
+    displayName: 'Huỳnh Khắc Thiên',
+    role: 'admin'
+  };
+  assert.equal(rbacService.isAdmin(adminUser), true, 'hkthien@husc.edu.vn must be recognized as Admin');
+  assert.equal(rbacService.hasPermission(adminUser, 'view_dashboard'), true);
+  assert.equal(rbacService.hasPermission(adminUser, 'view_content_quality'), true);
+  assert.equal(rbacService.hasPermission(adminUser, 'manage_prompts'), true);
+  assert.equal(rbacService.hasPermission(adminUser, 'view_langfuse'), true);
+  assert.equal(rbacService.getUserPermissions(adminUser).length, 10, 'Admin must possess all 10 RBAC permissions');
+
+  // Case insensitivity
+  const adminUpper = { uid: 'u2', email: 'HKTHIEN@HUSC.EDU.VN', displayName: 'Thien', role: 'instructor' };
+  assert.equal(rbacService.isAdmin(adminUpper), true, 'Admin email check must be case-insensitive');
+
+  // 2. Normal user rejection
+  const normalUser = {
+    uid: 'u_student',
+    email: 'student@example.com',
+    displayName: 'Student',
+    role: 'student'
+  };
+  assert.equal(rbacService.isAdmin(normalUser), false, 'Normal student must NOT have admin access');
+  assert.equal(rbacService.hasPermission(normalUser, 'view_dashboard'), false);
+  assert.equal(rbacService.hasPermission(normalUser, 'manage_prompts'), false);
+
+  const reqCheck = rbacService.validateAdminRequest(normalUser);
+  assert.equal(reqCheck.authorized, false);
+  assert.ok(reqCheck.error?.includes('FORBIDDEN_NOT_ADMIN'));
+
+  // 3. Telemetry KPIs & Langfuse Deep Link Verification
+  const kpis = adminTelemetryService.getOverviewKPIs('7d');
+  assert.ok(kpis.totalLessons > 0);
+  assert.ok(kpis.contentQualityScore >= 95);
+
+  const langfuseUrl = adminTelemetryService.getLangfuseTraceUrl('tr_test_123');
+  assert.ok(langfuseUrl.includes('https://cloud.langfuse.com/project/clsg-ir-studio/traces/tr_test_123'));
+
+  const promptUrl = adminTelemetryService.getLangfusePromptUrl('section_generator', 'v2.1');
+  assert.ok(promptUrl.includes('prompts/section_generator?v=v2.1'));
+
+  // 4. Content vs Telemetry metadata isolation test (Rule 15)
+  const qualityData = adminTelemetryService.getContentQualityData();
+  assert.ok(qualityData.issues.length > 0);
+  qualityData.issues.forEach((iss) => {
+    // Assert learner-facing cleaned output NEVER contains trace ID or metadata
+    assert.ok(!iss.cleanedOutput.includes(iss.traceId || 'trace'), 'Learner content must not contain trace ID');
+    assert.ok(!iss.cleanedOutput.includes('aicb'), 'Learner content must not contain administrative metadata');
+    assert.ok(!iss.cleanedOutput.includes('■'), 'Learner content must not contain black square glyph');
+  });
+});
+
+
 

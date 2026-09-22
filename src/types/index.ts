@@ -4,7 +4,7 @@
  */
 import { LearningNeed } from './lessonModel';
 
-export type UserRole = 'student' | 'instructor' | 'researcher';
+export type UserRole = 'admin' | 'instructor' | 'student' | 'researcher';
 
 export interface User {
   uid: string;
@@ -468,3 +468,176 @@ export interface ExecutionTraceLog {
   timestamp: string;
   details: Record<string, any>;
 }
+
+// ============================================================================
+// ADMIN DASHBOARD & OBSERVABILITY TYPES
+// ============================================================================
+
+export type AdminPermission =
+  | 'view_dashboard'
+  | 'view_users'
+  | 'view_lessons'
+  | 'view_content_quality'
+  | 'view_ai_analytics'
+  | 'view_errors'
+  | 'view_tts'
+  | 'view_langfuse'
+  | 'manage_prompts'
+  | 'manage_lessons';
+
+export type TimeFilter = 'today' | '7d' | '30d' | '90d';
+
+export type QualityIssueType =
+  | 'METADATA_LEAK'
+  | 'DUPLICATE_CONTENT'
+  | 'INVALID_CHARACTER'
+  | 'TEMPLATE_LEAK'
+  | 'FILLER_CONTENT'
+  | 'ROLE_VIOLATION'
+  | 'BROKEN_FORMAT'
+  | 'EMPTY_CONTENT';
+
+export type ErrorSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+export interface ContentQualityIssue {
+  id: string;
+  lessonId: string;
+  lessonTitle: string;
+  sectionId: string;
+  issueType: QualityIssueType;
+  severity: ErrorSeverity;
+  rawOutput: string;
+  cleanedOutput: string;
+  model: string;
+  promptVersion: string;
+  timestamp: string;
+  traceId?: string;
+  resolved?: boolean;
+}
+
+export interface AILlmMetric {
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  successRate: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  totalCost: number;
+  avgLatencyMs: number;
+  byModel: {
+    model: string;
+    requests: number;
+    tokens: number;
+    cost: number;
+    avgLatencyMs: number;
+    errorRate: number;
+  }[];
+  byFeature: {
+    feature: string;
+    requests: number;
+    tokens: number;
+    cost: number;
+    avgLatencyMs: number;
+  }[];
+  byPromptVersion: {
+    prompt: string;
+    version: string;
+    requests: number;
+    qualityScore: number;
+    cost: number;
+  }[];
+}
+
+export interface ErrorRecord {
+  id: string;
+  timestamp: string;
+  type: QualityIssueType | 'GENERATION_ERROR' | 'PARSER_ERROR' | 'TTS_ERROR' | 'LLM_ERROR' | 'TIMEOUT';
+  lessonId: string;
+  lessonTitle: string;
+  sectionId: string;
+  model: string;
+  severity: ErrorSeverity;
+  status: 'unresolved' | 'investigating' | 'resolved';
+  message: string;
+  traceId?: string;
+  stackSnippet?: string;
+}
+
+export interface PromptMetadata {
+  id: string;
+  name: string;
+  version: string;
+  status: 'production' | 'staging' | 'deprecated';
+  model: string;
+  qualityScore: number;
+  cost: number;
+  avgLatencyMs: number;
+  templateSnippet: string;
+  createdAt: string;
+  updatedAt: string;
+  traceCount: number;
+}
+
+export interface TTSMetric {
+  requests: number;
+  totalDurationMin: number;
+  successRate: number;
+  avgLatencyMs: number;
+  failureRate: number;
+  totalCost: number;
+  byVoice: {
+    voice: string;
+    provider: string;
+    requests: number;
+    durationMin: number;
+    cost: number;
+  }[];
+  byProvider: {
+    provider: string;
+    requests: number;
+    avgLatencyMs: number;
+    cost: number;
+  }[];
+}
+
+export interface EvaluationMetric {
+  relevance: number;
+  accuracy: number;
+  clarity: number;
+  conciseness: number;
+  structure: number;
+  instructionAdherence: number;
+  overallScore: number;
+  evaluatorType: 'llm_judge' | 'rule_based' | 'human';
+  failedSamplesCount: number;
+  trend: number[];
+}
+
+export interface LangfuseTraceSummary {
+  traceId: string;
+  name: string;
+  sessionId: string;
+  userId: string;
+  lessonId: string;
+  latencyMs: number;
+  totalCost: number;
+  status: 'success' | 'error';
+  tags: string[];
+  url: string;
+  timestamp: string;
+  model: string;
+}
+
+export interface AdminOverviewKPIs {
+  totalUsers: number;
+  activeUsers: number;
+  totalLessons: number;
+  publishedLessons: number;
+  aiRequests: number;
+  aiCost: number;
+  avgLatencyMs: number;
+  errorRate: number;
+  contentQualityScore: number;
+}
+

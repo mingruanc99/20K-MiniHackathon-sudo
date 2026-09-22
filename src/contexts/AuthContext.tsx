@@ -17,10 +17,12 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   isDemoMode: boolean;
+  isAdmin: boolean;
   signInWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string, name?: string) => Promise<void>;
   loginAsDemo: (profile?: Partial<User>) => void;
+  loginAsAdmin: () => void;
   logout: () => Promise<void>;
 }
 
@@ -32,7 +34,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
-      return saved ? JSON.parse(saved) : null;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.email?.toLowerCase() === 'hkthien@husc.edu.vn') {
+          parsed.role = 'admin';
+        }
+        return parsed;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -41,17 +50,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Check if active user is demo mode
   const isDemo = !user || user.uid.startsWith('demo_');
+  const isAdminUser = Boolean(user && (user.role === 'admin' || user.email?.toLowerCase() === 'hkthien@husc.edu.vn'));
 
   useEffect(() => {
     if (isFirebaseConfigured) {
       const unsubscribe = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
         if (fbUser) {
+          const isBootstrapAdmin = fbUser.email?.toLowerCase() === 'hkthien@husc.edu.vn';
           const liveUser: User = {
             uid: fbUser.uid,
             email: fbUser.email,
             displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
             photoURL: fbUser.photoURL,
-            role: 'instructor'
+            role: isBootstrapAdmin ? 'admin' : 'instructor'
           };
           setUser(liveUser);
           localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(liveUser));
@@ -235,16 +246,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  const loginAsAdmin = () => {
+    const adminUser: User = {
+      uid: 'admin_hkthien_husc',
+      email: 'hkthien@husc.edu.vn',
+      displayName: 'Huỳnh Khắc Thiên (Admin)',
+      photoURL: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80',
+      role: 'admin',
+      createdAt: new Date().toISOString()
+    };
+    setUser(adminUser);
+    localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(adminUser));
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
         loading,
         isDemoMode: isDemo,
+        isAdmin: isAdminUser,
         signInWithGoogle,
         loginWithEmail,
         registerWithEmail,
         loginAsDemo,
+        loginAsAdmin,
         logout
       }}
     >

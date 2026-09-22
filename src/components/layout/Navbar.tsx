@@ -41,6 +41,17 @@ export const Navbar: React.FC = () => {
             <Link to="/projects/new" className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 transition flex items-center gap-1.5 text-xs font-semibold">
               <UploadCloud className="w-3.5 h-3.5 text-indigo-600" /> Tải lên bài giảng
             </Link>
+
+            {/* Admin Direct Access */}
+            {(user?.role === 'admin' || user?.email?.toLowerCase() === 'hkthien@husc.edu.vn') && (
+              <Link
+                to="/admin"
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition flex items-center gap-1.5 text-xs font-bold shadow-xs"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Admin Dashboard</span>
+              </Link>
+            )}
           </nav>
         </div>
 
