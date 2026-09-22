@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased font-sans;
+  }
+}
+
+/* Custom academic styling */
+.badge-role-hook {
+  @apply bg-amber-50 text-amber-700 border border-amber-200;
+}
+.badge-role-mechanism {
+  @apply bg-blue-50 text-blue-700 border border-blue-200;
+}
+.badge-role-example {
+  @apply bg-emerald-50 text-emerald-700 border border-emerald-200;
+}
+.badge-role-summary {
+  @apply bg-purple-50 text-purple-700 border border-purple-200;
+}
+.badge-role-definition {
+  @apply bg-cyan-50 text-cyan-700 border border-cyan-200;
+}
+.badge-role-comparison {
+  @apply bg-indigo-50 text-indigo-700 border border-indigo-200;
+}
+
+/* Pause Tags */
+.pause-tag-syntactic {
+  @apply bg-amber-100/70 text-amber-800 border border-amber-300/80;
+}
+.pause-tag-semantic {
+  @apply bg-blue-100/70 text-blue-800 border border-blue-300/80;
+}
+.pause-tag-concept {
+  @apply bg-purple-100/70 text-purple-800 border border-purple-300/80;
+}
+.pause-tag-transition {
+  @apply bg-rose-100/70 text-rose-800 border border-rose-300/80;
+}
+.pause-tag-emphasis {
+  @apply bg-emerald-100/70 text-emerald-800 border border-emerald-300/80;
+}
+
+/* Code block pre formatting */
+pre code {
+  font-family: 'JetBrains Mono', monospace;
+}

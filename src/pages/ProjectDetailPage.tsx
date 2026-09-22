@@ -1,0 +1,372 @@
+// src/pages/ProjectDetailPage.tsx
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { projectService } from '../services/projectService';
+import { pipelineOrchestrator } from '../pipeline/orchestrator';
+import { Project, ExecutionTraceLog, UserConfiguration } from '../types';
+import { Stepper, PipelineStage } from '../components/pipeline/Stepper';
+import { StatusBadge } from '../components/common/StatusBadge';
+import { StructureViewer } from '../components/pipeline/StructureViewer';
+import { UserConfigViewer } from '../components/pipeline/UserConfigViewer';
+import { PlanViewer } from '../components/pipeline/PlanViewer';
+import { NarrationViewer } from '../components/pipeline/NarrationViewer';
+import { ProsodyViewer } from '../components/pipeline/ProsodyViewer';
+import { VisualIntentViewer } from '../components/pipeline/VisualIntentViewer';
+import { QualityGuardViewer } from '../components/pipeline/QualityGuardViewer';
+import { LessonUnderstandingViewer } from '../components/pipeline/LessonUnderstandingViewer';
+import { CLSGIRInspector } from '../components/pipeline/CLSGIRInspector';
+import { VideoPreview } from '../components/pipeline/VideoPreview';
+import { DecisionTrace } from '../components/pipeline/DecisionTrace';
+import { technicalTerminologyService } from '../pipeline/services/technicalTerminologyService';
+import { ApiKeyModal } from '../components/common/ApiKeyModal';
+import { apiKeyService } from '../services/llm/apiKeyService';
+import {
+  Sparkles,
+  Play,
+  RotateCw,
+  Download,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+  Clock,
+  Layers,
+  KeyRound
+} from 'lucide-react';
+
+export const ProjectDetailPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const [project, setProject] = useState<Project | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [currentStage, setCurrentStage] = useState<PipelineStage>('source');
+  const [pipelineRunning, setPipelineRunning] = useState(false);
+  const [pipelineError, setPipelineError] = useState<string>('');
+  const [progressMsg, setProgressMsg] = useState('');
+  const [traceLogs, setTraceLogs] = useState<ExecutionTraceLog[]>([]);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+
+  useEffect(() => {
+    if (user && id) {
+      loadProject();
+    }
+  }, [user, id]);
+
+  const sanitizeLegacyProject = (p: Project): Project => {
+    if (!p.clsgIr?.scenes) return p;
+    let modified = false;
+    const sanitizedScenes = p.clsgIr.scenes.map((scene) => {
+      let sceneMod = false;
+      const cleanNarrationText = technicalTerminologyService.resolveAndPreserveSentence(scene.narration.text).resolvedText;
+      if (cleanNarrationText !== scene.narration.text) {
+        sceneMod = true;
+        modified = true;
+      }
+
+      const cleanSentences = (scene.narration.sentences || []).map((sent) => {
+        const { resolvedText } = technicalTerminologyService.resolveAndPreserveSentence(sent.text);
+        if (resolvedText !== sent.text) {
+          sceneMod = true;
+          modified = true;
+          return { ...sent, text: resolvedText };
+        }
+        return sent;
+      });
+
+      const cleanProsodySentences = (scene.prosody_plan?.sentences || []).map((sent) => {
+        const { resolvedText } = technicalTerminologyService.resolveAndPreserveSentence(sent.text);
+        if (resolvedText !== sent.text) {
+          sceneMod = true;
+          modified = true;
+          return { ...sent, text: resolvedText };
+        }
+        return sent;
+      });
+
+      if (sceneMod) {
+        return {
+          ...scene,
+          narration: {
+            ...scene.narration,
+            text: cleanNarrationText,
+            sentences: cleanSentences,
+            word_count: cleanNarrationText.split(/\s+/).length
+          },
+          prosody_plan: {
+            ...scene.prosody_plan,
+            sentences: cleanProsodySentences
+          }
+        };
+      }
+      return scene;
+    });
+
+    if (modified) {
+      const sanitizedProject: Project = {
+        ...p,
+        clsgIr: {
+          ...p.clsgIr,
+          scenes: sanitizedScenes
+        }
+      };
+      projectService.updateProject(sanitizedProject).catch(console.warn);
+      return sanitizedProject;
+    }
+    return p;
+  };
+
+  const loadProject = async () => {
+    if (!user || !id) return;
+    setLoading(true);
+    let p = await projectService.getProject(id, user.uid);
+    if (!p) {
+      // Fallback to demo project
+      p = projectService.getBuiltinCnnProject(user.uid);
+    }
+    p = sanitizeLegacyProject(p);
+    setProject(p);
+    setLoading(false);
+
+    // If already verified, set stage to quality or ir
+    if (p.status === 'verified' && p.clsgIr) {
+      setCurrentStage('quality');
+    } else if (p.status === 'uploaded') {
+      // Auto-trigger full pipeline for immediate satisfaction
+      runPipeline(p);
+    }
+  };
+
+  const runPipeline = async (targetProject?: Project) => {
+    const proj = targetProject || project;
+    if (!proj) return;
+
+    if (!apiKeyService.hasApiKey()) {
+      setShowKeyModal(true);
+      setPipelineError('Ứng dụng đang hoạt động ở chế độ Trực tuyến (Online LLM). Vui lòng cấu hình Gemini API Key để thực thi.');
+      return;
+    }
+
+    try {
+      setPipelineError('');
+      setPipelineRunning(true);
+      setProgressMsg('Initializing pipeline orchestrator...');
+
+      const result = await pipelineOrchestrator.runFullPipeline(
+        proj.canonicalDocument || proj.source.fileName,
+        proj.source.fileName,
+        proj.configuration,
+        (msg) => setProgressMsg(msg)
+      );
+
+      const updatedProject: Project = {
+        ...proj,
+        status: result.qualityReport.overall_status === 'FAILED' ? 'failed' : 'verified',
+        canonicalDocument: result.documentTree,
+        lessonBlueprint: result.blueprint,
+        clsgIr: result.verifiedIr,
+        qualityReport: result.qualityReport,
+        updatedAt: new Date().toISOString()
+      };
+
+      setProject(updatedProject);
+      setTraceLogs(result.traceLogs);
+      await projectService.updateProject(updatedProject);
+      setCurrentStage('quality');
+    } catch (err: any) {
+      console.error('Pipeline failed:', err);
+      setPipelineError(`Lỗi xử lý Pipeline: ${err.message || err}`);
+    } finally {
+      setPipelineRunning(false);
+      setProgressMsg('');
+    }
+  };
+
+  const handleUpdateConfig = async (newConfig: UserConfiguration, reRunPipeline: boolean) => {
+    if (!project) return;
+    const updatedProj: Project = {
+      ...project,
+      configuration: newConfig,
+      updatedAt: new Date().toISOString()
+    };
+    setProject(updatedProj);
+    await projectService.updateProject(updatedProj);
+
+    if (reRunPipeline) {
+      await runPipeline(updatedProj);
+    }
+  };
+
+  if (loading) {
+    return <div className="p-12 text-center text-xs text-slate-500">Đang tải phòng thiết kế bài giảng...</div>;
+  }
+
+  if (!project) {
+    return (
+      <div className="p-12 text-center space-y-3">
+        <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
+        <div className="text-sm font-semibold text-slate-700">Không tìm thấy bài giảng</div>
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="text-xs text-indigo-600 font-semibold"
+        >
+          Quay lại Bảng điều khiển
+        </button>
+      </div>
+    );
+  }
+
+  const scenes = project.clsgIr?.scenes || [];
+
+  return (
+    <div className="space-y-6">
+      {pipelineError && (
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+            <span>{pipelineError}</span>
+          </div>
+          <button
+            onClick={() => runPipeline()}
+            className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-semibold text-[11px] transition"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
+
+      {/* Studio Header */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+              {project.source.fileType.toUpperCase()}
+            </span>
+            <StatusBadge status={project.status} />
+            <span className="text-xs text-slate-400">• Cập nhật lúc {new Date(project.updatedAt).toLocaleTimeString()}</span>
+          </div>
+          <h1 className="text-xl font-bold text-slate-900">{project.title}</h1>
+          <p className="text-xs text-slate-500 mt-0.5">{project.description}</p>
+        </div>
+
+        {/* Action Controls */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowKeyModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition"
+            title="Cấu hình Google Gemini API Key"
+          >
+            <KeyRound className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="hidden sm:inline">Cài đặt API Key</span>
+          </button>
+
+          <button
+            onClick={() => runPipeline()}
+            disabled={pipelineRunning}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition disabled:opacity-50"
+          >
+            {pipelineRunning ? (
+              <RotateCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="w-3.5 h-3.5" />
+            )}
+            <span>{pipelineRunning ? progressMsg || 'Đang thực thi Pipeline...' : 'Chạy Toàn Bộ Pipeline'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Stepper Navigation */}
+      <Stepper currentStage={currentStage} onSelectStage={(s) => setCurrentStage(s)} />
+
+      {/* Active Stage View */}
+      <div className="min-h-[460px]">
+        {currentStage === 'source' && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Tài Liệu Bài Giảng Gốc</h2>
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Tên file:</span>
+                <span className="font-mono font-bold text-slate-800">{project.source.fileName}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Định dạng:</span>
+                <span className="uppercase font-mono text-slate-800">{project.source.fileType}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Cloudinary Public ID:</span>
+                <span className="font-mono text-indigo-700">{project.source.cloudinaryPublicId || 'demo/cnn_intro'}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {currentStage === 'structure' && <StructureViewer docTree={project.canonicalDocument || null} />}
+        {currentStage === 'understanding' && (
+          <LessonUnderstandingViewer
+            lessonModel={project.lessonBlueprint?.lesson_model || project.clsgIr?.lesson_model}
+            contentPrioritization={project.lessonBlueprint?.content_prioritization || project.clsgIr?.content_prioritization}
+            teachingUnits={project.lessonBlueprint?.teaching_units || project.clsgIr?.teaching_units}
+          />
+        )}
+        {currentStage === 'config' && (
+          <UserConfigViewer
+            config={project.configuration}
+            onUpdateConfig={handleUpdateConfig}
+            isRunning={pipelineRunning}
+          />
+        )}
+        {currentStage === 'plan' && <PlanViewer blueprint={project.lessonBlueprint || null} />}
+        {currentStage === 'narration' && <NarrationViewer scenes={scenes} />}
+        {currentStage === 'prosody' && <ProsodyViewer scenes={scenes} />}
+        {currentStage === 'visual' && <VisualIntentViewer scenes={scenes} />}
+        {currentStage === 'quality' && <QualityGuardViewer report={project.qualityReport || null} />}
+        {currentStage === 'ir' && <CLSGIRInspector ir={project.clsgIr || null} />}
+        {currentStage === 'video' && <VideoPreview ir={project.clsgIr || null} />}
+      </div>
+
+      {/* Explainability Decision Trace Drawer */}
+      <DecisionTrace />
+
+      {/* Live Pipeline Execution Trace */}
+      {traceLogs.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+          <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Nhật Ký Thực Thi Pipeline</span>
+            </h3>
+            <span className="text-[11px] font-mono text-indigo-600 font-semibold">
+              Tổng thời gian chạy: {traceLogs.reduce((sum, l) => sum + l.duration_sec, 0).toFixed(2)}s
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {traceLogs.map((log, i) => (
+              <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  <span className="font-semibold text-slate-800">{log.stage}</span>
+                </div>
+                <div className="flex items-center gap-3 font-mono text-slate-500">
+                  <span className="text-[11px] text-slate-400">{JSON.stringify(log.details)}</span>
+                  <span className="font-bold text-slate-700">{log.duration_sec}s</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* API Key Modal */}
+      <ApiKeyModal
+        isOpen={showKeyModal}
+        onClose={() => setShowKeyModal(false)}
+        onSaved={() => {
+          setShowKeyModal(false);
+          runPipeline();
+        }}
+      />
+    </div>
+  );
+};

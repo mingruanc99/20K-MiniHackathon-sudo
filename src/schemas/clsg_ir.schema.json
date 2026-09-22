@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CLSG_IR_Schema",
+  "type": "object",
+  "required": [
+    "ir_version",
+    "ir_id",
+    "document_id",
+    "blueprint_id",
+    "lecture_title",
+    "configuration",
+    "total_scenes",
+    "total_duration_sec",
+    "total_words",
+    "scenes",
+    "quality_report",
+    "verified_at"
+  ],
+  "properties": {
+    "ir_version": { "type": "string" },
+    "ir_id": { "type": "string" },
+    "document_id": { "type": "string" },
+    "blueprint_id": { "type": "string" },
+    "lecture_title": { "type": "string" },
+    "total_scenes": { "type": "integer" },
+    "total_duration_sec": { "type": "number" },
+    "total_words": { "type": "integer" },
+    "scenes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "section_id",
+          "topic",
+          "order",
+          "pedagogical_function",
+          "learning_goal",
+          "narration",
+          "prosody_plan",
+          "visual_cues",
+          "scene_start_time_sec",
+          "scene_end_time_sec",
+          "scene_duration_sec"
+        ],
+        "properties": {
+          "section_id": { "type": "string" },
+          "topic": { "type": "string" },
+          "order": { "type": "integer" },
+          "pedagogical_function": { "type": "string" },
+          "learning_goal": { "type": "string" },
+          "narration": {
+            "type": "object",
+            "required": ["text", "word_count", "sentences"],
+            "properties": {
+              "text": { "type": "string" },
+              "word_count": { "type": "integer" },
+              "sentences": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["id", "text", "prosody"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "text": { "type": "string" },
+                    "prosody": {
+                      "type": "object",
+                      "required": ["pause_after_ms", "pause_type", "rate", "energy", "emphasis"],
+                      "properties": {
+                        "pause_after_ms": { "type": "integer" },
+                        "pause_type": {
+                          "type": "string",
+                          "enum": [
+                            "syntactic",
+                            "semantic",
+                            "concept_boundary",
+                            "example_transition",
+                            "section_transition",
+                            "emphasis",
+                            "natural"
+                          ]
+                        },
+                        "rate": { "type": "string", "enum": ["x-slow", "slow", "medium", "fast"] },
+                        "energy": { "type": "string", "enum": ["soft", "medium", "loud"] },
+                        "emphasis": { "type": "array", "items": { "type": "string" } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "visual_cues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "visual_need",
+                "visual_type",
+                "visual_purpose",
+                "content_focus",
+                "learning_support",
+                "importance_level"
+              ],
+              "properties": {
+                "visual_need": { "type": "boolean" },
+                "visual_type": {
+                  "type": "string",
+                  "enum": [
+                    "diagram",
+                    "flowchart",
+                    "comparison",
+                    "infographic",
+                    "chart",
+                    "table",
+                    "screenshot",
+                    "illustration",
+                    "real_world_example",
+                    "timeline",
+                    "equation",
+                    "process_visualization",
+                    "concept_map"
+                  ]
+                },
+                "visual_purpose": { "type": "string" },
+                "content_focus": { "type": "array", "items": { "type": "string" } },
+                "learning_support": { "type": "string" },
+                "importance_level": { "type": "string", "enum": ["low", "medium", "high"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
