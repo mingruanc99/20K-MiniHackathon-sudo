@@ -30,6 +30,15 @@ export const UserConfigViewer: React.FC<UserConfigViewerProps> = ({
   const [editingConfig, setEditingConfig] = useState<UserConfiguration>({ ...config });
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  // Sync editingConfig when incoming config prop updates
+  React.useEffect(() => {
+    setEditingConfig({ ...config });
+  }, [config]);
+
+  const hasUnsavedChanges = React.useMemo(() => {
+    return JSON.stringify(config) !== JSON.stringify(editingConfig);
+  }, [config, editingConfig]);
+
   // Dynamic pause overhead factor
   let pauseFactor = 0.18;
   if (editingConfig.narrationStyle === 'conversational') pauseFactor = 0.20;
@@ -57,6 +66,12 @@ export const UserConfigViewer: React.FC<UserConfigViewerProps> = ({
     }));
   };
 
+  const handleSaveOnly = () => {
+    onUpdateConfig?.(editingConfig, false);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 2500);
+  };
+
   const handleSaveAndRun = (reRun: boolean) => {
     onUpdateConfig?.(editingConfig, reRun);
     setSavedSuccess(true);
@@ -73,6 +88,16 @@ export const UserConfigViewer: React.FC<UserConfigViewerProps> = ({
               Module Config
             </span>
             <span className="text-xs font-semibold text-slate-500">Learner & Pedagogical Configuration</span>
+            {hasUnsavedChanges && (
+              <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 animate-pulse">
+                Có thay đổi chưa lưu
+              </span>
+            )}
+            {savedSuccess && (
+              <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300">
+                ✅ Đã lưu cấu hình thành công
+              </span>
+            )}
           </div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">Cấu Hình Sư Phạm & Người Học</h2>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -85,10 +110,20 @@ export const UserConfigViewer: React.FC<UserConfigViewerProps> = ({
           <button
             type="button"
             onClick={() => setEditingConfig({ ...config })}
-            className="px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition flex items-center gap-1.5"
+            disabled={!hasUnsavedChanges}
+            className="px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition flex items-center gap-1.5 disabled:opacity-40"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Khôi phục gốc</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveOnly}
+            disabled={!hasUnsavedChanges}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>Lưu cấu hình</span>
           </button>
           <button
             type="button"
@@ -96,8 +131,8 @@ export const UserConfigViewer: React.FC<UserConfigViewerProps> = ({
             disabled={isRunning}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs transition flex items-center gap-1.5 disabled:opacity-50"
           >
-            <Save className="w-3.5 h-3.5" />
-            <span>{savedSuccess ? '✅ Đã lưu cấu hình!' : 'Lưu & Chạy Lại Pipeline'}</span>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>{savedSuccess ? '✅ Đã lưu!' : 'Lưu & Chạy Lại Pipeline'}</span>
           </button>
         </div>
       </div>

@@ -18,10 +18,6 @@ export const apiKeyService = {
       }
     }
 
-    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) {
-      return String(import.meta.env.VITE_GEMINI_API_KEY).trim();
-    }
-
     if (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
       return String(process.env.GEMINI_API_KEY).trim();
     }

@@ -35,35 +35,67 @@ export class ProjectService {
   }
 
   async listProjects(userId: string): Promise<Project[]> {
+    const localMap = new Map<string, Project>();
+
+    // 1. Read local storage projects
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const raw = localStorage.getItem(this.getLocalKey(userId));
+        if (raw) {
+          const list: Project[] = JSON.parse(raw);
+          list.forEach((p) => localMap.set(p.projectId, p));
+        }
+      } catch (err) {
+        console.warn('Error reading local projects:', err);
+      }
+    }
+
+    // 2. Read Firestore projects and merge with newer updatedAt
     if (this.canUseFirestore()) {
       try {
         const q = query(collection(db, 'projects'), where('userId', '==', userId));
         const snap = await getDocs(q);
-        const projects: Project[] = [];
-        snap.forEach((d) => projects.push(d.data() as Project));
-        return projects.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        snap.forEach((d) => {
+          const p = d.data() as Project;
+          const existing = localMap.get(p.projectId);
+          if (!existing || new Date(p.updatedAt).getTime() >= new Date(existing.updatedAt).getTime()) {
+            localMap.set(p.projectId, p);
+          }
+        });
       } catch (err) {
         console.warn('Firestore query failed, falling back to local store:', err);
       }
     }
 
-    const raw = localStorage.getItem(this.getLocalKey(userId));
-    if (!raw) {
-      // Initialize with default CNN demo project if empty
+    if (localMap.size === 0) {
       const initialProjects = [this.getBuiltinCnnProject(userId)];
-      localStorage.setItem(this.getLocalKey(userId), JSON.stringify(initialProjects));
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(this.getLocalKey(userId), JSON.stringify(initialProjects));
+      }
       return initialProjects;
     }
 
-    try {
-      const list: Project[] = JSON.parse(raw);
-      return list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-    } catch {
-      return [];
-    }
+    const merged = Array.from(localMap.values());
+    merged.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return merged;
   }
 
   async getProject(projectId: string, userId: string): Promise<Project | null> {
+    // 1. First check local store for the latest customized configuration
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const raw = localStorage.getItem(this.getLocalKey(userId));
+        if (raw) {
+          const list: Project[] = JSON.parse(raw);
+          const found = list.find((p) => p.projectId === projectId);
+          if (found) return found;
+        }
+      } catch (e) {
+        console.warn('Local store read error:', e);
+      }
+    }
+
+    // 2. Check Firestore if available
     if (this.canUseFirestore()) {
       try {
         const d = await getDoc(doc(db, 'projects', projectId));
@@ -76,8 +108,12 @@ export class ProjectService {
       }
     }
 
-    const projects = await this.listProjects(userId);
-    return projects.find((p) => p.projectId === projectId) || null;
+    // 3. Built-in CNN demo fallback
+    if (projectId === 'proj_demo_cnn_001') {
+      return this.getBuiltinCnnProject(userId);
+    }
+
+    return null;
   }
 
   async createProject(
@@ -88,11 +124,10 @@ export class ProjectService {
     description?: string,
     canonicalDocument?: CanonicalDocumentTree
   ): Promise<Project> {
-    const projectId = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const newId = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const now = new Date().toISOString();
-
-    const newProject: Project = {
-      projectId,
+    const newProj: Project = {
+      projectId: newId,
       userId,
       title,
       description: description || 'Instructional lecture video project',
@@ -104,24 +139,30 @@ export class ProjectService {
       updatedAt: now
     };
 
+    // 1. Save to local store immediately
+    try {
+      const raw = localStorage.getItem(this.getLocalKey(userId));
+      const list: Project[] = raw ? JSON.parse(raw) : [];
+      list.unshift(newProj);
+      localStorage.setItem(this.getLocalKey(userId), JSON.stringify(list));
+    } catch (e) {
+      console.warn('Local store create error:', e);
+    }
+
+    // 2. Sync to Firestore if authenticated
     if (this.canUseFirestore()) {
       try {
-        const payload = this.cleanForFirestore(newProject);
-        await setDoc(doc(db, 'projects', projectId), {
-          ...payload,
+        const clean = this.cleanForFirestore(newProj);
+        await setDoc(doc(db, 'projects', newId), {
+          ...clean,
           serverCreatedAt: serverTimestamp()
         });
       } catch (err) {
-        console.warn('Firestore create failed, saving to local store:', err);
+        console.warn('Firestore create failed, saved to local store:', err);
       }
     }
 
-    // Always keep local mirror updated
-    const list = await this.listProjects(userId);
-    list.unshift(newProject);
-    localStorage.setItem(this.getLocalKey(userId), JSON.stringify(list));
-
-    return newProject;
+    return newProj;
   }
 
   async updateProject(project: Project): Promise<void> {
@@ -130,23 +171,30 @@ export class ProjectService {
       updatedAt: new Date().toISOString()
     };
 
+    // 1. ALWAYS update local store immediately so customized settings are never lost
+    try {
+      const raw = localStorage.getItem(this.getLocalKey(project.userId));
+      const list: Project[] = raw ? JSON.parse(raw) : [];
+      const idx = list.findIndex((p) => p.projectId === project.projectId);
+      if (idx >= 0) {
+        list[idx] = updated;
+      } else {
+        list.unshift(updated);
+      }
+      localStorage.setItem(this.getLocalKey(project.userId), JSON.stringify(list));
+    } catch (e) {
+      console.warn('Local store update error:', e);
+    }
+
+    // 2. Sync to Firestore using setDoc with merge: true to avoid failures on uncreated docs
     if (this.canUseFirestore()) {
       try {
         const payload = this.cleanForFirestore(updated);
-        await updateDoc(doc(db, 'projects', project.projectId), payload);
+        await setDoc(doc(db, 'projects', project.projectId), payload, { merge: true });
       } catch (err) {
-        console.warn('Firestore update failed, updating local store:', err);
+        console.warn('Firestore update failed, saved to local store:', err);
       }
     }
-
-    const list = await this.listProjects(project.userId);
-    const idx = list.findIndex((p) => p.projectId === project.projectId);
-    if (idx >= 0) {
-      list[idx] = updated;
-    } else {
-      list.unshift(updated);
-    }
-    localStorage.setItem(this.getLocalKey(project.userId), JSON.stringify(list));
   }
 
   async deleteProject(projectId: string, userId: string): Promise<void> {
