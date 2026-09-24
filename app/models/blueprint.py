@@ -39,6 +39,14 @@ class SectionPlan(BaseModel):
     instructional_goal: str = Field(
         description="The specific instructional 'WHY' for this scene"
     )
+    assigned_chunk_ids: List[str] = Field(
+        default_factory=list,
+        description="SemanticChunk IDs assigned as grounded source evidence for this section"
+    )
+    primary_visual_id: Optional[str] = Field(
+        default=None,
+        description="Primary visual asset reference ID for visual alignment"
+    )
 
 class LessonBlueprint(BaseModel):
     blueprint_id: str = Field(description="Unique blueprint identifier")

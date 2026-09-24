@@ -28,9 +28,9 @@ export class LLMRouter implements ILLMProvider {
     const gemini = new GeminiProvider();
     this.primaryProvider = gemini;
 
-    // Reactively update when user saves a new API key in the UI
-    apiKeyService.subscribe((newKey) => {
-      gemini.setApiKey(newKey);
+    // Reactively update when user saves a new API key or switches provider in the UI
+    apiKeyService.subscribe((state) => {
+      gemini.setApiKey(typeof state === 'string' ? state : state.apiKey);
     });
   }
 

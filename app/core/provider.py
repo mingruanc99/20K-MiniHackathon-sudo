@@ -1,16 +1,42 @@
 # app/core/provider.py
 """
-LLM Provider Abstraction for CLSG-IR.
+LLM Provider Abstraction & Gateway for CLSG-IR.
 Includes:
 - BaseLLMProvider interface
 - DeterministicMockProvider: Guaranteed offline, reproducible, high-quality domain responses
 - OpenAIProvider: Optional production provider if OPENAI_API_KEY is present
-- GeminiProvider: Optional production provider if GEMINI_API_KEY is present
+- LLMGateway: Decoupled functional interfaces:
+    * lesson_understanding()
+    * content_prioritization()
+    * teaching_arc_generation()
+    * narration_generation()
+    * optional_knowledge_augmentation()
+- Observability: Langfuse-ready trace event schema & logger
 """
 import os
 import re
+import time
+import uuid
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+from pydantic import BaseModel, Field
+
+class LLMTraceEvent(BaseModel):
+    trace_id: str = Field(description="Unique trace identifier")
+    document_id: str
+    chunk_id: Optional[str] = None
+    lesson_unit_id: Optional[str] = None
+    scene_id: Optional[str] = None
+    call_type: str = Field(description="lesson_understanding | content_prioritization | teaching_arc | narration | rag")
+    model: str
+    prompt: str
+    response: str
+    latency_ms: float
+    token_estimate: int
+    cost_usd: float = 0.0
+    status: str = "success"
+    quality_score: Optional[float] = None
+    timestamp: float = Field(default_factory=time.time)
 
 class BaseLLMProvider(ABC):
     @abstractmethod
@@ -30,11 +56,14 @@ class DeterministicMockProvider(BaseLLMProvider):
         if "narration" in prompt_lower or "script" in prompt_lower:
             return self._generate_narration_sample(prompt)
         
-        # Default fallback
+        # Lesson understanding handling
+        if "lesson understanding" in prompt_lower or "overview" in prompt_lower:
+            return "This lecture presents the core principles of deep learning architectures, analyzing tradeoffs between dense networks and spatial convolutions."
+            
+        # Fallback
         return "Deterministic technical response generated for CLSG-IR pipeline."
 
     def _generate_narration_sample(self, prompt: str) -> str:
-        # Extract target word count if present
         target_words = 60
         match = re.search(r"target.*?(\d+)\s*words?", prompt, re.IGNORECASE)
         if match:
@@ -81,7 +110,6 @@ class DeterministicMockProvider(BaseLLMProvider):
             )
 
         words = text.split()
-        # Scale to match target words within reasonable proximity
         if len(words) < target_words:
             padding_needed = target_words - len(words)
             padding = [
@@ -90,10 +118,8 @@ class DeterministicMockProvider(BaseLLMProvider):
             text = text + " " + " ".join(padding)
             words = text.split()
 
-        # Trim if significantly over target
         if len(words) > int(target_words * 1.15):
             trimmed_words = words[:target_words]
-            # Ensure proper punctuation at end
             last_word = trimmed_words[-1].rstrip(".,;:")
             text = " ".join(trimmed_words[:-1]) + " " + last_word + "."
 
@@ -127,6 +153,119 @@ class OpenAIProvider(BaseLLMProvider):
             return resp.choices[0].message.content or ""
         except Exception:
             return DeterministicMockProvider().generate(prompt, system_prompt)
+
+class LLMGateway:
+    """
+    Decoupled Gateway for all LLM calls across the CLSG-IR pipeline.
+    Maintains clean boundaries, fallback mechanisms, and Langfuse-ready tracing.
+    """
+    def __init__(self, provider: Optional[BaseLLMProvider] = None):
+        self.provider = provider or get_llm_provider()
+        self.trace_logs: List[LLMTraceEvent] = []
+
+    def lesson_understanding(self, document_id: str, markdown_content: str) -> str:
+        """Call 1: Read whole lesson to form holistic pedagogical schema."""
+        prompt = (
+            f"Analyze the following complete lecture document and provide a holistic pedagogical summary:\n\n"
+            f"{markdown_content[:2000]}"
+        )
+        return self._traced_call(
+            call_type="lesson_understanding",
+            document_id=document_id,
+            prompt=prompt,
+            system_prompt="You are an expert instructional designer analyzing educational curriculum."
+        )
+
+    def content_prioritization(self, document_id: str, total_duration_sec: int, summary: str) -> str:
+        """Call 2: Determine core concepts vs secondary details based on time budget."""
+        prompt = (
+            f"Target duration: {total_duration_sec} seconds.\n"
+            f"Lesson summary: {summary}\n"
+            f"Prioritize key concepts that must be taught vs secondary details to trim."
+        )
+        return self._traced_call(
+            call_type="content_prioritization",
+            document_id=document_id,
+            prompt=prompt,
+            system_prompt="You are a strict instructional budgeting and pacing engine."
+        )
+
+    def teaching_arc_generation(self, document_id: str, prioritized_concepts: str) -> str:
+        """Call 3: Structure Gagné's 9 events & Bloom progression."""
+        prompt = f"Design a scaffolded teaching arc for these concepts:\n{prioritized_concepts}"
+        return self._traced_call(
+            call_type="teaching_arc",
+            document_id=document_id,
+            prompt=prompt,
+            system_prompt="You are an expert in cognitive load theory and instructional scaffolding."
+        )
+
+    def narration_generation(
+        self,
+        document_id: str,
+        section_id: str,
+        prompt: str,
+        system_prompt: str,
+        chunk_ids: Optional[List[str]] = None
+    ) -> str:
+        """Section-level narration generation grounded in assigned semantic chunks."""
+        return self._traced_call(
+            call_type="narration",
+            document_id=document_id,
+            lesson_unit_id=section_id,
+            chunk_id=chunk_ids[0] if chunk_ids else None,
+            prompt=prompt,
+            system_prompt=system_prompt
+        )
+
+    def optional_knowledge_augmentation(self, query: str, context: str) -> str:
+        """
+        On-demand RAG / Knowledge Augmentation.
+        Only invoked when source material has clear knowledge deficits or missing definitions.
+        """
+        prompt = f"Context: {context}\nQuery: {query}\nProvide concise verified pedagogical explanation:"
+        return self._traced_call(
+            call_type="rag",
+            document_id="external_kb",
+            prompt=prompt,
+            system_prompt="You are a verified pedagogical knowledge repository. Only provide factual definitions."
+        )
+
+    def _traced_call(
+        self,
+        call_type: str,
+        document_id: str,
+        prompt: str,
+        system_prompt: str = "",
+        lesson_unit_id: Optional[str] = None,
+        chunk_id: Optional[str] = None,
+        scene_id: Optional[str] = None
+    ) -> str:
+        t0 = time.perf_counter()
+        resp = self.provider.generate(prompt, system_prompt)
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+        model_name = getattr(self.provider, "model", "deterministic-mock-v1")
+        tokens = int(len(prompt.split()) * 1.3) + int(len(resp.split()) * 1.3)
+        cost = tokens * 0.000002 if "gpt" in model_name else 0.0
+
+        event = LLMTraceEvent(
+            trace_id=f"tr_{uuid.uuid4().hex[:8]}",
+            document_id=document_id,
+            chunk_id=chunk_id,
+            lesson_unit_id=lesson_unit_id,
+            scene_id=scene_id,
+            call_type=call_type,
+            model=model_name,
+            prompt=prompt,
+            response=resp,
+            latency_ms=round(elapsed_ms, 2),
+            token_estimate=tokens,
+            cost_usd=round(cost, 6),
+            status="success"
+        )
+        self.trace_logs.append(event)
+        return resp
 
 def get_llm_provider(provider_type: str = "auto") -> BaseLLMProvider:
     if provider_type == "openai" and os.environ.get("OPENAI_API_KEY"):

@@ -14,10 +14,15 @@ import {
   QualityReport,
   ExecutionTraceLog,
   GlobalNarrativeContext,
-  SectionSummaryInfo
+  SectionSummaryInfo,
+  NarrativeIR,
+  KnowledgeIR,
+  CurriculumIR
 } from '../types';
 import { extractDocument } from './module1_extractor/extractorFactory';
 import { InstructionalPlanner } from './module2_planner/instructionalPlanner';
+import { narrativeIntelligenceEngine } from './services/narrativeIntelligenceEngine';
+import { knowledgeSpaceEngine } from './services/knowledgeSpaceEngine';
 import { NarrationGenerator } from './module3_generator/narrationGenerator';
 import { ProsodyPlanner } from './module3_generator/prosodyPlanner';
 import { VisualIntentGenerator } from './module3_generator/visualIntentGenerator';
@@ -26,6 +31,9 @@ import { QualityVisualGuard } from './module4_guard/qualityGuard';
 export interface PipelineExecutionResult {
   documentTree: CanonicalDocumentTree;
   blueprint: LessonBlueprint;
+  knowledgeIr: KnowledgeIR;
+  curriculumIr: CurriculumIR;
+  narrativeIr: NarrativeIR;
   draftScenes: CLSGScene[];
   qualityReport: QualityReport;
   verifiedIr: VerifiedCLSG_IR;
@@ -63,7 +71,27 @@ export class PipelineOrchestrator {
     });
 
     // -------------------------------------------------------------
-    // Stage 2: Instructional Planning
+    // Stage 1.5: Knowledge Space Reconstruction & Time-Aware Curriculum
+    // -------------------------------------------------------------
+    onProgress?.('Reconstructing knowledge space & curriculum DAG...', 25);
+    const tKS0 = performance.now();
+    const knowledgeIr = knowledgeSpaceEngine.buildKnowledgeSpace(docTree);
+    const targetMin = Math.max(3, Math.round((config.targetDurationSeconds || 600) / 60));
+    const curriculumIr = knowledgeSpaceEngine.compileCurriculum(knowledgeIr, targetMin, config.targetWpm || 135);
+    const tKS1 = performance.now();
+    traceLogs.push({
+      stage: 'Knowledge Space & Dynamic Curriculum Compiler',
+      duration_sec: Math.round((tKS1 - tKS0) / 10) / 100,
+      timestamp: new Date().toLocaleTimeString(),
+      details: {
+        concepts_extracted: knowledgeIr.concepts.length,
+        propositions: knowledgeIr.total_propositions,
+        evidence_artifacts: knowledgeIr.total_evidence_artifacts,
+        active_concepts: curriculumIr.active_concepts_count,
+        strategy: curriculumIr.compression_strategy
+      }
+    });
+
     // -------------------------------------------------------------
     // Stage 2: Instructional Planning (Whole-Lesson Understanding)
     // -------------------------------------------------------------
@@ -81,6 +109,26 @@ export class PipelineOrchestrator {
         noise_filtered: blueprint.content_prioritization?.omitted_content_count || 0,
         target_words: blueprint.total_word_budget,
         duration_sec: blueprint.total_target_duration_sec
+      }
+    });
+
+    // -------------------------------------------------------------
+    // Stage 2.5: Module 2.5 - Narrative Intelligence Layer (NIL)
+    // -------------------------------------------------------------
+    onProgress?.('Synthesizing narrative curiosity, analogies & discourse...', 50);
+    const tNIL0 = performance.now();
+    const narrativeIr = narrativeIntelligenceEngine.generateNarrativeIR(docTree, blueprint, config);
+    const tNIL1 = performance.now();
+    traceLogs.push({
+      stage: 'Module 2.5: Narrative Intelligence Layer (Curiosity & Cognitive ToM)',
+      duration_sec: Math.round((tNIL1 - tNIL0) / 10) / 100,
+      timestamp: new Date().toLocaleTimeString(),
+      details: {
+        narrative_id: narrativeIr.lecture_narrative_id,
+        beats_planned: narrativeIr.narrative_beats.length,
+        curiosity_hooks: narrativeIr.total_curiosity_hooks,
+        avg_cognitive_load: narrativeIr.average_cognitive_load,
+        persona: narrativeIr.persona_archetype
       }
     });
 
@@ -123,7 +171,7 @@ export class PipelineOrchestrator {
       };
 
       // 3A: Knowledge-Driven Narration Script with Global Narrative Context
-      const narrationText = this.narrationGen.generateNarration(plan, config, docSec?.raw_text, {
+      let narrationText = this.narrationGen.generateNarration(plan, config, docSec?.raw_text, {
         previousPlan: prevPlan,
         nextPlan: nextPlan,
         lessonModel: blueprint.lesson_model,
@@ -132,6 +180,12 @@ export class PipelineOrchestrator {
         usedOpenings,
         usedPhrases
       });
+
+      // Enhance narration with Narrative Intelligence Re-voicing
+      const beat = narrativeIr.narrative_beats[idx];
+      if (beat && plan.slide_analysis?.slide_role !== 'DECORATIVE') {
+        narrationText = narrativeIntelligenceEngine.revoiceDraft(narrationText, beat, config.narration_language !== 'en');
+      }
 
       // Track opening sentence to prevent future sections from repeating it
       const firstSentence = narrationText.split(/[.!?\n]/)[0]?.trim();
@@ -209,6 +263,9 @@ export class PipelineOrchestrator {
     verifiedIr.lesson_model = blueprint.lesson_model;
     verifiedIr.content_prioritization = blueprint.content_prioritization;
     verifiedIr.teaching_units = blueprint.teaching_units;
+    verifiedIr.narrative_ir = narrativeIr;
+    verifiedIr.knowledge_ir = knowledgeIr;
+    verifiedIr.curriculum_ir = curriculumIr;
 
     traceLogs.push({
       stage: 'Module 4: Quality & Visual Guard (DAR-P <= 15% & Semantic Coherence)',
@@ -235,6 +292,9 @@ export class PipelineOrchestrator {
     return {
       documentTree: docTree,
       blueprint,
+      knowledgeIr,
+      curriculumIr,
+      narrativeIr,
       draftScenes,
       qualityReport,
       verifiedIr,

@@ -23,6 +23,7 @@ import { AdminPromptPage } from './pages/admin/AdminPromptPage';
 import { AdminErrorCenterPage } from './pages/admin/AdminErrorCenterPage';
 import { AdminTTSPage } from './pages/admin/AdminTTSPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
+import { KnowledgeInspectorPage } from './pages/KnowledgeInspectorPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -49,6 +50,10 @@ export const App: React.FC = () => {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          
+          {/* Dedicated Knowledge / Database Inspector (Public Access for Evaluators & Debugging) */}
+          <Route path="/knowledge" element={<KnowledgeInspectorPage />} />
+          <Route path="/inspector" element={<KnowledgeInspectorPage />} />
           
           <Route
             path="/dashboard"

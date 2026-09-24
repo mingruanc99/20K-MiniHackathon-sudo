@@ -129,6 +129,77 @@ export function getBuiltinCnnTree(): CanonicalDocumentTree {
         ],
         raw_text: 'Full CNN Pipeline Architecture & Synthesis\nEnd-to-End Pipeline: [Conv2D -> ReLU -> MaxPool] x N -> Dense Classification -> Softmax\nHierarchical Representations: Shallow layers detect edges; deep layers capture semantic entities\nSynthesis & Performance: State-of-the-art vision benchmarks achieved with sub-second inference'
       }
-    ]
+    ],
+    canonical_markdown: `# Introduction to Convolutional Neural Networks
+
+> [DOCUMENT_METADATA: id=doc_cnn_demo_01, type=pptx, total_sections=5]
+
+## Slide 1: Introduction to Convolutional Neural Networks
+> [SOURCE: doc=doc_cnn_demo_01, slide=1, section_id=S1, type=pptx]
+
+Computer Vision Challenges: Bridging the semantic gap from raw pixel tensors.
+From Photons to Percepts: Recognizing patterns invariant to lighting and scale.
+
+![Deep Learning Visual Recognition](assets/slide_01_img_01.png)
+> [VISUAL_ROLE: role=Conceptual Illustration | id=DOC01_S01_IMG01 | align=primary]
+
+> [SPEAKER_NOTE: Welcome students to computer vision. Today we uncover CNNs.]
+
+---
+
+## Slide 2: The Parameter Explosion in Dense MLPs
+> [SOURCE: doc=doc_cnn_demo_01, slide=2, section_id=S2, type=pptx]
+
+- Image Flattening: A modest 200x200 RGB image creates 120,000 raw input features
+- Weight Explosion: Connecting to 1,000 hidden units requires 120 Million parameters
+- Spatial Oblivion: Vector flattening destroys 2D neighborhood relationships
+
+| Architecture | Input Dimensions | First Hidden Layer (1000 units) | Trainable Parameters |
+| --- | --- | --- | --- |
+| Dense MLP (Flattened) | 200 x 200 x 3 = 120,000 | 1000 | ~120,000,000 |
+| Convolutional (Conv2D) | 200 x 200 x 3 | 32 filters (3x3x3) | ~896 |
+
+![Dense Vector Flattening](assets/slide_02_img_01.png)
+> [VISUAL_ROLE: role=Architecture Diagram | id=DOC01_S02_IMG01 | align=primary]
+
+---
+
+## Slide 3: The Convolution Operation & Kernel Mechanics
+> [SOURCE: doc=doc_cnn_demo_01, slide=3, section_id=S3, type=pptx]
+
+- The Kernel / Filter: A small learnable tensor (e.g. 3x3) sliding across the input grid
+- Element-wise Multiplication: Summing products at each position yields a scalar feature activation
+- Translation Equivariance: Identifying features regardless of spatial placement
+
+![Convolution Filter Stride](assets/slide_03_img_01.png)
+> [VISUAL_ROLE: role=Architecture Diagram | id=DOC01_S03_IMG01 | align=primary]
+
+---
+
+## Slide 4: Downsampling via Max Pooling
+> [SOURCE: doc=doc_cnn_demo_01, slide=4, section_id=S4, type=pptx]
+
+- Window Mechanics: A 2x2 window with stride 2 steps through the feature map
+- Peak Activation Extraction: Captures only the most salient signal while suppressing noise
+- Computational Efficiency: Halves spatial dimensions, quadrupling receptive field scale
+
+| Feature Map Size | Pooling Operation | Output Dimensions | Parameter Cost |
+| --- | --- | --- | --- |
+| 198 x 198 x 32 | MaxPool2D (2x2, stride 2) | 99 x 99 x 32 | 0 (Non-parametric) |
+
+![Max Pooling 2x2 Window](assets/slide_04_img_01.png)
+> [VISUAL_ROLE: role=Architecture Diagram | id=DOC01_S04_IMG01 | align=primary]
+
+---
+
+## Slide 5: Full CNN Pipeline Architecture & Synthesis
+> [SOURCE: doc=doc_cnn_demo_01, slide=5, section_id=S5, type=pptx]
+
+- End-to-End Pipeline: [Conv2D -> ReLU -> MaxPool] x N -> Dense Classification -> Softmax
+- Hierarchical Representations: Shallow layers detect edges; deep layers capture semantic entities
+- Synthesis & Performance: State-of-the-art vision benchmarks achieved with sub-second inference
+
+![CNN End-to-End Hierarchy](assets/slide_05_img_01.png)
+> [VISUAL_ROLE: role=Architecture Diagram | id=DOC01_S05_IMG01 | align=primary]`
   };
 }

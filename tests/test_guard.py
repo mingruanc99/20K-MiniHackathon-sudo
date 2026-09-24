@@ -26,8 +26,13 @@ Downsampling operations.
         self.assertIn(report.overall_status, ["PASSED", "WARNING"])
         self.assertTrue(report.overall_quality_score >= 0.70)
         self.assertTrue(report.dar_p_ratio >= 0.0)
+        self.assertTrue(report.content_fidelity_score >= 0.80)
+        self.assertTrue(report.text_visual_consistency_score >= 0.80)
+        self.assertTrue(report.provenance_traceability_score >= 0.90)
         self.assertEqual(verified_ir.total_scenes, len(draft.scenes))
         self.assertEqual(len(verified_ir.scenes), 3)
+        self.assertIsNotNone(verified_ir.scenes[0].provenance_trace)
+        self.assertEqual(verified_ir.scenes[0].provenance_trace.source_slide, 1)
 
 if __name__ == "__main__":
     unittest.main()

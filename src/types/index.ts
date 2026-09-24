@@ -59,11 +59,50 @@ export interface UserConfiguration {
   };
 }
 
+export interface DiagramNode {
+  id: string;
+  label: string;
+  name?: string;
+  bbox?: number[];
+  region?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface DiagramEdge {
+  source: string;
+  target: string;
+  label?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface StructuredDiagram {
+  diagram_id: string;
+  type: string;
+  subtype: string;
+  role: string;
+  description: string;
+  nodes: DiagramNode[];
+  edges: DiagramEdge[];
+  node_count: number;
+  edge_count: number;
+  annotations: string[];
+  bbox?: number[];
+  confidence: number;
+  metadata?: Record<string, any>;
+}
+
 export interface ContentElement {
   element_id: string;
-  type: 'title' | 'heading' | 'paragraph' | 'bullet_point' | 'table' | 'code' | 'equation' | 'note';
+  type: 'title' | 'heading' | 'paragraph' | 'bullet_point' | 'table' | 'code' | 'equation' | 'note' | 'diagram' | 'annotation' | 'image';
   text: string;
+  subtype?: string;
+  source_type?: 'slide_text' | 'diagram_annotation' | 'shape' | 'visual_asset';
+  role?: string;
   level?: number;
+  structured_diagram?: StructuredDiagram;
+  diagram_ref?: string;
+  description?: string;
+  caption?: string;
   metadata?: Record<string, any>;
 }
 
@@ -84,6 +123,9 @@ export interface CanonicalDocumentTree {
   sections: DocumentSection[];
   extraction_time_ms: number;
   metadata?: Record<string, any>;
+  canonical_markdown?: string;
+  semantic_chunks?: any[];
+  visual_elements?: any[];
 }
 
 export type BloomLevel = 'Remember' | 'Understand' | 'Apply' | 'Analyze' | 'Evaluate' | 'Create';
@@ -394,8 +436,18 @@ export interface ValidationCheck {
   auto_repaired?: boolean;
 }
 
+export * from './guard';
+
 export interface QualityReport {
   report_id: string;
+  decision?: import('./guard').QualityDecisionState;
+  decision_reason?: string;
+  scores?: import('./guard').DimensionScores;
+  issues?: import('./guard').QualityIssue[];
+  repair_attempts?: number;
+  max_repair_attempts?: number;
+  human_review_reason?: string;
+
   overall_status: QualityStatus;
   overall_quality_score: number;
   dar_p_ratio: number;
@@ -415,6 +467,11 @@ export interface QualityReport {
   timestamp: string;
 }
 
+export * from './narrative';
+export * from './knowledgeSpace';
+import { NarrativeIR } from './narrative';
+import { KnowledgeIR, CurriculumIR } from './knowledgeSpace';
+
 export interface VerifiedCLSG_IR {
   ir_version: string;
   ir_id: string;
@@ -426,6 +483,9 @@ export interface VerifiedCLSG_IR {
   total_duration_sec: number;
   total_words: number;
   scenes: CLSGScene[];
+  knowledge_ir?: KnowledgeIR;
+  curriculum_ir?: CurriculumIR;
+  narrative_ir?: NarrativeIR;
   lesson_model?: LessonModel;
   content_prioritization?: ContentPrioritization;
   teaching_units?: TeachingUnit[];
@@ -459,6 +519,9 @@ export interface Project {
   lessonBlueprint?: LessonBlueprint;
   blueprint?: LessonBlueprint;
   clsgIr?: VerifiedCLSG_IR;
+  knowledgeIr?: KnowledgeIR;
+  curriculumIr?: CurriculumIR;
+  narrativeIr?: NarrativeIR;
   qualityReport?: QualityReport;
   executionLogs?: ExecutionTraceLog[];
   createdAt: string;

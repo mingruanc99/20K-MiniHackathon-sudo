@@ -6,7 +6,7 @@ and Downstream Engine Export Schemas
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from app.models.config import PipelineConfig
-from app.models.expression import DraftScene, VisualCue, ProsodyPlan
+from app.models.expression import DraftScene, VisualCue, ProsodyPlan, SceneProvenanceTrace
 from app.models.guard import QualityReport
 
 class VerifiedScene(BaseModel):
@@ -22,6 +22,10 @@ class VerifiedScene(BaseModel):
     scene_start_time_sec: float
     scene_end_time_sec: float
     scene_duration_sec: float
+    provenance_trace: Optional[SceneProvenanceTrace] = Field(
+        default=None,
+        description="End-to-end trace from scene back to lesson unit, chunk, slide, and visual"
+    )
 
 class VerifiedCLSG_IR(BaseModel):
     ir_version: str = Field(default="1.0.0")

@@ -7,6 +7,7 @@ import { pipelineOrchestrator } from '../pipeline/orchestrator';
 import { Project, ExecutionTraceLog, UserConfiguration } from '../types';
 import { Stepper, PipelineStage } from '../components/pipeline/Stepper';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { MarkdownViewer } from '../components/pipeline/MarkdownViewer';
 import { StructureViewer } from '../components/pipeline/StructureViewer';
 import { UserConfigViewer } from '../components/pipeline/UserConfigViewer';
 import { PlanViewer } from '../components/pipeline/PlanViewer';
@@ -18,7 +19,12 @@ import { LessonUnderstandingViewer } from '../components/pipeline/LessonUndersta
 import { CLSGIRInspector } from '../components/pipeline/CLSGIRInspector';
 import { VideoPreview } from '../components/pipeline/VideoPreview';
 import { DecisionTrace } from '../components/pipeline/DecisionTrace';
+import { RelationalDatabaseViewer } from '../components/pipeline/RelationalDatabaseViewer';
+import { NarrativeInspector } from '../components/pipeline/NarrativeInspector';
+import { KnowledgeGraphCurriculumViewer } from '../components/pipeline/KnowledgeGraphCurriculumViewer';
+import TransitionIntelligenceViewer from '../components/pipeline/TransitionIntelligenceViewer';
 import { technicalTerminologyService } from '../pipeline/services/technicalTerminologyService';
+import { ApiKeyModal } from '../components/common/ApiKeyModal';
 import {
   Sparkles,
   Play,
@@ -28,7 +34,8 @@ import {
   AlertCircle,
   FileText,
   Clock,
-  Layers
+  Layers,
+  KeyRound
 } from 'lucide-react';
 
 export const ProjectDetailPage: React.FC = () => {
@@ -43,6 +50,7 @@ export const ProjectDetailPage: React.FC = () => {
   const [pipelineError, setPipelineError] = useState<string>('');
   const [progressMsg, setProgressMsg] = useState('');
   const [traceLogs, setTraceLogs] = useState<ExecutionTraceLog[]>([]);
+  const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
 
   useEffect(() => {
     if (user && id) {
@@ -212,17 +220,27 @@ export const ProjectDetailPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {pipelineError && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center justify-between">
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-            <span>{pipelineError}</span>
+            <span className="leading-relaxed">{pipelineError}</span>
           </div>
-          <button
-            onClick={() => runPipeline()}
-            className="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-semibold text-[11px] transition"
-          >
-            Thử lại
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsKeyModalOpen(true)}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>Đổi Key / Chuyển sang Claude hoặc OpenAI</span>
+            </button>
+            <button
+              onClick={() => runPipeline()}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-semibold text-[11px] transition"
+            >
+              Thử lại
+            </button>
+          </div>
         </div>
       )}
 
@@ -242,6 +260,15 @@ export const ProjectDetailPage: React.FC = () => {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsKeyModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer"
+          >
+            <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+            <span>Cấu hình AI / Đổi Key</span>
+          </button>
+
           <button
             onClick={() => runPipeline()}
             disabled={pipelineRunning}
@@ -282,7 +309,15 @@ export const ProjectDetailPage: React.FC = () => {
           </div>
         )}
 
-        {currentStage === 'structure' && <StructureViewer docTree={project.canonicalDocument || null} />}
+        {currentStage === 'markdown' && <MarkdownViewer docTree={project.canonicalDocument || null} />}
+        {currentStage === 'structure' && <StructureViewer docTree={project.canonicalDocument || null} initialTab="tree" />}
+        {currentStage === 'database' && <RelationalDatabaseViewer />}
+        {currentStage === 'curriculum' && (
+          <KnowledgeGraphCurriculumViewer
+            knowledgeIr={project.clsgIr?.knowledge_ir || project.knowledgeIr || null}
+            curriculumIr={project.clsgIr?.curriculum_ir || project.curriculumIr || null}
+          />
+        )}
         {currentStage === 'understanding' && (
           <LessonUnderstandingViewer
             lessonModel={project.lessonBlueprint?.lesson_model || project.clsgIr?.lesson_model}
@@ -298,6 +333,14 @@ export const ProjectDetailPage: React.FC = () => {
           />
         )}
         {currentStage === 'plan' && <PlanViewer blueprint={project.lessonBlueprint || null} />}
+        {currentStage === 'transition' && (
+          <TransitionIntelligenceViewer
+            transitionMap={(project.clsgIr as any)?.transition_map || null}
+          />
+        )}
+        {currentStage === 'narrative' && (
+          <NarrativeInspector narrativeIr={project.clsgIr?.narrative_ir || project.narrativeIr || null} />
+        )}
         {currentStage === 'narration' && <NarrationViewer scenes={scenes} />}
         {currentStage === 'prosody' && <ProsodyViewer scenes={scenes} />}
         {currentStage === 'visual' && <VisualIntentViewer scenes={scenes} />}
@@ -338,6 +381,12 @@ export const ProjectDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Global API Key & Multi-Provider Modal */}
+      <ApiKeyModal
+        isOpen={isKeyModalOpen}
+        onClose={() => setIsKeyModalOpen(false)}
+      />
     </div>
   );
 };

@@ -650,40 +650,87 @@ export class QualityVisualGuard {
       auto_repaired: narrativeRepairsCount > 0
     });
 
-    // Overall Quality Score (Balanced across all dimensions)
-    const overallScore =
-      darScore * 0.25 +
-      taxScore * 0.15 +
-      necessityScore * 0.15 +
-      factualScore * 0.15 +
-      langScore * 0.15 +
-      narrativeScore * 0.15;
+    // 5 Dimension Scores for Subsystem A
+    const contentDim = Math.round(factualScore * 100) / 100;
+    const pedagogyDim = Math.round(((necessityScore + langScore) / 2) * 100) / 100;
+    const narrativeDim = Math.round(narrativeScore * 100) / 100;
+    const visualDim = Math.round(((taxScore + necessityScore) / 2) * 100) / 100;
+    const technicalDim = Math.round(((darScore + 0.98) / 2) * 100) / 100;
+    const overallDim = Math.round(
+      (contentDim * 0.25 + pedagogyDim * 0.20 + narrativeDim * 0.20 + visualDim * 0.20 + technicalDim * 0.15) * 100
+    ) / 100;
+
+    // Build structured QualityIssues
+    const detectedIssues: import('../../types').QualityIssue[] = [];
+    checks.forEach((c) => {
+      if (c.status !== 'PASSED') {
+        detectedIssues.push({
+          issue_id: `iss_${c.check_id}_${Date.now().toString(36)}`,
+          category: c.category.includes('visual')
+            ? 'visual'
+            : c.category.includes('factual')
+            ? 'content'
+            : c.category.includes('temporal')
+            ? 'technical'
+            : 'narrative',
+          issue_type: c.check_id,
+          severity: c.status === 'FAILED' ? 'high' : 'medium',
+          description: c.message,
+          repair_suggestion: c.auto_repaired ? 'Tự động sửa lỗi đã được áp dụng.' : 'Xem xét điều chỉnh thủ công qua Human Review.'
+        });
+      }
+    });
+
+    // Multi-state Decision Engine: PASS, NEEDS_REVIEW, AUTO_REPAIR, FAIL
+    let decision: import('../../types').QualityDecisionState = 'PASS';
+    let decisionReason = 'Mọi chỉ số chất lượng đạt tiêu chuẩn khắt khe của CLSG-IR. Sẵn sàng phát hành.';
+
+    if (overallDim < 0.60 || checks.some((c) => c.status === 'FAILED')) {
+      decision = 'FAIL';
+      decisionReason = 'Chất lượng dưới ngưỡng an toàn tối thiểu hoặc có lỗi kiểm định nghiêm trọng.';
+    } else if (autoRepairs.length > 0 && overallDim >= 0.85) {
+      decision = 'AUTO_REPAIR';
+      decisionReason = `Đã tự động khắc phục ${autoRepairs.length} điểm bất thường (DAR-P, lặp câu, rò rỉ siêu dữ liệu) thành công.`;
+    } else if (overallDim < 0.85 || detectedIssues.some((i) => i.severity === 'high')) {
+      decision = 'NEEDS_REVIEW';
+      decisionReason = 'Có các vấn đề chất lượng cần chuyên gia sư phạm thẩm định và duyệt trước khi phát hành.';
+    }
 
     const overallStatus =
-      checks.some((c) => c.status === 'FAILED') || overallScore < 0.70
-        ? 'FAILED'
-        : checks.some((c) => c.status === 'WARNING') || overallScore < 0.85
-        ? 'WARNING'
-        : 'PASSED';
+      decision === 'FAIL' ? 'FAILED' : decision === 'PASS' ? 'PASSED' : 'WARNING';
 
     const qualityReport: QualityReport = {
       report_id: `qr_${Date.now().toString(36)}`,
+      decision,
+      decision_reason: decisionReason,
+      scores: {
+        content: contentDim,
+        pedagogy: pedagogyDim,
+        narrative: narrativeDim,
+        visual: visualDim,
+        technical: technicalDim,
+        overall: overallDim
+      },
+      issues: detectedIssues,
+      repair_attempts: autoRepairs.length > 0 ? 1 : 0,
+      max_repair_attempts: 2,
+      human_review_required: decision === 'NEEDS_REVIEW' || decision === 'FAIL',
+      human_review_reason: decision === 'NEEDS_REVIEW' ? decisionReason : undefined,
       overall_status: overallStatus,
-      overall_quality_score: Math.round(overallScore * 100) / 100,
+      overall_quality_score: overallDim,
       dar_p_ratio: Math.round(durationErrorRatio * 1000) / 1000,
       target_duration_sec: targetDuration,
       actual_duration_sec: Math.round(actualDuration * 10) / 10,
       duration_error_pct: durationErrorPct,
-      factual_consistency_score: Math.round(factualScore * 100) / 100,
+      factual_consistency_score: contentDim,
       visual_necessity_score: Math.round(necessityScore * 100) / 100,
       taxonomy_validity_score: Math.round(taxScore * 100) / 100,
       prosody_coherence_score: 0.98,
       language_terminology_score: Math.round(langScore * 100) / 100,
-      narrative_coherence_score: Math.round(narrativeScore * 100) / 100,
+      narrative_coherence_score: narrativeDim,
       language_traces: Array.from(new Set(allLanguageTraces)).slice(0, 10),
       checks,
       auto_repairs_applied: autoRepairs,
-      human_review_required: overallStatus !== 'PASSED',
       timestamp: new Date().toISOString()
     };
 

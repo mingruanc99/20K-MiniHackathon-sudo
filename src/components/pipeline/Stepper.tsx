@@ -2,6 +2,7 @@
 import React from 'react';
 import {
   FileText,
+  FileCode,
   Layers,
   Compass,
   Mic,
@@ -11,15 +12,24 @@ import {
   Code2,
   Video,
   Sliders,
-  BrainCircuit
+  BrainCircuit,
+  Database,
+  Sparkles,
+  Network,
+  GitMerge
 } from 'lucide-react';
 
 export type PipelineStage =
   | 'source'
+  | 'markdown'
   | 'structure'
+  | 'database'
+  | 'curriculum'
   | 'understanding'
   | 'config'
   | 'plan'
+  | 'transition'
+  | 'narrative'
   | 'narration'
   | 'prosody'
   | 'visual'
@@ -35,10 +45,15 @@ interface StepperProps {
 
 const STAGES: { id: PipelineStage; label: string; module: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'source', label: 'Tệp gốc', module: 'IN', icon: FileText },
+  { id: 'markdown', label: 'Markdown CIR', module: 'CIR', icon: FileCode },
   { id: 'structure', label: 'Cấu trúc', module: 'M1', icon: Layers },
+  { id: 'database', label: 'Database quan hệ', module: 'DB', icon: Database },
+  { id: 'curriculum', label: 'Giáo trình động', module: 'KCL', icon: Network },
   { id: 'understanding', label: 'Hiểu bài giảng', module: 'M2', icon: BrainCircuit },
   { id: 'config', label: 'Cấu hình', module: 'CFG', icon: Sliders },
   { id: 'plan', label: 'Kế hoạch', module: 'ARC', icon: Compass },
+  { id: 'transition', label: 'Cầu nối ý tưởng', module: 'TIL', icon: GitMerge },
+  { id: 'narrative', label: 'Trí tuệ tự sự', module: 'NIL', icon: Sparkles },
   { id: 'narration', label: 'Lời giảng', module: '3A', icon: Mic },
   { id: 'prosody', label: 'Ngắt nghỉ', module: '3B', icon: Activity },
   { id: 'visual', label: 'Ý đồ thị giác', module: '3C', icon: Eye },

@@ -165,6 +165,7 @@ T032/
 ## 📚 Technical Documentation
 
 ### 📐 Architecture & Data Flow
+- 📑 [Kiến Trúc Pipeline & Luồng Dữ Liệu Chi Tiết (Pipeline & Data Flow)](docs/architecture/DATA_FLOW_AND_PIPELINE.md)
 - 🔄 [Luồng Dữ Liệu Toàn Hệ Thống (System Data Flow)](docs/architecture/SYSTEM_DATA_FLOW.md)
 - 📊 [Ví Dụ Dữ Liệu End-to-End (Data Flow Example)](docs/architecture/END_TO_END_DATA_FLOW_EXAMPLE.md)
 - 🏛️ [Phương Pháp Đề Xuất Toàn Diện (Proposed Method)](docs/architecture/PROPOSED_METHOD.md)

@@ -1,9 +1,12 @@
 // src/services/llm/GeminiProvider.ts
 /**
- * Production Online Gemini Provider for CLSG-IR
- * 100% Online LLM execution via Google Generative Language REST API.
- * High-Availability Architecture: Automatic multi-model failover for 503 (High Demand), 429 (Rate Limit), and 404.
- * Primary: gemini-flash-lite-latest (Fastest, High Capacity) & gemini-flash-latest
+ * Production Multi-Provider Online LLM Engine for CLSG-IR
+ * Supports: Google Gemini, Anthropic Claude, OpenAI GPT, and OpenRouter.
+ * Features:
+ * - Real-time switching between providers and models without page refresh
+ * - Elimination of invalid models (e.g. gemini-3.5 404 errors)
+ * - Automatic failover for 503 (High Demand) and 429 (Rate Limits)
+ * - Fallback to structured MockLLMProvider when all providers are unavailable
  */
 import {
   CanonicalDocumentTree,
@@ -15,28 +18,20 @@ import {
   SemanticCritiqueReport
 } from '../../types';
 import { ILLMProvider, NarrationContext } from './LLMProvider';
-import { apiKeyService } from './apiKeyService';
+import { apiKeyService, LLMProviderType } from './apiKeyService';
 import { MockLLMProvider } from './MockLLMProvider';
 import { contentPurifierService } from '../../pipeline/services/contentPurifierService';
 import { adminTelemetryService } from '../adminTelemetryService';
 
 export class GeminiProvider implements ILLMProvider {
-  readonly providerId = 'gemini';
+  readonly providerId = 'multi_provider_llm';
   readonly isDemo = false;
 
-  private primaryModel: string;
-  private lightModel: string;
   private customApiKey?: string;
   private fallbackMock = new MockLLMProvider();
 
-  constructor(
-    apiKey?: string,
-    primaryModel: string = 'gemini-flash-lite-latest',
-    lightModel: string = 'gemini-flash-lite-latest'
-  ) {
+  constructor(apiKey?: string) {
     this.customApiKey = apiKey;
-    this.primaryModel = primaryModel;
-    this.lightModel = lightModel;
   }
 
   public getActiveApiKey(): string {
@@ -47,43 +42,73 @@ export class GeminiProvider implements ILLMProvider {
     this.customApiKey = key;
   }
 
-  private async callGeminiJson<T>(
-    model: string,
+  /**
+   * Universal JSON caller routing to Gemini, Claude, OpenAI, or OpenRouter
+   */
+  private async callLLMJson<T>(
     prompt: string,
     systemInstruction: string = '',
-    featureName: string = 'Gemini Generation'
+    featureName: string = 'AI Generation'
   ): Promise<T> {
-    const key = this.getActiveApiKey();
+    const activeProvider = apiKeyService.getActiveProvider();
+    const activeModel = apiKeyService.getActiveModel(activeProvider);
+    const key = this.customApiKey || apiKeyService.getApiKey(activeProvider);
+
     if (!key) {
       adminTelemetryService.recordError({
         type: 'LLM_ERROR',
-        lessonId: 'gemini_session',
+        lessonId: 'llm_session',
         lessonTitle: 'Online LLM Service',
         sectionId: featureName,
-        model,
+        model: `${activeProvider}:${activeModel}`,
         severity: 'high',
-        message: 'Chưa cấu hình Gemini API Key'
+        message: `Chưa cấu hình API Key cho ${activeProvider}`
       });
       throw new Error(
-        'Chưa cấu hình Gemini API Key. Vui lòng nhấn vào biểu tượng API Key trên thanh điều hướng để nhập mã khóa của bạn.'
+        `Chưa cấu hình API Key cho ${activeProvider.toUpperCase()}. Vui lòng nhấn vào nút [Đổi Key / AI] trên thanh công cụ để nhập mã khóa của bạn.`
       );
     }
 
-    // High availability pool: automatic failover when a model experiences temporary spikes (503)
-    const candidateModels = [
-      model,
-      'gemini-flash-lite-latest',
-      'gemini-flash-latest',
-      'gemini-3.5-flash-lite',
-      'gemini-3.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash'
-    ];
-    const uniqueModels = Array.from(new Set(candidateModels));
+    if (activeProvider === 'claude') {
+      return this.callClaude<T>(key, activeModel, prompt, systemInstruction, featureName);
+    }
+
+    if (activeProvider === 'openai') {
+      return this.callOpenAI<T>(key, activeModel, prompt, systemInstruction, featureName);
+    }
+
+    if (activeProvider === 'openrouter') {
+      return this.callOpenRouter<T>(key, activeModel, prompt, systemInstruction, featureName);
+    }
+
+    // Default: Google Gemini
+    return this.callGemini<T>(key, activeModel, prompt, systemInstruction, featureName);
+  }
+
+  /**
+   * Google Gemini Caller with verified model pool (NO non-existent 3.5 models)
+   */
+  private async callGemini<T>(
+    key: string,
+    requestedModel: string,
+    prompt: string,
+    systemInstruction: string,
+    featureName: string
+  ): Promise<T> {
+    // Only real, existing Google Generative Language models:
+    const candidateModels = Array.from(
+      new Set([
+        requestedModel,
+        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro'
+      ])
+    );
 
     let lastError: any = null;
 
-    for (const currentModel of uniqueModels) {
+    for (const currentModel of candidateModels) {
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${key}`;
       const tStart = performance.now();
 
@@ -98,7 +123,7 @@ export class GeminiProvider implements ILLMProvider {
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 90000);
+        const timeoutId = setTimeout(() => controller.abort(), 75000);
 
         const res = await fetch(endpoint, {
           method: 'POST',
@@ -115,9 +140,8 @@ export class GeminiProvider implements ILLMProvider {
           const errText = await res.text();
           const latencyMs = Math.round(performance.now() - tStart);
 
-          // Record telemetry error
           adminTelemetryService.recordAICall({
-            model: currentModel,
+            model: `gemini:${currentModel}`,
             feature: featureName,
             promptTokens: Math.round((prompt.length + (systemInstruction?.length || 0)) / 4),
             completionTokens: 0,
@@ -128,21 +152,20 @@ export class GeminiProvider implements ILLMProvider {
             errorMessage: `${res.status}: ${errText.slice(0, 150)}`
           });
 
-          // 503 / 502 / 500: Model high demand or server busy -> automatic failover to next model!
+          // 503/500: Server overloaded -> retry next model
           if (res.status === 503 || res.status === 502 || res.status === 500) {
-            console.warn(`Model ${currentModel} quá tải hoặc gặp sự cố tạm thời (${res.status}). Đang tự động chuyển sang mô hình tiếp theo...`);
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            console.warn(`Model ${currentModel} quá tải (503). Đang chuyển sang model tiếp theo...`);
+            await new Promise((r) => setTimeout(r, 1000));
             continue;
           }
 
-          // 429: Rate limit -> polite wait and failover
+          // 429: Rate limit -> switch to next model
           if (res.status === 429) {
-            console.warn(`Model ${currentModel} đạt giới hạn tốc độ (429). Đang chuyển sang mô hình khác...`);
-            await new Promise((resolve) => setTimeout(resolve, 1500));
+            console.warn(`Model ${currentModel} đạt giới hạn tốc độ (429). Đang chuyển sang model khác...`);
+            await new Promise((r) => setTimeout(r, 1200));
             continue;
           }
 
-          // 404: Model not found
           if (res.status === 404) {
             continue;
           }
@@ -154,40 +177,235 @@ export class GeminiProvider implements ILLMProvider {
         const latencyMs = Math.round(performance.now() - tStart);
         const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!candidateText) {
-          throw new Error('Không nhận được nội dung phản hồi từ mô hình Gemini.');
+          throw new Error('Không nhận được nội dung phản hồi từ Gemini.');
         }
 
-        // Record successful call with real token usage
         const usage = data.usageMetadata || {};
         const promptTokens = usage.promptTokenCount || Math.round((prompt.length + (systemInstruction?.length || 0)) / 4);
         const completionTokens = usage.candidatesTokenCount || Math.round(candidateText.length / 4);
-        const totalTokens = promptTokens + completionTokens;
-        const costUsd = currentModel.includes('pro')
-          ? (promptTokens * 0.0000035 + completionTokens * 0.0000105)
-          : (promptTokens * 0.000000075 + completionTokens * 0.00000030);
 
         adminTelemetryService.recordAICall({
-          model: currentModel,
+          model: `gemini:${currentModel}`,
           feature: featureName,
           promptTokens,
           completionTokens,
-          totalTokens,
-          costUsd: Math.round(costUsd * 100000) / 100000,
+          totalTokens: promptTokens + completionTokens,
+          costUsd: promptTokens * 0.0000001 + completionTokens * 0.0000004,
           latencyMs,
           status: 'success'
         });
 
-        // Clean possible markdown code fences if LLM wrapped in ```json
         const cleanedJson = candidateText.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
         return JSON.parse(cleanedJson) as T;
       } catch (err: any) {
         lastError = err;
-        console.warn(`Kết nối tới ${currentModel} gặp lỗi: ${err.message}. Đang thử mô hình kế tiếp...`);
+        console.warn(`Thử nghiệm ${currentModel} thất bại: ${err.message}. Đang thử model kế tiếp...`);
         continue;
       }
     }
 
-    throw lastError || new Error('Không thể kết nối đến dịch vụ Google Gemini LLM sau khi thử tất cả các mô hình.');
+    throw lastError || new Error('Tất cả các model Gemini đều không khả dụng hoặc bị giới hạn tốc độ.');
+  }
+
+  /**
+   * Anthropic Claude Caller (Direct browser calls allowed with dangerous header)
+   */
+  private async callClaude<T>(
+    key: string,
+    model: string,
+    prompt: string,
+    systemInstruction: string,
+    featureName: string
+  ): Promise<T> {
+    const tStart = performance.now();
+    const endpoint = 'https://api.anthropic.com/v1/messages';
+
+    const fullSystem = `${systemInstruction || 'You are an expert AI instructional designer.'}\nIMPORTANT: You must output ONLY a valid JSON object matching the requested schema. Do not add markdown backticks, greetings, or conversational remarks.`;
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: model || 'claude-3-5-sonnet-20241022',
+        max_tokens: 4096,
+        system: fullSystem,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const latencyMs = Math.round(performance.now() - tStart);
+
+    if (!res.ok) {
+      const errText = await res.text();
+      adminTelemetryService.recordAICall({
+        model: `claude:${model}`,
+        feature: featureName,
+        promptTokens: Math.round(prompt.length / 4),
+        completionTokens: 0,
+        totalTokens: Math.round(prompt.length / 4),
+        costUsd: 0,
+        latencyMs,
+        status: 'error',
+        errorMessage: `${res.status}: ${errText.slice(0, 150)}`
+      });
+      throw new Error(`Anthropic Claude Error (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    const text = data.content?.[0]?.text || '';
+    const cleanedJson = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
+
+    adminTelemetryService.recordAICall({
+      model: `claude:${model}`,
+      feature: featureName,
+      promptTokens: data.usage?.input_tokens || Math.round(prompt.length / 4),
+      completionTokens: data.usage?.output_tokens || Math.round(text.length / 4),
+      totalTokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+      costUsd: 0.003,
+      latencyMs,
+      status: 'success'
+    });
+
+    return JSON.parse(cleanedJson) as T;
+  }
+
+  /**
+   * OpenAI GPT Caller
+   */
+  private async callOpenAI<T>(
+    key: string,
+    model: string,
+    prompt: string,
+    systemInstruction: string,
+    featureName: string
+  ): Promise<T> {
+    const tStart = performance.now();
+    const endpoint = 'https://api.openai.com/v1/chat/completions';
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        model: model || 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemInstruction || 'You are an expert AI instructional designer. Return strictly valid JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.2
+      })
+    });
+
+    const latencyMs = Math.round(performance.now() - tStart);
+
+    if (!res.ok) {
+      const errText = await res.text();
+      adminTelemetryService.recordAICall({
+        model: `openai:${model}`,
+        feature: featureName,
+        promptTokens: Math.round(prompt.length / 4),
+        completionTokens: 0,
+        totalTokens: Math.round(prompt.length / 4),
+        costUsd: 0,
+        latencyMs,
+        status: 'error',
+        errorMessage: `${res.status}: ${errText.slice(0, 150)}`
+      });
+      throw new Error(`OpenAI Error (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content || '{}';
+    const cleanedJson = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
+
+    adminTelemetryService.recordAICall({
+      model: `openai:${model}`,
+      feature: featureName,
+      promptTokens: data.usage?.prompt_tokens || Math.round(prompt.length / 4),
+      completionTokens: data.usage?.completion_tokens || Math.round(text.length / 4),
+      totalTokens: data.usage?.total_tokens || 0,
+      costUsd: 0.001,
+      latencyMs,
+      status: 'success'
+    });
+
+    return JSON.parse(cleanedJson) as T;
+  }
+
+  /**
+   * OpenRouter Unified Caller (supports Claude, GPT, DeepSeek, etc. without CORS hurdles)
+   */
+  private async callOpenRouter<T>(
+    key: string,
+    model: string,
+    prompt: string,
+    systemInstruction: string,
+    featureName: string
+  ): Promise<T> {
+    const tStart = performance.now();
+    const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+        'HTTP-Referer': 'https://clsg-ir-studio.vercel.app',
+        'X-Title': 'CLSG-IR Studio'
+      },
+      body: JSON.stringify({
+        model: model || 'anthropic/claude-3.5-sonnet',
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: `${systemInstruction || 'Instructional Designer'}\nYou must respond strictly with valid JSON only.` },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.2
+      })
+    });
+
+    const latencyMs = Math.round(performance.now() - tStart);
+
+    if (!res.ok) {
+      const errText = await res.text();
+      adminTelemetryService.recordAICall({
+        model: `openrouter:${model}`,
+        feature: featureName,
+        promptTokens: Math.round(prompt.length / 4),
+        completionTokens: 0,
+        totalTokens: Math.round(prompt.length / 4),
+        costUsd: 0,
+        latencyMs,
+        status: 'error',
+        errorMessage: `${res.status}: ${errText.slice(0, 150)}`
+      });
+      throw new Error(`OpenRouter Error (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content || '{}';
+    const cleanedJson = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
+
+    adminTelemetryService.recordAICall({
+      model: `openrouter:${model}`,
+      feature: featureName,
+      promptTokens: data.usage?.prompt_tokens || Math.round(prompt.length / 4),
+      completionTokens: data.usage?.completion_tokens || Math.round(text.length / 4),
+      totalTokens: data.usage?.total_tokens || 0,
+      costUsd: 0.002,
+      latencyMs,
+      status: 'success'
+    });
+
+    return JSON.parse(cleanedJson) as T;
   }
 
   async generateLessonUnderstanding(
@@ -259,14 +477,13 @@ Return a valid JSON object strictly adhering to this schema:
 }`;
 
     try {
-      return await this.callGeminiJson<LessonModel>(
-        this.primaryModel,
+      return await this.callLLMJson<LessonModel>(
         prompt,
         'You are an expert AI EdTech instructional designer.',
         'Module 2: Whole-Lesson Model'
       );
     } catch (err) {
-      console.warn('Gemini online calls failed after all retries, using resilient fallback:', err);
+      console.warn('Online LLM calls failed, using resilient fallback:', err);
       return this.fallbackMock.generateLessonUnderstanding(docTree, config);
     }
   }
@@ -304,14 +521,13 @@ Return a valid JSON object matching:
 }`;
 
     try {
-      return await this.callGeminiJson<ContentPrioritization>(
-        this.primaryModel,
+      return await this.callLLMJson<ContentPrioritization>(
         prompt,
         'You are an instructional content filtering system.',
         'Module 2: Content Prioritization'
       );
     } catch (err) {
-      console.warn('Gemini prioritization failed after retries, using resilient fallback:', err);
+      console.warn('Prioritization failed, using resilient fallback:', err);
       return this.fallbackMock.generateContentPrioritization(docTree, lessonModel);
     }
   }
@@ -353,14 +569,13 @@ Return a JSON array of Teaching Units:
 ]`;
 
     try {
-      return await this.callGeminiJson<TeachingUnit[]>(
-        this.primaryModel,
+      return await this.callLLMJson<TeachingUnit[]>(
         prompt,
         'You are a master curriculum and instructional designer.',
         'Module 2: Teaching Plan'
       );
     } catch (err) {
-      console.warn('Gemini teaching plan failed after retries, using resilient fallback:', err);
+      console.warn('Teaching plan failed, using resilient fallback:', err);
       return this.fallbackMock.generateTeachingPlan(docTree, lessonModel, prioritization, config);
     }
   }
@@ -395,8 +610,7 @@ Key Points: ${unit.key_talking_points.join('; ')}
 Return JSON: { "narration": "Natural Vietnamese spoken lecture text" }`;
 
     try {
-      const res = await this.callGeminiJson<{ narration: string }>(
-        this.lightModel,
+      const res = await this.callLLMJson<{ narration: string }>(
         prompt,
         'You are an inspiring university AI lecturer speaking fluent, natural Vietnamese.',
         'Module 3A: Narration Generation'
@@ -404,7 +618,7 @@ Return JSON: { "narration": "Natural Vietnamese spoken lecture text" }`;
       const purification = contentPurifierService.purifyNarration(res.narration);
       return purification.cleanedText;
     } catch (err) {
-      console.warn('Gemini narration failed after retries, using resilient fallback:', err);
+      console.warn('Narration generation failed, using resilient fallback:', err);
       return this.fallbackMock.generateNarration(unit, lessonModel, context, config);
     }
   }
@@ -439,8 +653,7 @@ Return JSON:
 }`;
 
     try {
-      return await this.callGeminiJson<SemanticCritiqueReport>(
-        this.lightModel,
+      return await this.callLLMJson<SemanticCritiqueReport>(
         prompt,
         'You are an instructional quality guard critic.',
         'Module 4: Quality Guard Critique'

@@ -7,6 +7,7 @@
 import JSZip from 'jszip';
 import { CanonicalDocumentTree, DocumentSection, ContentElement } from '../../types';
 import { contentPurifierService } from '../services/contentPurifierService';
+import { diagramRecognizer } from './diagramRecognizer';
 
 export class PPTXExtractor {
   async extract(fileData: ArrayBuffer | Blob, filename: string): Promise<CanonicalDocumentTree> {
@@ -131,23 +132,30 @@ export class PPTXExtractor {
         }
       }
 
+      // Analyze diagram structure & separate annotations
+      const { cleanElements } = diagramRecognizer.analyzeSlide(
+        elements,
+        slideTitle,
+        slideNum,
+        `doc_${slideNum}`
+      );
+
       // If slide had no text elements, add placeholder
-      if (elements.length === 0) {
-        elements.push({
+      if (cleanElements.length === 0) {
+        cleanElements.push({
           element_id: `${secId}_el_01`,
           type: 'title',
           text: `Slide ${slideNum}`,
           level: 1
         });
-        rawTexts.push(`Slide ${slideNum}`);
       }
 
       sections.push({
         section_id: secId,
         title: slideTitle,
         order: slideNum,
-        elements,
-        raw_text: rawTexts.join('\n')
+        elements: cleanElements,
+        raw_text: cleanElements.map((e) => e.text).join('\n')
       });
     }
 

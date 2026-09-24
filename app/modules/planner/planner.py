@@ -5,7 +5,7 @@ Transforms CanonicalDocumentTree + PipelineConfig into a structured LessonBluepr
 Calculates strict per-section word budgets W_target, Bloom levels, and pedagogical roles.
 """
 import uuid
-from typing import List
+from typing import List, Any, Optional, Dict
 from app.models.document import CanonicalDocumentTree, DocumentSection
 from app.models.config import PipelineConfig
 from app.models.blueprint import LessonBlueprint, SectionPlan, BloomLevel, PedagogicalRole
@@ -45,6 +45,19 @@ class InstructionalPlanner:
             is_vi = config.learner.language != "en"
             goal = self._formulate_instructional_goal(section.title, role, bloom, is_vi=is_vi)
 
+            # Match semantic chunks for this section
+            matched_chunk_ids = [
+                c.chunk_id for c in doc_tree.semantic_chunks
+                if c.section_id == section.section_id or c.parent_id == section.section_id
+            ]
+
+            # Match primary visual element for this slide
+            matching_visuals = [
+                v.visual_id for v in doc_tree.visual_elements
+                if v.source_slide == idx
+            ]
+            primary_vis = matching_visuals[0] if matching_visuals else None
+
             plan = SectionPlan(
                 section_id=section.section_id,
                 title=section.title,
@@ -55,7 +68,9 @@ class InstructionalPlanner:
                 target_word_budget=sec_word_budget,
                 key_concepts=extracted_concepts,
                 prerequisite_concepts=prereqs,
-                instructional_goal=goal
+                instructional_goal=goal,
+                assigned_chunk_ids=matched_chunk_ids,
+                primary_visual_id=primary_vis
             )
             section_plans.append(plan)
 
@@ -73,6 +88,90 @@ class InstructionalPlanner:
                 "wpm": config.presentation.baseline_wpm,
                 "pause_overhead_pct": inferred.target_pause_overhead_pct,
                 "learner_persona": config.learner.model_dump()
+            }
+        )
+
+    def plan_from_curriculum(
+        self,
+        curriculum: Any,
+        doc_id: str,
+        title: str,
+        config: PipelineConfig
+    ) -> LessonBlueprint:
+        """
+        Builds a LessonBlueprint from a duration-designed CurriculumIR.
+
+        CRITICAL: The section order in this blueprint reflects the TOPOLOGICAL
+        PREREQUISITE ORDER from the knowledge graph — NOT the original slide order.
+        Different durations will produce different section sets and orderings.
+
+        Each section carries TeachingDepth metadata specifying which cognitive
+        layers the narration generator must produce for this concept at this tier.
+        """
+        section_plans: List[SectionPlan] = []
+
+        role_map = {
+            "epistemic_hook_reveal": "hook",
+            "intuitive_analogy_walkthrough": "definition",
+            "empirical_evidence_deconstruction": "mechanism",
+            "comparative_tradeoff_analysis": "comparison",
+            "synthesis_and_mastery": "summary"
+        }
+
+        # Resolve strategy name (handle both old and new field names)
+        strategy_name = (
+            getattr(curriculum, 'teaching_design_strategy', None)
+            or getattr(curriculum, 'compression_strategy', 'standard_10m')
+        )
+
+        for idx, unit in enumerate(curriculum.teaching_trajectory, start=1):
+            ped_role = role_map.get(unit.pedagogical_strategy, "mechanism")
+
+            plan = SectionPlan(
+                section_id=unit.unit_id,
+                title=unit.unit_title,
+                order=idx,
+                pedagogical_function=ped_role,
+                bloom_level=unit.bloom_level if unit.bloom_level in ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"] else "Understand",
+                target_duration_sec=int(unit.target_duration_sec),
+                target_word_budget=unit.target_word_budget,
+                key_concepts=[unit.concept_id],
+                prerequisite_concepts=unit.prerequisite_concept_ids,
+                instructional_goal=unit.epistemic_goal,
+                assigned_chunk_ids=[unit.concept_id],
+                primary_visual_id=unit.primary_evidence_artifact_id
+            )
+
+            # Attach TeachingDepth as plan-level metadata if available
+            depth = getattr(unit, 'depth', None)
+            if depth is not None:
+                plan.__dict__["teaching_depth"] = {
+                    "narration_layers": depth.narration_layers,
+                    "evidence_density": depth.evidence_density,
+                    "bloom_ceiling": depth.bloom_ceiling,
+                    "include_analogy": depth.include_analogy,
+                    "include_misconception_inoculation": depth.include_misconception_inoculation,
+                    "teaching_time_sec": depth.teaching_time_sec,
+                }
+
+            section_plans.append(plan)
+
+        return LessonBlueprint(
+            blueprint_id=f"bp_kcl_{uuid.uuid4().hex[:8]}",
+            document_id=doc_id,
+            lecture_title=title,
+            total_target_duration_sec=int(curriculum.total_target_duration_sec),
+            total_word_budget=sum(p.target_word_budget for p in section_plans),
+            pedagogical_strategy=f"Knowledge-Centric Teaching Design ({str(strategy_name).upper()} - {curriculum.target_duration_min} min)",
+            sections=section_plans,
+            metadata={
+                "curriculum_id": curriculum.curriculum_id,
+                "teaching_design_strategy": strategy_name,
+                "strategy": strategy_name,  # backward compat
+                "design_rationale": getattr(curriculum, 'design_rationale', ''),
+                "active_concepts": curriculum.active_concepts_count,
+                "pruned_concepts": curriculum.pruned_concepts_count,
+                "target_duration_min": curriculum.target_duration_min
             }
         )
 

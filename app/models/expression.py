@@ -93,6 +93,14 @@ class VisualCue(BaseModel):
         description="Coordinates, colors, bounding boxes, or Manim object classes"
     )
 
+class SceneProvenanceTrace(BaseModel):
+    scene_id: str = Field(description="Unique scene ID")
+    lesson_unit_id: str = Field(description="Corresponding lesson unit or section_id")
+    chunk_ids: List[str] = Field(default_factory=list, description="Source semantic chunk IDs")
+    source_slide: int = Field(default=1, description="Origin slide/page number")
+    source_document: str = Field(default="", description="Origin document ID")
+    associated_visual_ids: List[str] = Field(default_factory=list, description="Directly referenced visual asset IDs")
+
 class DraftScene(BaseModel):
     scene_id: str = Field(description="Unique scene ID, e.g. scene_01")
     section_id: str
@@ -103,6 +111,10 @@ class DraftScene(BaseModel):
     word_count: int
     prosody_plan: ProsodyPlan
     visual_cues: List[VisualCue] = Field(default_factory=list)
+    provenance_trace: Optional[SceneProvenanceTrace] = Field(
+        default=None,
+        description="End-to-end trace from scene back to lesson unit, chunk, slide, and visual"
+    )
 
 class DraftCLSG_IR(BaseModel):
     draft_id: str = Field(description="Draft representation ID")
