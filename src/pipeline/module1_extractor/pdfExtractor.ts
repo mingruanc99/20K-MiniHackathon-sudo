@@ -52,75 +52,91 @@ export class PDFExtractor {
     const documentId = `doc_${Date.now().toString(36)}`;
     regionAssetStore.setHandle(documentId, { kind: 'pdf', pdfDoc, pageCount: pdfDoc.numPages });
 
-    const numPages = Math.min(pdfDoc.numPages, 30); // Giới hạn 30 trang để tránh vượt quá token limit
-    const images: { mimeType: string; data: string }[] = [];
+    const numPages = Math.min(pdfDoc.numPages, 50); // Giới hạn 50 trang
+    const batchSize = 5; // Xử lý từng cụm 5 trang để tránh vượt quá Rate Limit của OpenAI
+    let overallTitle = filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+    const allSections: DocumentSection[] = [];
 
-    for (let i = 1; i <= numPages; i++) {
-      const page = await pdfDoc.getPage(i);
-      const viewport = page.getViewport({ scale: 1.5 });
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        const base64Data = dataUrl.split(',')[1];
-        images.push({ mimeType: 'image/jpeg', data: base64Data });
+    const systemInstruction = "Bạn là một chuyên gia thiết kế sư phạm và trích xuất dữ liệu OCR xuất sắc. Bạn phân tích các slide bài giảng và trích xuất nội dung văn bản cũng như mô tả các biểu đồ một cách chính xác sang tiếng Việt và đóng gói vào cấu trúc JSON.";
+
+    for (let batchStart = 1; batchStart <= numPages; batchStart += batchSize) {
+      const batchEnd = Math.min(batchStart + batchSize - 1, numPages);
+      const images: { mimeType: string; data: string }[] = [];
+
+      // Chụp ảnh các slide trong lô hiện tại
+      for (let i = batchStart; i <= batchEnd; i++) {
+        const page = await pdfDoc.getPage(i);
+        const viewport = page.getViewport({ scale: 1.0 }); // Giảm scale xuống 1.0 để nhẹ token
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.7); // Nén 70%
+          const base64Data = dataUrl.split(',')[1];
+          images.push({ mimeType: 'image/jpeg', data: base64Data });
+        }
       }
-    }
 
-    const prompt = `Trích xuất toàn bộ văn bản và mô tả chi tiết các biểu đồ/hình ảnh từ các slide PDF được đính kèm (theo thứ tự từ trang 1 đến trang ${numPages}).
+      const numImagesInBatch = images.length;
+      const prompt = `Trích xuất toàn bộ văn bản và mô tả chi tiết biểu đồ/hình ảnh từ các slide PDF đính kèm (từ slide ${batchStart} đến ${batchEnd}).
 Yêu cầu:
-1. Đọc và trích xuất TOÀN BỘ chữ trên từng slide.
-2. Nếu slide có hình ảnh, biểu đồ, lưu đồ: HÃY mô tả lại ý nghĩa sư phạm của chúng bằng văn bản.
-3. KHÔNG bỏ sót bất kỳ slide nào.
-4. QUAN TRỌNG: Toàn bộ quá trình bóc tách và mô tả phải được viết 100% bằng TIẾNG VIỆT. Không dịch sang tiếng Anh.
+1. Đọc và trích xuất TOÀN BỘ chữ.
+2. Nếu có hình ảnh/biểu đồ, mô tả lại ý nghĩa sư phạm bằng văn bản.
+3. QUAN TRỌNG: Viết 100% bằng TIẾNG VIỆT. KHÔNG bỏ sót slide nào.
 
-Trả về dữ liệu BẮT BUỘC dưới định dạng JSON có cấu trúc sau:
+Trả về BẮT BUỘC dưới định dạng JSON:
 {
-  "title": "Tên bài giảng chung (Dựa vào slide đầu tiên)",
+  "title": "Tên bài giảng chung (Chỉ ghi nếu đây là slide đầu tiên, nếu không cứ để rỗng)",
   "sections": [
     {
       "title": "Tiêu đề của slide",
       "elements": [
         {
           "type": "paragraph",
-          "text": "Nội dung văn bản, mô tả chi tiết biểu đồ (Bằng Tiếng Việt)..."
+          "text": "Nội dung văn bản (Bằng Tiếng Việt)..."
         }
       ]
     }
   ]
 }
-Lưu ý: Mảng 'sections' phải có đúng ${numPages} phần tử, tương ứng với ${numPages} hình ảnh slide được đính kèm. Nếu slide chỉ có hình, hãy để tiêu đề là 'Slide [số]' và phần text là mô tả hình đó.`;
+Lưu ý: Mảng 'sections' BẮT BUỘC phải có đúng ${numImagesInBatch} phần tử, tương ứng với ${numImagesInBatch} ảnh slide truyền vào.`;
 
-    const systemInstruction = "Bạn là một chuyên gia thiết kế sư phạm và trích xuất dữ liệu OCR xuất sắc. Bạn có nhiệm vụ phân tích các slide bài giảng và trích xuất nội dung văn bản cũng như mô tả các biểu đồ một cách chính xác sang tiếng Việt và đóng gói vào cấu trúc JSON.";
+      const resultJson = await online!.generateJson<any>(
+        prompt,
+        systemInstruction,
+        "PDF Vision Extraction",
+        { images, timeoutMs: 120000, maxOutputTokens: 4096 }
+      );
 
-    const resultJson = await online!.generateJson<any>(
-      prompt,
-      systemInstruction,
-      "PDF Vision Extraction",
-      { images, timeoutMs: 120000, maxOutputTokens: 8192 }
-    );
+      if (batchStart === 1 && resultJson.title) {
+        overallTitle = resultJson.title;
+      }
 
-    const sections: DocumentSection[] = (resultJson.sections || []).map((s: any, idx: number) => ({
-      section_id: `S${idx + 1}`,
-      title: s.title || `Trang ${idx + 1}`,
-      order: idx + 1,
-      elements: (s.elements || []).map((e: any, eIdx: number) => ({
-        element_id: `S${idx + 1}_E${eIdx + 1}`,
-        type: e.type || 'paragraph',
-        text: e.text || ''
-      }))
-    }));
+      const batchSections: DocumentSection[] = (resultJson.sections || []).map((s: any, idx: number) => {
+        const globalIdx = batchStart + idx;
+        return {
+          section_id: `S${globalIdx}`,
+          title: s.title || `Trang ${globalIdx}`,
+          order: globalIdx,
+          elements: (s.elements || []).map((e: any, eIdx: number) => ({
+            element_id: `S${globalIdx}_E${eIdx + 1}`,
+            type: e.type || 'paragraph',
+            text: e.text || ''
+          }))
+        };
+      });
+      allSections.push(...batchSections);
+    }
 
     return {
       document_id: documentId,
-      title: resultJson.title || filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' '),
+      title: overallTitle,
       source_type: 'pdf',
       source_filename: filename,
-      total_sections: sections.length,
-      sections,
+      total_sections: allSections.length,
+      sections: allSections,
       visual_regions: [], // Bỏ qua cơ chế OCR hình ảnh cũ vì LLM đã đọc hết thành text
       page_aspect: 16 / 9,
       extraction_time_ms: Math.round((performance.now() - startTime) * 10) / 10,
