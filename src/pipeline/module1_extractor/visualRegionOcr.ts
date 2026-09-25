@@ -2,18 +2,19 @@
 /**
  * Region OCR: reads only the located visual regions (never whole documents).
  *
- * Engine routing (preference "auto"):
- * - tables, scanned pages, user-drawn regions -> tesseract.js first (free, exact characters).
- *     Tables are rebuilt into rows/cells from word boxes (TSV). If confidence is low and an LLM is
- *     available, Gemini re-reads the crop.
- * - diagrams, charts, pictures -> Gemini vision first (needs structure: nodes/edges, series,
- *     "is this decorative"). Without Gemini, tesseract reads the labels in sparse-text mode.
+ * Engine routing (preference "auto"): tesseract.js first for every region kind (free, local, exact
+ * characters). Gemini vision re-reads a crop only when tesseract failed or is unsure, the region is
+ * not a plain picture, and the scan's small vision budget (`maxLlmCalls`) is not spent. LLM quota is
+ * limited, so OCR must stand on tesseract alone.
  * Preferences "tesseract" / "gemini" force one engine (with the other as fallback).
  * Native regions (PPTX tables, chart XML, SmartArt) already carry their data and are skipped.
  *
  * Before tesseract, crops are upscaled so text reaches ~30px x-height, converted to grayscale,
- * contrast-stretched, and Otsu-binarized when the background is colored.
- * tesseract.js is lazy-loaded from jsDelivr (pinned) and runs as a small worker pool.
+ * contrast-stretched, Otsu-binarized when the background is colored, and stripped of table rules
+ * and box borders (they wreck tesseract's layout analysis). The rule positions are kept and used as
+ * the table grid: each recognized word goes to the cell its center falls in.
+ * tesseract.js is lazy-loaded from jsDelivr (pinned) and runs as a small worker pool; call
+ * `warmUpTesseract()` early (e.g. on the upload page) so its first-load download is off the scan clock.
  */
 import { CanonicalDocumentTree, ContentElement, RegionOcrResult, VisualRegion } from '../../types';
 import { llmRouter } from '../../services/llm/LLMRouter';
@@ -29,6 +30,8 @@ export interface RegionOcrOptions {
   /** Absolute timestamp (performance.now()) after which pending regions are skipped. */
   deadline: number;
   preference?: OcrPreference;
+  /** Max Gemini vision calls in this run (fallback re-reads under "auto"). Default 3. */
+  maxLlmCalls?: number;
   onProgress?: (done: number, total: number) => void;
 }
 
@@ -95,6 +98,15 @@ async function getScheduler(): Promise<any> {
   return schedulerPromise;
 }
 
+/**
+ * Starts loading tesseract (core + vie/eng traineddata) in the background. The first load downloads
+ * ~20 MB and takes ~20 s; later loads come from the browser cache in well under a second.
+ */
+export function warmUpTesseract(): void {
+  if (typeof window === 'undefined') return;
+  getScheduler().catch((err) => console.warn('tesseract warm-up failed:', err));
+}
+
 // ---------------------------------------------------------------------------
 // Preprocessing
 // ---------------------------------------------------------------------------
@@ -107,11 +119,104 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+/** Rule positions (in preprocessed-image pixels) found and erased before OCR. */
+interface RuleGrid {
+  rows: number[];
+  cols: number[];
+}
+
+/**
+ * Finds long horizontal/vertical dark runs (table rules, box borders), erases them with a small halo,
+ * and returns their clustered positions. Vertical rules are only looked for in a ruled context
+ * (>= 2 horizontal rules) and must span most of the tightest row, so letter stems are never taken.
+ */
+export function removeRules(d: Uint8ClampedArray, w: number, h: number): RuleGrid {
+  const ink = new Uint8Array(w * h);
+  for (let i = 0, p = 0; p < w * h; i += 4, p++) ink[p] = d[i] < 128 ? 1 : 0;
+  const line = new Uint8Array(w * h);
+
+  const cluster = (vals: number[]) => {
+    const out: number[] = [];
+    let start = -1;
+    let prev = -10;
+    for (const v of vals) {
+      if (v - prev > 3) {
+        if (start >= 0) out.push(Math.round((start + prev) / 2));
+        start = v;
+      }
+      prev = v;
+    }
+    if (start >= 0) out.push(Math.round((start + prev) / 2));
+    return out;
+  };
+
+  const minH = Math.max(40, Math.round(w * 0.1));
+  const hRows: number[] = [];
+  for (let y = 0; y < h; y++) {
+    let run = 0;
+    let found = false;
+    for (let x = 0; x <= w; x++) {
+      if (x < w && ink[y * w + x]) {
+        run++;
+        continue;
+      }
+      if (run >= minH) {
+        for (let k = x - run; k < x; k++) line[y * w + k] = 1;
+        found = true;
+      }
+      run = 0;
+    }
+    if (found) hRows.push(y);
+  }
+  const rows = cluster(hRows);
+
+  let cols: number[] = [];
+  if (rows.length >= 2) {
+    let minGap = Infinity;
+    for (let i = 1; i < rows.length; i++) if (rows[i] - rows[i - 1] > 8) minGap = Math.min(minGap, rows[i] - rows[i - 1]);
+    const minV = Math.max(40, Math.round((Number.isFinite(minGap) ? minGap : h) * 0.8));
+    const vCols: number[] = [];
+    for (let x = 0; x < w; x++) {
+      let run = 0;
+      let found = false;
+      for (let y = 0; y <= h; y++) {
+        if (y < h && ink[y * w + x]) {
+          run++;
+          continue;
+        }
+        if (run >= minV) {
+          for (let k = y - run; k < y; k++) line[k * w + x] = 1;
+          found = true;
+        }
+        run = 0;
+      }
+      if (found) vCols.push(x);
+    }
+    cols = cluster(vCols);
+  }
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!line[y * w + x]) continue;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const yy = y + dy;
+          const xx = x + dx;
+          if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue;
+          const i = (yy * w + xx) * 4;
+          d[i] = d[i + 1] = d[i + 2] = 255;
+        }
+      }
+    }
+  }
+  return { rows, cols };
+}
+
 /**
  * Upscale small crops (tesseract wants ~300 dpi / 20-30px x-height), grayscale, stretch contrast,
- * and binarize with Otsu when the crop is not already near black-on-white.
+ * binarize with Otsu when the crop is not already near black-on-white, and erase rules/borders.
  */
-async function preprocessForTesseract(image: LLMImageInput): Promise<string> {
+async function preprocessForTesseract(image: LLMImageInput): Promise<{ src: string; grid: RuleGrid }> {
   const img = await loadImage(`data:${image.mimeType};base64,${image.data}`);
   const shortSide = Math.min(img.width, img.height);
   const scale = Math.max(1, Math.min(3, 1100 / Math.max(1, shortSide)));
@@ -121,7 +226,7 @@ async function preprocessForTesseract(image: LLMImageInput): Promise<string> {
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return img.src;
+  if (!ctx) return { src: img.src, grid: { rows: [], cols: [] } };
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, w, h);
   const px = ctx.getImageData(0, 0, w, h);
@@ -181,8 +286,9 @@ async function preprocessForTesseract(image: LLMImageInput): Promise<string> {
     if (invert) v = 255 - v;
     d[i] = d[i + 1] = d[i + 2] = v;
   }
+  const grid = removeRules(d, w, h);
   ctx.putImageData(px, 0, 0);
-  return canvas.toDataURL('image/png');
+  return { src: canvas.toDataURL('image/png'), grid };
 }
 
 // ---------------------------------------------------------------------------
@@ -198,7 +304,7 @@ interface TsvWord {
   text: string;
 }
 
-function parseTsv(tsv: string): TsvWord[] {
+export function parseTsv(tsv: string): TsvWord[] {
   const out: TsvWord[] = [];
   for (const row of (tsv || '').split('\n').slice(1)) {
     const c = row.split('\t');
@@ -256,30 +362,88 @@ function rebuildTable(words: TsvWord[]): string[][] {
   });
 }
 
+/**
+ * Table from the erased rules: rows between consecutive horizontal rules, columns between vertical
+ * rules; each word goes to the cell holding its center. Words inside a cell keep tesseract's line
+ * order, then left to right (sorting by raw `top` would scramble words whose diacritics differ).
+ */
+export function tableFromGrid(words: TsvWord[], grid: RuleGrid): string[][] {
+  const { rows, cols } = grid;
+  if (rows.length < 3 || cols.length < 3) return [];
+  const slot = (edges: number[], v: number) => {
+    for (let i = 0; i < edges.length - 1; i++) if (v >= edges[i] && v < edges[i + 1]) return i;
+    return -1;
+  };
+  const lineTop = new Map<string, number>();
+  words.forEach((w) => lineTop.set(w.line, Math.min(lineTop.get(w.line) ?? Infinity, w.top)));
+  const cells: TsvWord[][][] = Array.from({ length: rows.length - 1 }, () => Array.from({ length: cols.length - 1 }, () => []));
+  for (const w of words) {
+    const r = slot(rows, w.top + w.height / 2);
+    const c = slot(cols, w.left + w.width / 2);
+    if (r >= 0 && c >= 0) cells[r][c].push(w);
+  }
+  return cells
+    .map((row) =>
+      row.map((ws) =>
+        ws
+          .sort((a, b) => (lineTop.get(a.line)! - lineTop.get(b.line)!) || a.left - b.left)
+          .map((w) => w.text)
+          .join(' ')
+      )
+    )
+    .filter((row) => row.some((t) => t));
+}
+
+/** Arrows and rule leftovers that tesseract reads as dashes/brackets. */
+const NOISE_TOKEN = /^[\s\-–—_=~|\\/<>»«→←↑↓\[\](){}.,:;'"`*+•·]+$/;
+
+/** Diagram labels: tesseract keeps wide gaps between separate boxes on one line (preserve_interword_spaces). */
+export function diagramLabels(text: string): string[] {
+  return text
+    .split('\n')
+    .flatMap((l) => l.split(/\s{3,}/))
+    .map((l) => l.replace(/^[\s\-–—_=~|>»→·•\[\]]+|[\s\-–—_=~|<«←·•\[\]]+$/g, '').trim())
+    .filter((l) => l.length > 1 && !NOISE_TOKEN.test(l));
+}
+
 async function ocrWithTesseract(image: LLMImageInput, region: VisualRegion): Promise<RegionOcrResult> {
   const t0 = performance.now();
   const scheduler = await getScheduler();
-  const src = await preprocessForTesseract(image);
-  // Page segmentation stays on tesseract's automatic mode (a worker-level parameter shared by the pool);
-  // diagram labels are then read line by line as nodes.
+  const { src, grid } = await preprocessForTesseract(image);
   const sparse = region.kind === 'diagram' || region.kind === 'chart' || region.kind === 'picture';
   const { data } = await scheduler.addJob('recognize', src, {}, { text: true, tsv: true });
-  const words = parseTsv(data?.tsv || '').filter((w) => w.conf >= 0);
-  const text = String(data?.text || '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  const words = parseTsv(data?.tsv || '').filter((w) => w.conf >= 0 && !NOISE_TOKEN.test(w.text));
   const meanConf = words.length ? words.reduce((s, w) => s + w.conf, 0) / words.length : 0;
-  const table = region.kind === 'table' || region.kind === 'manual' ? rebuildTable(words) : [];
-  const isTable = table.length >= 2 && table[0].length >= 2;
-  const lines = sparse ? text.split('\n').map((l) => l.trim()).filter((l) => l.length > 1) : [];
 
+  let table: string[][] = [];
+  // Whole scanned pages mix prose with tables; only located table/manual regions become grids.
+  if (region.kind === 'table' || region.kind === 'manual') {
+    table = tableFromGrid(words, grid);
+    if (!table.length) table = rebuildTable(words);
+  }
+  const isTable = table.length >= 2 && table[0].length >= 2;
+  const rawText = String(data?.text || '');
+  const nodes = sparse && !isTable ? diagramLabels(rawText) : [];
+  const text = isTable
+    ? table.map((r) => r.join(' | ')).join('\n')
+    : rawText
+        .split('\n')
+        .map((l) => l.replace(/[ \t]+/g, ' ').trim())
+        .filter((l) => l && !NOISE_TOKEN.test(l))
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n');
+
+  // A picture without text is a finished reading (nothing to transcribe), not a failure to retry.
+  const noTextPicture = !text && region.kind === 'picture';
   return {
     engine: 'tesseract',
-    status: text ? 'done' : 'failed',
-    content_type: isTable ? 'table' : sparse && lines.length ? 'diagram' : 'text',
+    status: text || noTextPicture ? 'done' : 'failed',
+    content_type: isTable ? 'table' : nodes.length ? 'diagram' : noTextPicture ? 'photo' : 'text',
     text,
     table: isTable ? table : undefined,
-    nodes: sparse && lines.length ? lines.slice(0, 30) : undefined,
+    nodes: nodes.length ? nodes.slice(0, 30) : undefined,
     confidence: Math.round(meanConf) / 100,
-    error: text ? undefined : 'Không nhận diện được chữ',
+    error: text || noTextPicture ? undefined : 'Không nhận diện được chữ',
     latency_ms: Math.round(performance.now() - t0)
   };
 }
@@ -314,16 +478,20 @@ async function ocrWithGemini(image: LLMImageInput): Promise<RegionOcrResult> {
   };
 }
 
-const TEXT_FIRST_KINDS = new Set(['table', 'scanned_page', 'manual']);
-
-async function ocrOneRegion(documentId: string, region: VisualRegion, preference: OcrPreference): Promise<RegionOcrResult> {
+async function ocrOneRegion(
+  documentId: string,
+  region: VisualRegion,
+  preference: OcrPreference,
+  takeLlmCall: () => boolean
+): Promise<RegionOcrResult> {
   const image = await regionAssetStore.getRegionImage(documentId, region);
   if (!image) {
     return { engine: 'native', status: 'skipped', error: 'Không cắt được ảnh vùng này (định dạng EMF/WMF hoặc thiếu file nguồn)' };
   }
-  const tesseractFirst = preference === 'tesseract' || (preference === 'auto' && TEXT_FIRST_KINDS.has(region.kind));
+  const tesseractFirst = preference !== 'gemini';
 
   const tryGemini = async (): Promise<RegionOcrResult | null> => {
+    if (!takeLlmCall()) return null;
     try {
       return await ocrWithGemini(image);
     } catch (err: any) {
@@ -342,8 +510,11 @@ async function ocrOneRegion(documentId: string, region: VisualRegion, preference
 
   if (tesseractFirst) {
     const t = await tryTesseract();
-    const unreliable = !t || t.status !== 'done' || (t.confidence ?? 0) * 100 < LOW_CONFIDENCE;
-    if (!unreliable || preference === 'tesseract') return t || { engine: 'tesseract', status: 'failed', error: 'tesseract không chạy được' };
+    const unreliable = !t || t.status !== 'done' || (Boolean(t.text) && (t.confidence ?? 0) * 100 < LOW_CONFIDENCE);
+    // Pictures rarely hold teachable text; they never spend the vision budget under "auto".
+    if (!unreliable || preference === 'tesseract' || region.kind === 'picture') {
+      return t || { engine: 'tesseract', status: 'failed', error: 'tesseract không chạy được' };
+    }
     const g = await tryGemini();
     // Keep tesseract's characters as the reading if Gemini is unavailable.
     return g || t || { engine: 'tesseract', status: 'failed', error: 'Không đọc được vùng này' };
@@ -377,6 +548,13 @@ export async function ocrVisualRegions(
   const results = new Map<string, RegionOcrResult>();
   let done = 0;
   let cursor = 0;
+  // An explicit "gemini" choice (user asked for it on specific regions) is not rationed.
+  let llmLeft = opts.preference === 'gemini' ? Infinity : opts.maxLlmCalls ?? 3;
+  const takeLlmCall = () => {
+    if (llmLeft <= 0) return false;
+    llmLeft--;
+    return true;
+  };
 
   const worker = async () => {
     while (cursor < selected.length) {
@@ -384,7 +562,7 @@ export async function ocrVisualRegions(
       if (performance.now() > opts.deadline) {
         results.set(region.region_id, { engine: region.ocr?.engine || 'gemini', status: 'skipped', error: 'Hết ngân sách thời gian quét' });
       } else {
-        results.set(region.region_id, await ocrOneRegion(documentId, region, opts.preference || 'auto'));
+        results.set(region.region_id, await ocrOneRegion(documentId, region, opts.preference || 'auto', takeLlmCall));
       }
       opts.onProgress?.(++done, selected.length);
     }

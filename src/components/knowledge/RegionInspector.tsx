@@ -148,7 +148,7 @@ export const RegionInspector: React.FC<Props> = ({ docTree, sourceReady, busy, o
               value={preference}
               onChange={(e) => setPreference(e.target.value as OcrPreference)}
               className="rounded-lg border border-rule-strong bg-paper-sheet px-2 py-1 text-xs text-ink"
-              title="Tự động: tesseract cho bảng/trang scan/vùng tự vẽ, Gemini cho sơ đồ/biểu đồ/ảnh"
+              title="Tự động: tesseract cho mọi vùng; Gemini chỉ đọc lại vài vùng tesseract chưa chắc chắn (tối đa 3 lần mỗi lượt)"
             >
               <option value="auto">Tự động</option>
               <option value="tesseract">Chỉ tesseract</option>

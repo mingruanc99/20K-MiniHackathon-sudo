@@ -1433,3 +1433,55 @@ test('Study calibration: quiz gaps and syllabus shift time toward weak topics, k
   assert.ok(ops.findNode(res.tree.root, 'pg_S1').children.some((c) => c.keyword?.kind === 'focus'), 'focus keywords added');
   assert.ok(res.unmatchedGaps.some((g) => /PyTorch|OPTICS|Unsupervised/.test(g.label)), 'gaps not covered by the deck are reported');
 });
+
+test('OCR preprocessing erases table rules and keeps their grid; letter stems survive', async () => {
+  const { removeRules } = await import('../../src/pipeline/module1_extractor/visualRegionOcr.ts');
+  const w = 400;
+  const h = 200;
+  const d = new Uint8ClampedArray(w * h * 4).fill(255);
+  const ink = (x, y) => {
+    const i = (y * w + x) * 4;
+    d[i] = d[i + 1] = d[i + 2] = 0;
+  };
+  // 3x2 cell table: horizontal rules at y=10,100,190 and vertical rules at x=10,200,390 (2px thick).
+  for (const y of [10, 100, 190]) for (let x = 10; x <= 390; x++) { ink(x, y); ink(x, y + 1); }
+  for (const x of [10, 200, 390]) for (let y = 10; y <= 191; y++) { ink(x, y); ink(x + 1, y); }
+  // A "letter" stem inside a cell: 30px tall, shorter than 80% of a row.
+  for (let y = 40; y < 70; y++) ink(60, y);
+
+  const grid = removeRules(d, w, h);
+  assert.equal(grid.rows.length, 3, `rows ${grid.rows}`);
+  assert.equal(grid.cols.length, 3, `cols ${grid.cols}`);
+  const at = (x, y) => d[(y * w + x) * 4];
+  assert.equal(at(100, 10), 255, 'horizontal rule erased');
+  assert.equal(at(200, 50), 255, 'vertical rule erased');
+  assert.equal(at(60, 55), 0, 'letter stem kept');
+});
+
+test('OCR table grid puts words in cells by center, in line order', async () => {
+  const { tableFromGrid, parseTsv } = await import('../../src/pipeline/module1_extractor/visualRegionOcr.ts');
+  // level page block par line word left top width height conf text
+  const row = (line, left, top, text) => `5\t1\t1\t1\t${line}\t1\t${left}\t${top}\t40\t20\t90\t${text}`;
+  const tsv = [
+    'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext',
+    row(1, 70, 30, 'hình'), // same line as "Mô" but 2px higher (diacritics)
+    row(1, 20, 32, 'Mô'),
+    row(2, 220, 30, 'Tham'),
+    row(2, 265, 31, 'số'),
+    row(3, 20, 130, 'LeNet-5'),
+    row(4, 220, 130, '60')
+  ].join('\n');
+  const table = tableFromGrid(parseTsv(tsv), { rows: [10, 100, 190], cols: [10, 200, 390] });
+  assert.deepEqual(table, [['Mô hình', 'Tham số'], ['LeNet-5', '60']]);
+  assert.deepEqual(tableFromGrid(parseTsv(tsv), { rows: [10, 190], cols: [10, 390] }), [], 'needs at least 2x2 cells');
+});
+
+test('OCR diagram labels split boxes on wide gaps and drop arrow noise', async () => {
+  const { diagramLabels } = await import('../../src/pipeline/module1_extractor/visualRegionOcr.ts');
+  assert.deepEqual(diagramLabels('Ảnh đầu vào            — Tích chập                — Pooling      —]  Kết nối đầy đủ\n→\n|'), [
+    'Ảnh đầu vào',
+    'Tích chập',
+    'Pooling',
+    'Kết nối đầy đủ'
+  ]);
+});

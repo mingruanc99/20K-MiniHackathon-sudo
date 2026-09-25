@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { projectService } from '../services/projectService';
 import { cloudinaryService } from '../services/cloudinaryService';
 import { scanDocument, ScanProgress } from '../pipeline/services/documentScanner';
+import { warmUpTesseract } from '../pipeline/module1_extractor/visualRegionOcr';
 import { benchmarkService, buildScanRunLog, summarizeRun } from '../services/benchmark/benchmarkService';
 import { FileType, LearnerLevel, UserConfiguration } from '../types';
 import { markLectureMoved } from './LectureBoardPage';
@@ -84,6 +85,8 @@ export const NewLecturePage: React.FC = () => {
     }
     setError('');
     setFile(f);
+    // Slides and PDFs may hold tables/diagrams: load OCR while the user fills in the rest of the form.
+    if (ext === 'pptx' || ext === 'pdf') warmUpTesseract();
     if (!title) setTitle(f.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' '));
   };
 

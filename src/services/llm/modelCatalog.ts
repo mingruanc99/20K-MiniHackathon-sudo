@@ -87,6 +87,8 @@ export interface ScanLimits {
   maxRegionsPerPage: number;
   /** Max visual regions OCR'd in the whole document. */
   maxRegionsTotal: number;
+  /** Max Gemini vision re-reads of regions tesseract could not read confidently. */
+  maxVisionCalls: number;
   /** Wall-clock budget for the whole scan (ms). */
   budgetMs: number;
 }
@@ -119,7 +121,10 @@ export function deriveScanLimits(model: string = DEFAULT_MODEL, budgetMs = 55_00
     pagesPerBatch,
     concurrency,
     maxRegionsPerPage: 3,
-    maxRegionsTotal: cap.vision ? requestsForOcr * 2 : 0,
+    // OCR runs on local tesseract, so the region cap is about time, not API quota.
+    maxRegionsTotal: 40,
+    // Gemini vision only re-reads the few regions tesseract is unsure about.
+    maxVisionCalls: cap.vision ? Math.min(3, requestsForOcr) : 0,
     budgetMs
   };
 }

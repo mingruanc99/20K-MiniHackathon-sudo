@@ -16,7 +16,7 @@ import { CanonicalDocumentTree, KnowledgeTree, KnowledgeTreeNode, UserConfigurat
 import { PPTXExtractor } from '../module1_extractor/pptxExtractor';
 import { PDFExtractor } from '../module1_extractor/pdfExtractor';
 import { MarkdownExtractor } from '../module1_extractor/markdownExtractor';
-import { ocrVisualRegions, mergeRegionsIntoTree } from '../module1_extractor/visualRegionOcr';
+import { ocrVisualRegions, mergeRegionsIntoTree, warmUpTesseract } from '../module1_extractor/visualRegionOcr';
 import { regionAssetStore } from '../module1_extractor/regionAssets';
 import {
   extractLocalKeywords,
@@ -189,11 +189,13 @@ export async function scanDocument(
     let docTree = 'sections' in source ? source : await extractSourceFile(source, filename);
     const tExtract = performance.now();
     const regions = docTree.visual_regions || [];
+    // Start loading tesseract now so it overlaps the analysis instead of eating the OCR budget.
+    if (regions.some((r) => !r.excluded && r.ocr?.engine !== 'native')) warmUpTesseract();
     progress('analyze', `Đã đọc ${docTree.total_sections} trang, ${regions.length} vùng hình ảnh. Đang phân tích...`, 20);
 
     const online = opts.useLLM !== false ? llmRouter.getOnlineProvider() : null;
     const canUseLLM = Boolean(online && online.hasApiKey());
-    if (!canUseLLM) notes.push('Không có API key: keyword và chương được tính bằng luật cục bộ, OCR dùng tesseract.');
+    if (!canUseLLM) notes.push('Không có API key: keyword và chương được tính bằng luật cục bộ.');
 
     // 2. Parallel analysis
     const pagesForText = pageTextsFromSections(docTree.sections);
@@ -213,9 +215,10 @@ export async function scanDocument(
     const tick = () => progress('analyze', `Đang phân tích: ${kwDone}/${batches.length} lô keyword, ${ocrDone} vùng ảnh`, 20 + Math.round(((kwDone + ocrDone) / totalWork) * 65));
 
     const ocrTask = ocrVisualRegions(docTree.document_id, regions, {
-      concurrency: Math.max(1, Math.floor(limits.concurrency / 2)),
+      concurrency: Math.max(2, Math.floor(limits.concurrency / 2)),
       maxRegionsPerPage: limits.maxRegionsPerPage,
-      maxRegionsTotal: canUseLLM ? limits.maxRegionsTotal : Math.min(limits.maxRegionsTotal, 12),
+      maxRegionsTotal: limits.maxRegionsTotal,
+      maxLlmCalls: canUseLLM ? limits.maxVisionCalls : 0,
       deadline: deadline - 3000,
       onProgress: (d) => {
         ocrDone = d;
