@@ -199,7 +199,9 @@ export class PDFExtractor {
     const pdfDoc = await pdfjsLib.getDocument({
       data: uint8Array,
       cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
-      cMapPacked: true
+      cMapPacked: true,
+      standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/',
+      password: '' // Suppress password prompts for RC4 encrypted PDFs with empty passwords
     }).promise;
 
     const documentId = `doc_${Date.now().toString(36)}`;
