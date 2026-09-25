@@ -96,8 +96,17 @@ test('CLSG-IR Module 4: Quality Guard evaluates DAR-P and certifies VerifiedCLSG
   };
 
   const res = await orchestrator.runFullPipeline('cnn_intro.pptx', 'cnn_intro.pptx', config);
-  assert.ok(['PASSED', 'WARNING'].includes(res.qualityReport.overall_status));
-  assert.ok(res.qualityReport.duration_error_pct <= 15.0);
+  // DAR-P is measured, not forced: it must equal the formula applied to the final scenes.
+  const est = res.verifiedIr.scenes.reduce((s, sc) => s + sc.scene_duration_sec, 0);
+  const expectedPct = Math.round((Math.abs(est - 180) / 180) * 1000) / 10;
+  assert.ok(Math.abs(res.qualityReport.duration_error_pct - expectedPct) <= 0.2, `${res.qualityReport.duration_error_pct} vs ${expectedPct}`);
+  const darCheck = res.qualityReport.checks.find((c) => c.check_id === 'chk_dar_p');
+  assert.equal(darCheck.status, expectedPct <= 15 ? 'PASSED' : expectedPct <= 25 ? 'WARNING' : 'FAILED');
+  // Speaking time is never scaled: every scene's speaking time matches its word count at the WPM.
+  for (const sc of res.verifiedIr.scenes) {
+    const words = sc.prosody_plan.sentences.reduce((n, s) => n + s.text.split(/\s+/).length, 0);
+    assert.ok(sc.prosody_plan.total_speaking_sec >= (words / (140 / 60)) * 0.99 - 0.2);
+  }
   assert.equal(res.verifiedIr.total_scenes, 5);
   assert.ok(res.traceLogs.length >= 4);
 });
@@ -528,13 +537,16 @@ test('Section 28 & 29 Demo Flow: S1 through S7 produces verified role classifica
 
   const s3Plan = { ...demoSections[2], slide_analysis: analyses.get('S3'), narrative_plan: plans.get('S3') };
   const s3Narration = narrationGen.generateNarration(s3Plan, config, demoDocs[2].raw_text);
-  assert.ok(s3Narration.includes('Ở slide trước, chúng ta đã thấy'));
-  assert.ok(s3Narration.includes('CNN dùng kernel để quét qua từng vùng nhỏ của ảnh và tạo ra feature map'));
+  // Grounded in the page (no canned topic text), no slide-reading, no numbering.
+  assert.ok(/kernel|feature map/i.test(s3Narration), s3Narration);
+  assert.ok(!/slide/i.test(s3Narration));
   assert.ok(!s3Narration.includes('Thứ nhất'));
+  // The page title is a heading, not narration content.
+  assert.ok(!s3Narration.startsWith('Convolution.'));
 
   const s4Plan = { ...demoSections[3], slide_analysis: analyses.get('S4'), narrative_plan: plans.get('S4') };
   const s4Narration = narrationGen.generateNarration(s4Plan, config, demoDocs[3].raw_text);
-  assert.ok(s4Narration.includes('Để hình dung rõ hơn cơ chế này, chúng ta thử nhìn vào một ví dụ cụ thể'));
+  assert.ok(s4Narration.includes('ví dụ'), s4Narration);
 });
 
 test('Natural & Focused Narration Upgrade: S1 Title Slide & S2 Hook Slide (Problem A, B, C & Section 25)', async () => {
@@ -609,7 +621,7 @@ test('Natural & Focused Narration Upgrade: S1 Title Slide & S2 Hook Slide (Probl
 
   // Assert S1 Narration is concise, focused, and free of metadata/filler
   assert.ok(s1Narration.includes('Chào mừng các bạn đến với bài học về Keypoint & Pose'));
-  assert.ok(s1Narration.includes('mô hình biểu diễn các điểm đặc trưng và tư thế của con người'));
+  assert.ok(s1Narration.split(/\s+/).length <= 40, 'Intro stays short');
   assert.ok(!s1Narration.includes('aicb-p2t4'));
   assert.ok(!s1Narration.includes('ngày 04'));
   assert.ok(!s1Narration.includes('chương 1'));
@@ -808,7 +820,7 @@ test('LLM Router and Cache: online router and cache hit validation', async () =>
 
   // Verify online GeminiProvider instance
   const gemini = new GeminiProvider('test-api-key');
-  assert.equal(gemini.providerId, 'gemini');
+  assert.equal(gemini.providerId, 'multi_provider_llm');
   assert.equal(gemini.isDemo, false);
 
   const tree = getBuiltinCnnTree();
@@ -1014,17 +1026,12 @@ test('Anti-Repetition & 4-Stage Narrative Flow: S1 (Hook) -> S2 (Think) -> S3 (E
     'All section openings must be distinct; no mechanical templates copied'
   );
 
-  // S1: Hook creates curiosity
-  assert.ok(
-    s1Text.includes('Bạn thử nhìn một người từ góc này') || s1Text.includes('xác định chính xác'),
-    'S1 must pose curiosity question'
-  );
+  // S1: Hook is grounded in its own page (no canned pose sentence)
+  assert.ok(s1Text.includes('tài xế'), `S1 must use its page content: ${s1Text}`);
+  assert.ok(!s1Text.includes('Bạn thử nhìn một người từ góc này'), 'No canned hook text');
 
-  // S2: Think stimulates reasoning
-  assert.ok(
-    s2Text.includes('Nếu chỉ nhìn một người từ góc này') || s2Text.includes('xác định được đâu là'),
-    'S2 must stimulate reflection'
-  );
+  // S2: Think voices the page's own question
+  assert.ok(s2Text.includes('xác định được đâu là'), 'S2 must stimulate reflection');
 
   // S3: Example gives concrete case
   assert.ok(
@@ -1220,9 +1227,11 @@ test('Admin Dashboard & RBAC: enforces role authorizations, bootstraps hkthien@h
   assert.ok(reqCheck.error?.includes('FORBIDDEN_NOT_ADMIN'));
 
   // 3. Telemetry KPIs & Langfuse Deep Link Verification
+  // With no real projects (the built-in demo does not count) KPIs must report "no data", not a fabricated score.
   const kpis = adminTelemetryService.getOverviewKPIs('7d');
-  assert.ok(kpis.totalLessons > 0);
-  assert.ok(kpis.contentQualityScore >= 95);
+  assert.equal(kpis.totalLessons, 0);
+  assert.equal(kpis.contentQualityScore, 0);
+  assert.equal(kpis.aiRequests, 0);
 
   const langfuseUrl = adminTelemetryService.getLangfuseTraceUrl('tr_test_123');
   assert.ok(langfuseUrl.includes('https://cloud.langfuse.com/project/') && langfuseUrl.includes('traces/tr_test_123'));
@@ -1232,7 +1241,8 @@ test('Admin Dashboard & RBAC: enforces role authorizations, bootstraps hkthien@h
 
   // 4. Content vs Telemetry metadata isolation test (Rule 15)
   const qualityData = adminTelemetryService.getContentQualityData();
-  assert.ok(qualityData.issues.length > 0);
+  assert.ok(Array.isArray(qualityData.issues));
+  assert.ok(!qualityData.issues.some((iss) => iss.id.startsWith('iss_pose_')), 'no injected demo issues');
   qualityData.issues.forEach((iss) => {
     // Assert learner-facing cleaned output NEVER contains trace ID or metadata
     assert.ok(!iss.cleanedOutput.includes(iss.traceId || 'trace'), 'Learner content must not contain trace ID');
@@ -1243,3 +1253,183 @@ test('Admin Dashboard & RBAC: enforces role authorizations, bootstraps hkthien@h
 
 
 
+
+// ---------------------------------------------------------------------------
+// Discourse policy, headings, keywords, knowledge tree, terminology regressions
+// ---------------------------------------------------------------------------
+
+test('Connective policy keeps only licensed connectives and caps density', async () => {
+  const { applyConnectivePolicy, countLeadingConnectives } = await import('../../src/pipeline/services/discoursePolicy.ts');
+  const scenes = [
+    {
+      text: 'Tuy nhiên, CNN xử lý ảnh bằng kernel. Vì vậy, kernel trượt qua ảnh. Mỗi vị trí cho ra một giá trị. Các giá trị tạo thành feature map.',
+      ctx: { sceneId: 'S1', role: 'KEY_EXPLANATION' }
+    },
+    {
+      text: 'Pooling không giữ vị trí chính xác của đặc trưng. Tuy nhiên, nó giúp mô hình bền vững hơn. Do đó, mô hình ít bị ảnh hưởng bởi dịch chuyển nhỏ. Kích thước feature map cũng giảm.',
+      ctx: { sceneId: 'S2', role: 'KEY_EXPLANATION' }
+    }
+  ];
+  const { texts, stats } = applyConnectivePolicy(scenes, 'vi');
+  assert.ok(!texts[0].startsWith('Tuy nhiên'), 'no connective at scene start');
+  assert.ok(texts[0].startsWith('CNN'), 'sentence re-capitalized');
+  assert.ok(!/Vì vậy, kernel/.test(texts[0]), 'result connective without a stated cause is removed');
+  // Scene 2: contrast is licensed ("không giữ")
+  assert.ok(texts[1].includes('Tuy nhiên, nó giúp'), texts[1]);
+  assert.ok(stats.removed.length >= 3);
+  const after = countLeadingConnectives(texts.join(' '), 'vi');
+  assert.ok(after.connectives / after.sentences <= 0.25 + 1e-9);
+});
+
+test('Heading policy speaks each heading once and drops heading-only transitions', async () => {
+  const { applyHeadingPolicy, countHeadingMentions } = await import('../../src/pipeline/services/discoursePolicy.ts');
+  const specs = [
+    { sceneId: 'S1', sectionTitle: 'Mạng nơ-ron tích chập', chapterId: 'ch1', chapterTitle: 'Chương 1: Nền tảng thị giác máy', isChapterFirstPage: true },
+    { sceneId: 'S2', sectionTitle: 'Phép toán pooling', chapterId: 'ch1', chapterTitle: 'Chương 1: Nền tảng thị giác máy', isChapterFirstPage: false }
+  ];
+  const texts = [
+    'Chúng ta bắt đầu với Chương 1: Nền tảng thị giác máy. Mạng nơ-ron tích chập dùng kernel. Chúng ta cùng bước sang Phép toán pooling ngay sau đây.',
+    'Phép toán pooling giảm kích thước feature map. Như đã nói trong Chương 1: Nền tảng thị giác máy, pooling rất phổ biến.'
+  ];
+  const before = countHeadingMentions(texts, specs);
+  const { texts: out, stats } = applyHeadingPolicy(texts, specs, { language: 'vi' });
+  const after = countHeadingMentions(out, specs);
+  assert.ok(before.repeated > 0);
+  assert.equal(after.repeated, 0, JSON.stringify(out));
+  assert.ok(!out[0].includes('bước sang'), 'heading-only transition dropped');
+  assert.ok(out[1].startsWith('Phép toán pooling'), 'own heading kept once');
+  assert.ok(stats.sentencesDropped >= 1);
+});
+
+test('Keyword extractor keeps Vietnamese diacritics and weights title/dictionary terms', async () => {
+  const { extractLocalKeywords } = await import('../../src/pipeline/services/keywordExtractor.ts');
+  const pages = [
+    { section_id: 'S1', title: 'Mạng nơ-ron tích chập', body: 'Mạng nơ-ron tích chập dùng kernel để tạo feature map. Kernel trượt trên ảnh.' },
+    { section_id: 'S2', title: 'Pooling', body: 'Max pooling giảm kích thước feature map và giữ đặc trưng mạnh nhất.' },
+    { section_id: 'S3', title: 'Huấn luyện', body: 'Backpropagation cập nhật trọng số bằng gradient descent.' }
+  ];
+  const kw = extractLocalKeywords(pages, { maxPerPage: 5, minWeight: 0.2 });
+  const s1 = kw.get('S1').map((k) => k.term.toLowerCase());
+  assert.ok(s1.some((t) => t.includes('tích chập')), `diacritics kept: ${s1}`);
+  assert.equal(kw.get('S1')[0].weight, 1, 'weights normalized per page');
+  assert.ok(kw.get('S3').some((k) => /gradient descent|backpropagation/i.test(k.term)));
+  for (const list of kw.values()) assert.ok(list.length <= 5);
+});
+
+test('Knowledge tree: page edits sum up, chapter edits distribute down, locks and exclusions hold', async () => {
+  const ops = await import('../../src/pipeline/services/knowledgeTreeOps.ts');
+  const page = (id, sec) => ({ id, kind: 'page', title: id, section_id: id.replace('pg_', ''), duration_sec: sec, children: [] });
+  const tree = {
+    tree_id: 't',
+    document_id: 'd',
+    created_at: '',
+    updated_at: '',
+    model: 'local',
+    settings: { min_keyword_weight: 0.3, max_keywords_per_page: 5, max_pages: 50, target_duration_sec: 120 },
+    stats: {},
+    root: {
+      id: 'doc_root',
+      kind: 'document',
+      title: 'Doc',
+      children: [
+        { id: 'ch_1', kind: 'chapter', title: 'A', children: [page('pg_S1', 30), page('pg_S2', 30)] },
+        { id: 'ch_2', kind: 'chapter', title: 'B', children: [page('pg_S3', 60)] }
+      ]
+    }
+  };
+  let t = ops.recompute(tree);
+  assert.equal(t.root.duration_sec, 120);
+
+  t = ops.setNodeDuration(t, 'pg_S1', 50);
+  assert.equal(ops.findNode(t.root, 'ch_1').duration_sec, 80);
+  assert.equal(t.root.duration_sec, 140);
+
+  t = ops.toggleLock(t, 'pg_S1');
+  t = ops.setNodeDuration(t, 'ch_1', 100);
+  assert.equal(ops.findNode(t.root, 'pg_S1').duration_sec, 50, 'locked page keeps its time');
+  assert.equal(ops.findNode(t.root, 'pg_S2').duration_sec, 50);
+
+  t = ops.toggleExclude(t, 'pg_S3');
+  assert.equal(t.root.duration_sec, t.settings.target_duration_sec, 'target kept after exclusion');
+  const o = ops.treeToPipelineOverrides(t);
+  assert.ok(o.excludedSections.has('S3'));
+  assert.equal(o.chapterOf.S1.isFirstPage, true);
+  assert.equal(o.chapterOf.S2.isFirstPage, false);
+});
+
+test('Terminology: "feature map" is not rewritten to "feature mAP"; English titles are not translated', () => {
+  const r1 = technicalTerminologyService.resolveAndPreserveSentence('Kernel tạo ra feature map sau mỗi lần trượt.');
+  assert.ok(r1.resolvedText.includes('feature map'), r1.resolvedText);
+  assert.ok(!r1.resolvedText.includes('feature mAP'));
+  const r2 = technicalTerminologyService.resolveAndPreserveSentence('Image Processing Model');
+  assert.equal(r2.resolvedText, 'Image Processing Model');
+});
+
+test('Pipeline run emits a benchmark log with metrics and per-call token accounting', async () => {
+  const orchestrator = new PipelineOrchestrator();
+  const res = await orchestrator.runFullPipeline(getBuiltinCnnTree(), 'cnn_intro.pptx', {
+    language: 'vi',
+    narration_language: 'vi',
+    learnerLevel: 'undergraduate',
+    priorKnowledge: '',
+    targetDurationSeconds: 180,
+    targetWpm: 140,
+    narrationStyle: 'academic',
+    visualDensity: 'balanced'
+  });
+  const log = res.benchmark;
+  assert.equal(log.kind, 'pipeline');
+  assert.ok(log.metrics);
+  assert.equal(log.metrics.dar_p_error_pct, res.qualityReport.duration_error_pct);
+  assert.ok(log.metrics.connective_density <= 0.25 + 1e-9);
+  assert.equal(log.metrics.heading_repeats, 0);
+  assert.equal(log.tokens.calls, log.calls.length);
+  assert.ok(log.timings.length >= 5);
+  // Scores are measured, not floored: every dimension is within [0, 1]
+  for (const v of Object.values(log.metrics.dimensions)) assert.ok(v >= 0 && v <= 1);
+});
+
+test('Study calibration: quiz gaps and syllabus shift time toward weak topics, keep total and locks', async () => {
+  const fs = await import('node:fs');
+  const { parseQuizResults } = await import('../../src/pipeline/services/studySignals.ts');
+  const { calibrateWithStudySignals } = await import('../../src/pipeline/services/studyCalibration.ts');
+  const ops = await import('../../src/pipeline/services/knowledgeTreeOps.ts');
+
+  const quiz = parseQuizResults(fs.readFileSync('source/quiz_results_analysis.md', 'utf8'), 'quiz.md');
+  assert.equal(quiz.quizzes.length, 2);
+  assert.ok(quiz.gaps.some((g) => g.keyTerms.includes('np.vstack')));
+  assert.ok(!quiz.gaps.some((g) => g.keyTerms.includes('Area')), 'no noise terms');
+
+  const sections = [
+    { section_id: 'S1', title: 'Mảng NumPy', raw_text: 'NumPy array, np.vstack, np.column_stack, ndim, shape, size', elements: [] },
+    { section_id: 'S2', title: 'Pandas DataFrame', raw_text: 'df.drop axis=1 xoá cột, df.describe thống kê, df.count', elements: [] },
+    { section_id: 'S3', title: 'Lịch sử trí tuệ nhân tạo', raw_text: 'Hội nghị Dartmouth 1956, mùa đông AI', elements: [] },
+    { section_id: 'S4', title: 'Mạng nơ-ron tích chập', raw_text: 'CNN convolution pooling', elements: [] }
+  ];
+  const docTree = { document_id: 'd', title: 'AI', source_type: 'pptx', source_filename: 'ai.pptx', total_sections: 4, extraction_time_ms: 1, sections };
+  const page = (s) => ({ id: `pg_${s.section_id}`, kind: 'page', title: s.title, section_id: s.section_id, duration_sec: 60, children: [] });
+  let tree = {
+    tree_id: 't', document_id: 'd', created_at: '', updated_at: '', model: 'local',
+    settings: { min_keyword_weight: 0.3, max_keywords_per_page: 5, max_pages: 50, target_duration_sec: 240 },
+    stats: {},
+    root: { id: 'doc_root', kind: 'document', title: 'AI', children: [{ id: 'ch_1', kind: 'chapter', title: 'A', children: sections.map(page) }] }
+  };
+  tree = ops.recompute(tree);
+  tree = ops.toggleLock(tree, 'pg_S4');
+
+  const syllabus = {
+    fileName: 'de-cuong.md',
+    topics: [
+      { id: 't1', number: '2.1', title: 'NumPy và thao tác mảng', level: 2, text: 'np.vstack ndim shape', keyTerms: ['NumPy'] },
+      { id: 't2', number: '2.2', title: 'Pandas', level: 2, text: 'DataFrame drop describe', keyTerms: ['Pandas'] }
+    ]
+  };
+  const res = await calibrateWithStudySignals(tree, docTree, { quiz, syllabus }, undefined, { useLLM: false });
+  const dur = (id) => ops.findNode(res.tree.root, id).duration_sec;
+  assert.equal(res.tree.root.duration_sec, 240, 'total kept');
+  assert.equal(dur('pg_S4'), 60, 'locked page untouched');
+  assert.ok(dur('pg_S1') > 60 && dur('pg_S2') > 60, `weak topics gain time: ${dur('pg_S1')}, ${dur('pg_S2')}`);
+  assert.ok(dur('pg_S3') < 60, 'off-syllabus page loses time');
+  assert.ok(ops.findNode(res.tree.root, 'pg_S1').children.some((c) => c.keyword?.kind === 'focus'), 'focus keywords added');
+  assert.ok(res.unmatchedGaps.some((g) => /PyTorch|OPTICS|Unsupervised/.test(g.label)), 'gaps not covered by the deck are reported');
+});

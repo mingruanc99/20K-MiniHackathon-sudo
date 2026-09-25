@@ -224,42 +224,42 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
     switch (role) {
       case 'core_mechanism':
         return {
-          bg: 'bg-emerald-50',
-          border: 'border-emerald-300',
-          text: 'text-emerald-700',
-          badge: 'bg-emerald-600 text-white',
+          bg: 'bg-paper-band',
+          border: 'border-rule-strong',
+          text: 'text-print',
+          badge: 'bg-print text-white',
           label: '⚙️ Cơ Chế Cốt Lõi'
         };
       case 'foundational_axiom':
         return {
-          bg: 'bg-blue-50',
-          border: 'border-blue-300',
-          text: 'text-blue-700',
-          badge: 'bg-blue-600 text-white',
+          bg: 'bg-paper-band',
+          border: 'border-rule-strong',
+          text: 'text-print',
+          badge: 'bg-cover text-white',
           label: '🏛️ Tiên Đề Nền Tảng'
         };
       case 'architectural_tradeoff':
         return {
-          bg: 'bg-amber-50',
-          border: 'border-amber-300',
-          text: 'text-amber-700',
-          badge: 'bg-amber-600 text-white',
+          bg: 'bg-pen-soft',
+          border: 'border-pen-line',
+          text: 'text-pen',
+          badge: 'bg-pen text-white',
           label: '⚖️ Đánh Đổi Kiến Trúc'
         };
       case 'empirical_proof':
         return {
-          bg: 'bg-purple-50',
-          border: 'border-purple-300',
-          text: 'text-purple-700',
-          badge: 'bg-purple-600 text-white',
+          bg: 'bg-paper-band',
+          border: 'border-rule-strong',
+          text: 'text-print',
+          badge: 'bg-cover text-white',
           label: '📊 Dẫn Chứng Thực Nghiệm'
         };
       default:
         return {
-          bg: 'bg-slate-50',
-          border: 'border-slate-300',
-          text: 'text-slate-700',
-          badge: 'bg-slate-600 text-white',
+          bg: 'bg-paper-band',
+          border: 'border-rule-strong',
+          text: 'text-ink-soft',
+          badge: 'bg-print text-white',
           label: '🚀 Ứng Dụng Thực Tế'
         };
     }
@@ -268,39 +268,39 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Top Banner: Knowledge Space & Curriculum Architect */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white shadow-sm border border-slate-800">
+      <div className=" bg-cover   rounded-2xl p-6 text-white shadow-sm border border-cover-deep">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-white/10">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold uppercase tracking-wider font-mono border border-indigo-400/30">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-print text-cover-foil text-xs font-bold uppercase tracking-wider font-mono border border-rule-strong/30">
                 <Network className="w-3.5 h-3.5" />
                 Knowledge Space & Dynamic Curriculum Engine
               </span>
-              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono border border-emerald-500/30">
+              <span className="px-2 py-0.5 rounded bg-print text-print-soft text-[11px] font-mono border border-print/30">
                 Slide-Agnostic Pedagogy
               </span>
             </div>
             <h2 className="text-xl font-bold tracking-tight">
               Tái Cấu Trúc Không Gian Tri Thức & Thiết Kế Giáo Trình Động
             </h2>
-            <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
+            <p className="text-xs text-paper/80 mt-1 max-w-3xl leading-relaxed">
               Hệ thống không còn giảng giải thụ động từng slide. Toàn bộ tài liệu được giải phóng thành <strong>Mạng lưới khái niệm (Knowledge DAG)</strong> với các sơ đồ, công thức đóng vai trò <strong>Dẫn chứng thực nghiệm (Evidence Artifacts)</strong> gắn trực tiếp vào khái niệm.
             </p>
           </div>
 
           {/* Quick Metrics */}
           <div className="grid grid-cols-3 gap-2.5 shrink-0 text-center font-mono">
-            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <div className="text-[10px] text-slate-400 uppercase font-sans">Khái niệm</div>
-              <div className="text-base font-extrabold text-white mt-0.5">{activeKnowledge.concepts.length}</div>
+            <div className="bg-cover-deep rounded-xl p-3 border border-white/10">
+              <div className="text-[11px] text-ink-faint uppercase font-sans">Khái niệm</div>
+              <div className="text-base font-extrabold text-ink mt-0.5">{activeKnowledge.concepts.length}</div>
             </div>
-            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <div className="text-[10px] text-slate-400 uppercase font-sans">Mệnh đề sự thật</div>
-              <div className="text-base font-extrabold text-indigo-300 mt-0.5">{activeKnowledge.total_propositions}</div>
+            <div className="bg-cover-deep rounded-xl p-3 border border-white/10">
+              <div className="text-[11px] text-ink-faint uppercase font-sans">Mệnh đề sự thật</div>
+              <div className="text-base font-extrabold text-navy mt-0.5">{activeKnowledge.total_propositions}</div>
             </div>
-            <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-              <div className="text-[10px] text-slate-400 uppercase font-sans">Dẫn chứng thị giác</div>
-              <div className="text-base font-extrabold text-amber-300 mt-0.5">{activeKnowledge.total_evidence_artifacts}</div>
+            <div className="bg-cover-deep rounded-xl p-3 border border-white/10">
+              <div className="text-[11px] text-ink-faint uppercase font-sans">Dẫn chứng thị giác</div>
+              <div className="text-base font-extrabold text-pen mt-0.5">{activeKnowledge.total_evidence_artifacts}</div>
             </div>
           </div>
         </div>
@@ -308,21 +308,21 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
         {/* Dynamic Duration Dial Selector */}
         <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-indigo-400" />
-            <span className="text-xs font-semibold text-slate-200">
+            <Clock className="w-4 h-4 text-print-soft" />
+            <span className="text-xs font-semibold text-paper">
               Mô Phỏng Biên Soạn Bài Giảng Theo Thời Lượng (Duration Dial):
             </span>
           </div>
 
-          <div className="flex items-center bg-white/10 p-1 rounded-xl gap-1 border border-white/10">
+          <div className="flex items-center bg-cover-deep p-1 rounded-xl gap-1 border border-white/10">
             {[3, 10, 30, 60].map((dur) => (
               <button
                 key={dur}
                 onClick={() => setSelectedDuration(dur)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition font-mono ${
                   selectedDuration === dur
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'text-slate-300 hover:text-white hover:bg-white/10'
+                    ? 'bg-cover text-white shadow-xs'
+                    : 'text-paper/80 hover:text-white hover:bg-cover-deep'
                 }`}
               >
                 {dur} Phút {dur === 3 ? '(Flash)' : dur === 10 ? '(Cốt lõi)' : dur === 30 ? '(Chuyên sâu)' : '(Master)'}
@@ -336,15 +336,15 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column (7 cols): Dynamic Curriculum Trajectory (Compiled for chosen duration) */}
         <div className="lg:col-span-7 space-y-4">
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+          <div className="bg-paper-sheet border border-rule rounded-2xl p-5 shadow-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-rule mb-4">
               <div className="flex items-center gap-2">
-                <Compass className="w-4 h-4 text-indigo-600" />
-                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                <Compass className="w-4 h-4 text-print" />
+                <h3 className="text-xs font-bold text-ink uppercase tracking-wider">
                   Lộ Trình Sư Phạm Được Tái Thiết Lập ({selectedDuration} Phút — {activeCurriculum.total_target_words} từ)
                 </h3>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-paper-band text-print font-bold border border-rule-strong">
                 Chiến lược: {activeCurriculum.compression_strategy.toUpperCase()}
               </span>
             </div>
@@ -361,38 +361,38 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
                     onClick={() => setSelectedConceptId(unit.concept_id)}
                     className={`p-4 rounded-xl border transition cursor-pointer ${
                       selectedConceptId === unit.concept_id
-                        ? `${roleTheme.bg} ${roleTheme.border} ring-2 ring-indigo-400/40 shadow-xs`
-                        : 'bg-slate-50/70 border-slate-200 hover:border-slate-300'
+                        ? `${roleTheme.bg} ${roleTheme.border} ring-2 ring-rule-strong/40 shadow-xs`
+                        : 'bg-paper-band border-rule hover:border-rule-strong'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-slate-800 text-white font-mono text-[10px] font-bold flex items-center justify-center">
+                        <span className="w-5 h-5 rounded-full bg-cover-deep text-white font-mono text-[11px] font-bold flex items-center justify-center">
                           {idx + 1}
                         </span>
-                        <h4 className="text-xs font-bold text-slate-900">{unit.unit_title}</h4>
+                        <h4 className="text-xs font-bold text-ink">{unit.unit_title}</h4>
                       </div>
-                      <div className="flex items-center gap-2 font-mono text-[10px]">
-                        <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 font-semibold">
+                      <div className="flex items-center gap-2 font-mono text-[11px]">
+                        <span className="px-2 py-0.5 rounded bg-paper-sheet border border-rule text-ink-soft font-semibold">
                           {unit.target_duration_sec}s ({unit.target_word_budget} từ)
                         </span>
-                        <span className={`px-2 py-0.5 rounded text-white font-bold ${roleTheme.badge}`}>
+                        <span className={`px-2 py-0.5 rounded text-ink font-bold ${roleTheme.badge}`}>
                           {unit.bloom_level}
                         </span>
                       </div>
                     </div>
 
-                    <p className="text-slate-600 text-xs leading-relaxed mb-2.5">
+                    <p className="text-ink-soft text-xs leading-relaxed mb-2.5">
                       {unit.epistemic_goal}
                     </p>
 
-                    <div className="flex items-center justify-between text-[11px] pt-2 border-t border-slate-200/60 font-mono">
-                      <span className="text-indigo-700 font-semibold flex items-center gap-1">
+                    <div className="flex items-center justify-between text-xs pt-2 border-t border-rule/60 font-mono">
+                      <span className="text-print font-semibold flex items-center gap-1">
                         <Sparkles className="w-3 h-3" />
                         Chiến lược: {unit.pedagogical_strategy}
                       </span>
                       {unit.primary_evidence_artifact_id && (
-                        <span className="text-amber-700 font-semibold flex items-center gap-1">
+                        <span className="text-pen font-semibold flex items-center gap-1">
                           <Eye className="w-3 h-3" />
                           Dẫn chứng: {unit.primary_evidence_artifact_id}
                         </span>
@@ -404,12 +404,12 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
             </div>
 
             {/* Pruning Stats Box */}
-            <div className="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center justify-between text-slate-600">
+            <div className="mt-4 p-3 rounded-xl bg-paper-band border border-rule text-xs flex items-center justify-between text-ink-soft">
               <span className="flex items-center gap-1.5 font-medium">
-                <Info className="w-3.5 h-3.5 text-slate-400" />
+                <Info className="w-3.5 h-3.5 text-ink-faint" />
                 Đã kích hoạt {activeCurriculum.active_concepts_count}/{activeKnowledge.concepts.length} khái niệm cốt lõi.
               </span>
-              <span className="font-mono text-[11px] text-slate-500">
+              <span className="font-mono text-xs text-ink-faint">
                 {activeCurriculum.pruned_concepts_count > 0
                   ? `(Tự động lược bỏ ${activeCurriculum.pruned_concepts_count} khái niệm phụ để vừa vặn ${selectedDuration} phút)`
                   : 'Toàn bộ không gian tri thức được bao phủ hoàn chỉnh.'}
@@ -420,15 +420,15 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
 
         {/* Right Column (5 cols): Selected Concept Deep-Dive & Evidence Artifacts */}
         <div className="lg:col-span-5 space-y-4">
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs sticky top-4 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="bg-paper-sheet border border-rule rounded-2xl p-5 shadow-xs sticky top-4 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-rule">
               <div className="flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-indigo-600" />
-                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                <BookOpen className="w-4 h-4 text-print" />
+                <h3 className="text-xs font-bold text-ink uppercase tracking-wider">
                   Thực Thể Tri Thức (Concept Detail)
                 </h3>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold">
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-paper-band text-ink-soft font-bold">
                 {selectedConcept.concept_id}
               </span>
             </div>
@@ -439,15 +439,15 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
               return (
                 <div className={`p-3.5 rounded-xl border ${theme.bg} ${theme.border} space-y-1.5`}>
                   <div className="flex items-center justify-between">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${theme.badge}`}>
+                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${theme.badge}`}>
                       {theme.label}
                     </span>
-                    <span className="text-[10px] font-mono font-bold text-slate-700">
+                    <span className="text-[11px] font-mono font-bold text-ink-soft">
                       Độ phức tạp: {Math.round(selectedConcept.cognitive_complexity_score * 100)}%
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900">{selectedConcept.canonical_name}</h4>
-                  <p className="text-xs text-slate-700 leading-relaxed">
+                  <h4 className="text-sm font-bold text-ink">{selectedConcept.canonical_name}</h4>
+                  <p className="text-xs text-ink-soft leading-relaxed">
                     {selectedConcept.formal_definition}
                   </p>
                 </div>
@@ -456,13 +456,13 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
 
             {/* Evidence Artifacts Bound to this Concept */}
             <div className="space-y-2">
-              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono flex items-center gap-1">
-                <ImageIcon className="w-3.5 h-3.5 text-amber-600" />
+              <div className="text-[11px] font-bold text-ink-faint uppercase tracking-wider font-mono flex items-center gap-1">
+                <ImageIcon className="w-3.5 h-3.5 text-pen" />
                 Dẫn Chứng Thị Giác & Bằng Chứng Thực Nghiệm ({selectedConcept.evidence_artifacts.length}):
               </div>
 
               {selectedConcept.evidence_artifacts.length === 0 ? (
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-400 italic text-center">
+                <div className="p-3 rounded-xl bg-paper-band border border-rule text-xs text-ink-faint italic text-center">
                   Khái niệm này sử dụng trực giác ẩn dụ, không gắn dẫn chứng thị giác tĩnh.
                 </div>
               ) : (
@@ -470,22 +470,22 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
                   {selectedConcept.evidence_artifacts.map((art) => (
                     <div
                       key={art.artifact_id}
-                      className="p-3 rounded-xl bg-amber-50/60 border border-amber-200 text-xs space-y-1.5"
+                      className="p-3 rounded-xl bg-pen-soft border border-pen-line text-xs space-y-1.5"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-amber-900 font-mono text-[11px] flex items-center gap-1">
-                          <Eye className="w-3 h-3 text-amber-700" />
+                        <span className="font-bold text-pen font-mono text-xs flex items-center gap-1">
+                          <Eye className="w-3 h-3 text-pen" />
                           {art.artifact_id} ({art.modality.toUpperCase()})
                         </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-semibold">
+                        <span className="text-[11px] font-mono px-1.5 py-0.2 rounded bg-pen-soft text-pen font-semibold">
                           {art.role}
                         </span>
                       </div>
-                      <p className="text-slate-800 text-[11px] leading-relaxed">
+                      <p className="text-ink text-xs leading-relaxed">
                         {art.semantic_description}
                       </p>
                       {art.spatial_features && Object.keys(art.spatial_features).length > 0 && (
-                        <div className="text-[10px] font-mono text-slate-500 pt-1 border-t border-amber-200/60">
+                        <div className="text-[11px] font-mono text-ink-faint pt-1 border-t border-pen-line/60">
                           Đặc trưng topo: {JSON.stringify(art.spatial_features)}
                         </div>
                       )}
@@ -497,16 +497,16 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
 
             {/* Atomic Propositions */}
             <div className="space-y-2">
-              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+              <div className="text-[11px] font-bold text-ink-faint uppercase tracking-wider font-mono">
                 Mệnh Đề Sự Thật Bất Biến (Atomic Propositions):
               </div>
               <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                 {selectedConcept.propositions.map((p) => (
                   <div
                     key={p.prop_id}
-                    className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-800 flex items-start gap-1.5"
+                    className="p-2 rounded-lg bg-paper-band border border-rule text-xs text-ink flex items-start gap-1.5"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-print shrink-0 mt-1.5" />
                     <span>{p.statement}</span>
                   </div>
                 ))}
@@ -515,11 +515,11 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
 
             {/* Analogies & Misconceptions */}
             {selectedConcept.analogies.length > 0 && (
-              <div className="p-3 rounded-xl bg-purple-50/60 border border-purple-200 text-xs space-y-1">
-                <span className="text-[10px] font-bold text-purple-800 uppercase font-mono block">
+              <div className="p-3 rounded-xl bg-paper-band border border-rule-strong text-xs space-y-1">
+                <span className="text-[11px] font-bold text-print uppercase font-mono block">
                   Ẩn dụ trực quan:
                 </span>
-                <p className="text-slate-800 text-[11px]">
+                <p className="text-ink text-xs">
                   <strong>{selectedConcept.analogies[0].source_domain}:</strong> {selectedConcept.analogies[0].explanation}
                 </p>
               </div>

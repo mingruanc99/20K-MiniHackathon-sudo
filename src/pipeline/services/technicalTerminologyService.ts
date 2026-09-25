@@ -99,6 +99,27 @@ export class TechnicalTerminologyService {
     }
   }
 
+  private termRegexCache: RegExp | null = null;
+
+  private getTermRegex(): RegExp {
+    if (!this.termRegexCache) {
+      const escaped = this.canonicalKeysSorted.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      this.termRegexCache = new RegExp(`\\b(?:${escaped.join('|')})\\b`, 'gi');
+    }
+    this.termRegexCache.lastIndex = 0;
+    return this.termRegexCache;
+  }
+
+  /** Short mixed-case acronyms (mAP, IoU) collide with ordinary words when matched case-insensitively. */
+  private isCaseSensitiveAcronym(canonical: string): boolean {
+    return canonical.length <= 4 && /[A-Z]/.test(canonical) && /[a-z]/.test(canonical);
+  }
+
+  /** Canonical terminology dictionary (lowercase key -> definition), incl. project glossary. */
+  getTermDictionary(): Map<string, TermDefinition> {
+    return this.termsMap;
+  }
+
   /**
    * Extends or overrides terminology with project-specific glossary
    */
@@ -113,6 +134,7 @@ export class TechnicalTerminologyService {
       });
     }
     this.canonicalKeysSorted = Array.from(this.termsMap.keys()).sort((a, b) => b.length - a.length);
+    this.termRegexCache = null;
   }
 
   /**
@@ -183,40 +205,54 @@ export class TechnicalTerminologyService {
       }
     }
 
-    // Step 2: Identify and preserve canonical technical terms
-    for (const key of this.canonicalKeysSorted) {
-      const regex = new RegExp(`\\b${key}\\b`, 'gi');
-      if (regex.test(resolved)) {
-        const canonical = this.termsMap.get(key)!.canonical;
-        resolved = resolved.replace(regex, canonical);
-        if (!preserved.includes(canonical)) {
-          preserved.push(canonical);
-          decisionTraces?.push(`Preserved canonical technical term "${canonical}" (standard AI/CV terminology).`);
-        }
+    // Step 2: Identify and preserve canonical technical terms.
+    // One pass with longest-first alternation, so text rewritten by a long term ("feature map")
+    // is never re-matched by a shorter key ("map" -> "mAP").
+    resolved = resolved.replace(this.getTermRegex(), (match) => {
+      const def = this.termsMap.get(match.toLowerCase());
+      if (!def) return match;
+      if (this.isCaseSensitiveAcronym(def.canonical) && match !== def.canonical && match !== def.canonical.toUpperCase()) {
+        return match; // "map" in prose is not "mAP"
       }
-    }
-
-    // Step 3: Check and convert unnecessary English words/verbs if mixed into Vietnamese sentence
-    for (const [engWord, viReplacement] of this.unnecessaryEnglishMap.entries()) {
-      // Look for whole word English matches
-      const regex = new RegExp(`\\b${engWord}\\b`, 'gi');
-      if (regex.test(resolved)) {
-        // Special check: ensure it's not part of a larger technical term already preserved
-        let isPartOfTerm = false;
-        for (const term of preserved) {
-          if (term.toLowerCase().includes(engWord.toLowerCase())) {
-            isPartOfTerm = true;
-            break;
-          }
-        }
-
-        if (!isPartOfTerm) {
-          resolved = resolved.replace(regex, viReplacement);
-          decisionTraces?.push(`Converted unnecessary English "${engWord} → ${viReplacement}" to preserve natural Vietnamese.`);
-        }
+      if (!preserved.includes(def.canonical)) {
+        preserved.push(def.canonical);
+        decisionTraces?.push(`Preserved canonical technical term "${def.canonical}" (standard AI/CV terminology).`);
       }
-    }
+      return def.canonical;
+    });
 
+    // Step 3: Convert unnecessary English words/verbs in narration sentences.
+    // Heading-like strings (short, no sentence punctuation, e.g. "Image Processing Model") are left
+    // alone: word-by-word translation of an English title produces gibberish.
+    // Decided per sentence: only sentences that are mostly Vietnamese get stray English words replaced.
+    // An English sentence quoted from an English slide stays English (word-by-word translation of it
+    // produces gibberish like "RGB ảnh creates đầu vào features").
+    const VI_CHAR = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+    const sentences = resolved.split(/(?<=[.!?…])\s+/);
+    const isMostlyVietnamese = (sent: string) => {
+      const words = sent.split(/\s+/).filter((w) => /\p{L}/u.test(w));
+      if (!words.length) return false;
+      const vi = words.filter((w) => VI_CHAR.test(w)).length;
+      // Short Vietnamese phrases carry few diacritics per word; require a modest share.
+      if (vi / words.length >= 0.3) return true;
+      // A short English sentence ("Model predicts the bounding box.") is a leak worth repairing;
+      // long quoted sentences and heading-like strings without end punctuation are left alone.
+      return words.length <= 8 && /[.!?…]$/.test(sent.trim());
+    };
+    const vietnameseIdx = new Set(sentences.map((s, i) => (isMostlyVietnamese(s) ? i : -1)).filter((i) => i >= 0));
+    if (vietnameseIdx.size === 0) return { resolvedText: resolved, preserved, normalized };
+    const applyStep3 = (sent: string) => {
+      let out = sent;
+      for (const [engWord, viReplacement] of this.unnecessaryEnglishMap.entries()) {
+        const regex = new RegExp(`\\b${engWord}\\b`, 'gi');
+        if (!regex.test(out)) continue;
+        if (preserved.some((term) => term.toLowerCase().includes(engWord.toLowerCase()))) continue;
+        out = out.replace(regex, viReplacement);
+        decisionTraces?.push(`Converted unnecessary English "${engWord} → ${viReplacement}" to preserve natural Vietnamese.`);
+      }
+      return out;
+    };
+    resolved = sentences.map((s, i) => (vietnameseIdx.has(i) ? applyStep3(s) : s)).join(' ');
     return { resolvedText: resolved, preserved, normalized };
   }
 

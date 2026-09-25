@@ -64,7 +64,7 @@ const STAGES: { id: PipelineStage; label: string; module: string; icon: React.Co
 
 export const Stepper: React.FC<StepperProps> = ({ currentStage, onSelectStage }) => {
   return (
-    <div className="w-full bg-white border border-slate-200 rounded-xl p-2 mb-6 shadow-sm overflow-x-auto">
+    <div className="w-full bg-paper-sheet border border-rule rounded-xl p-2 mb-6 shadow-sm overflow-x-auto">
       <div className="flex items-center min-w-[760px] justify-between gap-1">
         {STAGES.map((s, idx) => {
           const Icon = s.icon;
@@ -76,17 +76,17 @@ export const Stepper: React.FC<StepperProps> = ({ currentStage, onSelectStage })
               onClick={() => onSelectStage(s.id)}
               className={`flex-1 flex flex-col items-center py-2 px-1 rounded-lg transition text-center group ${
                 isActive
-                  ? 'bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold shadow-xs'
-                  : 'hover:bg-slate-50 text-slate-600'
+                  ? 'bg-paper-band border border-rule-strong text-print font-semibold shadow-xs'
+                  : 'hover:bg-paper-band text-ink-soft'
               }`}
             >
               <div className="flex items-center gap-1 mb-1">
-                <span className={`text-[10px] font-mono px-1 py-0.2 rounded font-bold ${
-                  isActive ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-slate-200'
+                <span className={`text-[11px] font-mono px-1 py-0.2 rounded font-bold ${
+                  isActive ? 'bg-cover text-white' : 'bg-paper-band text-ink-faint group-hover:bg-rule'
                 }`}>
                   {s.module}
                 </span>
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-print' : 'text-ink-faint group-hover:text-ink-soft'}`} />
               </div>
               <span className="text-xs truncate max-w-[90px]">{s.label}</span>
             </button>

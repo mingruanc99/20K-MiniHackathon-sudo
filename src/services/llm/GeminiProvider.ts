@@ -4,8 +4,9 @@
  * Supports: Google Gemini, Anthropic Claude, OpenAI GPT, and OpenRouter.
  * Features:
  * - Real-time switching between providers and models without page refresh
- * - Elimination of invalid models (e.g. gemini-3.5 404 errors)
  * - Automatic failover for 503 (High Demand) and 429 (Rate Limits)
+ * - Real token accounting from API usage payloads (incl. Gemini thinking tokens)
+ * - Image input (vision) for region OCR
  * - Fallback to structured MockLLMProvider when all providers are unavailable
  */
 import {
@@ -18,10 +19,36 @@ import {
   SemanticCritiqueReport
 } from '../../types';
 import { ILLMProvider, NarrationContext } from './LLMProvider';
-import { apiKeyService, LLMProviderType } from './apiKeyService';
+import { apiKeyService, GEMINI_PROXY_ENDPOINT, isGeminiProxyConfigured, probeGeminiProxy } from './apiKeyService';
 import { MockLLMProvider } from './MockLLMProvider';
 import { contentPurifierService } from '../../pipeline/services/contentPurifierService';
 import { adminTelemetryService } from '../adminTelemetryService';
+import { usageMeter, estimateTokens, RecordCallInput } from './usageMeter';
+import { DEFAULT_MODEL } from './modelCatalog';
+
+export interface LLMImageInput {
+  mimeType: string;
+  /** Base64 payload without the data: prefix. */
+  data: string;
+}
+
+export interface LLMRequestOptions {
+  images?: LLMImageInput[];
+  maxOutputTokens?: number;
+  temperature?: number;
+  /** Allow Gemini 2.5 thinking. Off by default: our structured tasks don't need it and it is slow. */
+  thinking?: boolean;
+  timeoutMs?: number;
+}
+
+interface LLMRequest extends LLMRequestOptions {
+  prompt: string;
+  systemInstruction: string;
+  featureName: string;
+}
+
+const stripJsonFences = (text: string): string =>
+  text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
 
 export class GeminiProvider implements ILLMProvider {
   readonly providerId = 'multi_provider_llm';
@@ -42,24 +69,66 @@ export class GeminiProvider implements ILLMProvider {
     this.customApiKey = key;
   }
 
+  /** True when a personal key is set, or (for Gemini) the server-side shared key is available. */
+  public hasApiKey(): boolean {
+    const provider = apiKeyService.getActiveProvider();
+    if (this.customApiKey || apiKeyService.getApiKey(provider)) return true;
+    return provider === 'gemini' && isGeminiProxyConfigured();
+  }
+
+  public getActiveModel(): string {
+    const provider = apiKeyService.getActiveProvider();
+    return `${provider}:${apiKeyService.getActiveModel(provider)}`;
+  }
+
+  /** Records a call in the per-run usage meter and in admin telemetry. */
+  private track(input: RecordCallInput) {
+    const rec = usageMeter.record(input);
+    if (input.status === 'cache_hit') return;
+    adminTelemetryService.recordAICall({
+      model: `${input.provider}:${input.model}`,
+      feature: input.feature,
+      promptTokens: rec.promptTokens,
+      completionTokens: rec.completionTokens + rec.thoughtsTokens,
+      totalTokens: rec.totalTokens,
+      costUsd: rec.costUsd ?? 0,
+      latencyMs: input.latencyMs,
+      status: input.status === 'error' ? 'error' : 'success',
+      errorMessage: input.errorMessage
+    });
+  }
+
+  /**
+   * Public structured-JSON entry point used by the scanner, OCR and LLM narration.
+   * Throws when no key is configured or every model fails.
+   */
+  public async generateJson<T>(
+    prompt: string,
+    systemInstruction: string,
+    featureName: string,
+    options: LLMRequestOptions = {}
+  ): Promise<T> {
+    return this.callLLMJson<T>({ prompt, systemInstruction, featureName, ...options });
+  }
+
   /**
    * Universal JSON caller routing to Gemini, Claude, OpenAI, or OpenRouter
    */
-  private async callLLMJson<T>(
-    prompt: string,
-    systemInstruction: string = '',
-    featureName: string = 'AI Generation'
-  ): Promise<T> {
+  private async callLLMJson<T>(req: LLMRequest | string, systemInstruction = '', featureName = 'AI Generation'): Promise<T> {
+    const request: LLMRequest =
+      typeof req === 'string' ? { prompt: req, systemInstruction, featureName } : req;
     const activeProvider = apiKeyService.getActiveProvider();
     const activeModel = apiKeyService.getActiveModel(activeProvider);
     const key = this.customApiKey || apiKeyService.getApiKey(activeProvider);
+    if (!key && activeProvider === 'gemini') await probeGeminiProxy();
+    const useProxy = !key && activeProvider === 'gemini' && isGeminiProxyConfigured();
 
-    if (!key) {
+    if (!key && !useProxy) {
       adminTelemetryService.recordError({
         type: 'LLM_ERROR',
         lessonId: 'llm_session',
         lessonTitle: 'Online LLM Service',
-        sectionId: featureName,
+        sectionId: request.featureName,
         model: `${activeProvider}:${activeModel}`,
         severity: 'high',
         message: `Chưa cấu hình API Key cho ${activeProvider}`
@@ -69,134 +138,114 @@ export class GeminiProvider implements ILLMProvider {
       );
     }
 
-    if (activeProvider === 'claude') {
-      return this.callClaude<T>(key, activeModel, prompt, systemInstruction, featureName);
-    }
-
-    if (activeProvider === 'openai') {
-      return this.callOpenAI<T>(key, activeModel, prompt, systemInstruction, featureName);
-    }
-
-    if (activeProvider === 'openrouter') {
-      return this.callOpenRouter<T>(key, activeModel, prompt, systemInstruction, featureName);
-    }
-
-    // Default: Google Gemini
-    return this.callGemini<T>(key, activeModel, prompt, systemInstruction, featureName);
+    if (activeProvider === 'claude') return this.callClaude<T>(key, activeModel, request);
+    if (activeProvider === 'openai') return this.callOpenAICompatible<T>('openai', key, activeModel, request);
+    if (activeProvider === 'openrouter') return this.callOpenAICompatible<T>('openrouter', key, activeModel, request);
+    return this.callGemini<T>(key, activeModel, request);
   }
 
   /**
-   * Google Gemini Caller with verified model pool (NO non-existent 3.5 models)
+   * Google Gemini caller with a verified model pool.
    */
-  private async callGemini<T>(
-    key: string,
-    requestedModel: string,
-    prompt: string,
-    systemInstruction: string,
-    featureName: string
-  ): Promise<T> {
-    // Only real, existing Google Generative Language models:
-    const candidateModels = Array.from(
-      new Set([
-        requestedModel,
-        'gemini-2.0-flash',
-        'gemini-2.0-flash-lite',
-        'gemini-1.5-flash',
-        'gemini-1.5-pro'
-      ])
-    );
+  private async callGemini<T>(key: string, requestedModel: string, req: LLMRequest): Promise<T> {
+    // 2.5 models are closed to new Google accounts; 3.6 Flash is the current default.
+    const candidateModels = Array.from(new Set([requestedModel || DEFAULT_MODEL, 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']));
+    const promptEstimate = estimateTokens(req.prompt + req.systemInstruction) + (req.images?.length || 0) * 258;
 
     let lastError: any = null;
 
     for (const currentModel of candidateModels) {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${key}`;
       const tStart = performance.now();
 
+      const parts: any[] = [{ text: req.prompt }];
+      (req.images || []).forEach((img) => parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } }));
+
+      const generationConfig: Record<string, any> = {
+        responseMimeType: 'application/json',
+        temperature: req.temperature ?? 0.2
+      };
+      if (req.maxOutputTokens) generationConfig.maxOutputTokens = req.maxOutputTokens;
+      // Only Gemini 2.5 Flash / Flash-Lite are known to accept thinkingBudget 0; newer models use their defaults.
+      if (!req.thinking && /^gemini-2\.5-flash/.test(currentModel)) {
+        generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      }
+
       const body = {
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.2
-        }
+        contents: [{ role: 'user', parts }],
+        systemInstruction: req.systemInstruction ? { parts: [{ text: req.systemInstruction }] } : undefined,
+        generationConfig
       };
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 75000);
+        const timeoutId = setTimeout(() => controller.abort(), req.timeoutMs || 75000);
 
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-goog-api-key': key
-          },
-          body: JSON.stringify(body),
-          signal: controller.signal
-        });
+        // Personal key: call Google directly. No personal key: the server proxy adds the shared key.
+        const res = key
+          ? await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-goog-api-key': key },
+              body: JSON.stringify(body),
+              signal: controller.signal
+            })
+          : await fetch(GEMINI_PROXY_ENDPOINT, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: currentModel, request: body }),
+              signal: controller.signal
+            });
         clearTimeout(timeoutId);
 
         if (!res.ok) {
           const errText = await res.text();
-          const latencyMs = Math.round(performance.now() - tStart);
-
-          adminTelemetryService.recordAICall({
-            model: `gemini:${currentModel}`,
-            feature: featureName,
-            promptTokens: Math.round((prompt.length + (systemInstruction?.length || 0)) / 4),
-            completionTokens: 0,
-            totalTokens: Math.round((prompt.length + (systemInstruction?.length || 0)) / 4),
-            costUsd: 0,
-            latencyMs,
+          this.track({
+            provider: 'gemini',
+            model: currentModel,
+            feature: req.featureName,
+            promptTokens: 0,
+            latencyMs: Math.round(performance.now() - tStart),
             status: 'error',
             errorMessage: `${res.status}: ${errText.slice(0, 150)}`
           });
 
-          // 503/500: Server overloaded -> retry next model
           if (res.status === 503 || res.status === 502 || res.status === 500) {
-            console.warn(`Model ${currentModel} quá tải (503). Đang chuyển sang model tiếp theo...`);
+            console.warn(`Model ${currentModel} quá tải (${res.status}). Đang chuyển sang model tiếp theo...`);
+            await new Promise((r) => setTimeout(r, 800));
+            continue;
+          }
+          if (res.status === 429) {
+            console.warn(`Model ${currentModel} đạt giới hạn tốc độ (429). Đang chuyển sang model khác...`);
             await new Promise((r) => setTimeout(r, 1000));
             continue;
           }
-
-          // 429: Rate limit -> switch to next model
-          if (res.status === 429) {
-            console.warn(`Model ${currentModel} đạt giới hạn tốc độ (429). Đang chuyển sang model khác...`);
-            await new Promise((r) => setTimeout(r, 1200));
-            continue;
-          }
-
-          if (res.status === 404) {
-            continue;
-          }
-
+          if (res.status === 404) continue;
           throw new Error(`Gemini API Error ${res.status}: ${errText}`);
         }
 
         const data = await res.json();
         const latencyMs = Math.round(performance.now() - tStart);
-        const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const candidateText = (data.candidates?.[0]?.content?.parts || [])
+          .map((p: any) => p.text || '')
+          .join('');
         if (!candidateText) {
-          throw new Error('Không nhận được nội dung phản hồi từ Gemini.');
+          throw new Error(`Không nhận được nội dung phản hồi từ Gemini (finishReason: ${data.candidates?.[0]?.finishReason || 'unknown'}).`);
         }
 
-        const usage = data.usageMetadata || {};
-        const promptTokens = usage.promptTokenCount || Math.round((prompt.length + (systemInstruction?.length || 0)) / 4);
-        const completionTokens = usage.candidatesTokenCount || Math.round(candidateText.length / 4);
-
-        adminTelemetryService.recordAICall({
-          model: `gemini:${currentModel}`,
-          feature: featureName,
-          promptTokens,
-          completionTokens,
-          totalTokens: promptTokens + completionTokens,
-          costUsd: promptTokens * 0.0000001 + completionTokens * 0.0000004,
+        const usage = data.usageMetadata;
+        this.track({
+          provider: 'gemini',
+          model: currentModel,
+          feature: req.featureName,
+          promptTokens: usage?.promptTokenCount ?? promptEstimate,
+          completionTokens: usage?.candidatesTokenCount ?? estimateTokens(candidateText),
+          thoughtsTokens: usage?.thoughtsTokenCount ?? 0,
+          totalTokens: usage?.totalTokenCount,
+          tokensEstimated: !usage,
           latencyMs,
           status: 'success'
         });
 
-        const cleanedJson = candidateText.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
-        return JSON.parse(cleanedJson) as T;
+        return JSON.parse(stripJsonFences(candidateText)) as T;
       } catch (err: any) {
         lastError = err;
         console.warn(`Thử nghiệm ${currentModel} thất bại: ${err.message}. Đang thử model kế tiếp...`);
@@ -208,21 +257,20 @@ export class GeminiProvider implements ILLMProvider {
   }
 
   /**
-   * Anthropic Claude Caller (Direct browser calls allowed with dangerous header)
+   * Anthropic Claude caller (direct browser calls allowed with dangerous header)
    */
-  private async callClaude<T>(
-    key: string,
-    model: string,
-    prompt: string,
-    systemInstruction: string,
-    featureName: string
-  ): Promise<T> {
+  private async callClaude<T>(key: string, model: string, req: LLMRequest): Promise<T> {
     const tStart = performance.now();
-    const endpoint = 'https://api.anthropic.com/v1/messages';
+    const resolvedModel = model || 'claude-3-5-sonnet-20241022';
+    const fullSystem = `${req.systemInstruction || 'You are an expert AI instructional designer.'}\nIMPORTANT: You must output ONLY a valid JSON object matching the requested schema. Do not add markdown backticks, greetings, or conversational remarks.`;
 
-    const fullSystem = `${systemInstruction || 'You are an expert AI instructional designer.'}\nIMPORTANT: You must output ONLY a valid JSON object matching the requested schema. Do not add markdown backticks, greetings, or conversational remarks.`;
+    const content: any[] = (req.images || []).map((img) => ({
+      type: 'image',
+      source: { type: 'base64', media_type: img.mimeType, data: img.data }
+    }));
+    content.push({ type: 'text', text: req.prompt });
 
-    const res = await fetch(endpoint, {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -231,10 +279,10 @@ export class GeminiProvider implements ILLMProvider {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: model || 'claude-3-5-sonnet-20241022',
-        max_tokens: 4096,
+        model: resolvedModel,
+        max_tokens: req.maxOutputTokens || 4096,
         system: fullSystem,
-        messages: [{ role: 'user', content: prompt }]
+        messages: [{ role: 'user', content }]
       })
     });
 
@@ -242,13 +290,10 @@ export class GeminiProvider implements ILLMProvider {
 
     if (!res.ok) {
       const errText = await res.text();
-      adminTelemetryService.recordAICall({
-        model: `claude:${model}`,
-        feature: featureName,
-        promptTokens: Math.round(prompt.length / 4),
-        completionTokens: 0,
-        totalTokens: Math.round(prompt.length / 4),
-        costUsd: 0,
+      this.track({
+        provider: 'claude',
+        model: resolvedModel,
+        feature: req.featureName,
         latencyMs,
         status: 'error',
         errorMessage: `${res.status}: ${errText.slice(0, 150)}`
@@ -258,49 +303,67 @@ export class GeminiProvider implements ILLMProvider {
 
     const data = await res.json();
     const text = data.content?.[0]?.text || '';
-    const cleanedJson = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
-
-    adminTelemetryService.recordAICall({
-      model: `claude:${model}`,
-      feature: featureName,
-      promptTokens: data.usage?.input_tokens || Math.round(prompt.length / 4),
-      completionTokens: data.usage?.output_tokens || Math.round(text.length / 4),
-      totalTokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
-      costUsd: 0.003,
+    this.track({
+      provider: 'claude',
+      model: resolvedModel,
+      feature: req.featureName,
+      promptTokens: data.usage?.input_tokens ?? estimateTokens(req.prompt + fullSystem),
+      completionTokens: data.usage?.output_tokens ?? estimateTokens(text),
+      tokensEstimated: !data.usage,
       latencyMs,
       status: 'success'
     });
 
-    return JSON.parse(cleanedJson) as T;
+    return JSON.parse(stripJsonFences(text)) as T;
   }
 
   /**
-   * OpenAI GPT Caller
+   * OpenAI & OpenRouter (same chat-completions wire format)
    */
-  private async callOpenAI<T>(
+  private async callOpenAICompatible<T>(
+    provider: 'openai' | 'openrouter',
     key: string,
     model: string,
-    prompt: string,
-    systemInstruction: string,
-    featureName: string
+    req: LLMRequest
   ): Promise<T> {
     const tStart = performance.now();
-    const endpoint = 'https://api.openai.com/v1/chat/completions';
+    const isRouter = provider === 'openrouter';
+    const resolvedModel = model || (isRouter ? 'anthropic/claude-3.5-sonnet' : 'gpt-4o-mini');
+    const endpoint = isRouter
+      ? 'https://openrouter.ai/api/v1/chat/completions'
+      : 'https://api.openai.com/v1/chat/completions';
+
+    const userContent: any = req.images?.length
+      ? [
+          { type: 'text', text: req.prompt },
+          ...req.images.map((img) => ({ type: 'image_url', image_url: { url: `data:${img.mimeType};base64,${img.data}` } }))
+        ]
+      : req.prompt;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${key}`
+    };
+    if (isRouter) {
+      headers['HTTP-Referer'] = 'https://clsg-ir-studio.vercel.app';
+      headers['X-Title'] = 'CLSG-IR Studio';
+    }
 
     const res = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`
-      },
+      headers,
       body: JSON.stringify({
-        model: model || 'gpt-4o-mini',
+        model: resolvedModel,
         response_format: { type: 'json_object' },
+        max_tokens: req.maxOutputTokens,
         messages: [
-          { role: 'system', content: systemInstruction || 'You are an expert AI instructional designer. Return strictly valid JSON.' },
-          { role: 'user', content: prompt }
+          {
+            role: 'system',
+            content: `${req.systemInstruction || 'You are an expert AI instructional designer.'}\nYou must respond strictly with valid JSON only.`
+          },
+          { role: 'user', content: userContent }
         ],
-        temperature: 0.2
+        temperature: req.temperature ?? 0.2
       })
     });
 
@@ -308,104 +371,32 @@ export class GeminiProvider implements ILLMProvider {
 
     if (!res.ok) {
       const errText = await res.text();
-      adminTelemetryService.recordAICall({
-        model: `openai:${model}`,
-        feature: featureName,
-        promptTokens: Math.round(prompt.length / 4),
-        completionTokens: 0,
-        totalTokens: Math.round(prompt.length / 4),
-        costUsd: 0,
+      this.track({
+        provider,
+        model: resolvedModel,
+        feature: req.featureName,
         latencyMs,
         status: 'error',
         errorMessage: `${res.status}: ${errText.slice(0, 150)}`
       });
-      throw new Error(`OpenAI Error (${res.status}): ${errText}`);
+      throw new Error(`${isRouter ? 'OpenRouter' : 'OpenAI'} Error (${res.status}): ${errText}`);
     }
 
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content || '{}';
-    const cleanedJson = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
-
-    adminTelemetryService.recordAICall({
-      model: `openai:${model}`,
-      feature: featureName,
-      promptTokens: data.usage?.prompt_tokens || Math.round(prompt.length / 4),
-      completionTokens: data.usage?.completion_tokens || Math.round(text.length / 4),
-      totalTokens: data.usage?.total_tokens || 0,
-      costUsd: 0.001,
+    this.track({
+      provider,
+      model: resolvedModel,
+      feature: req.featureName,
+      promptTokens: data.usage?.prompt_tokens ?? estimateTokens(req.prompt + req.systemInstruction),
+      completionTokens: data.usage?.completion_tokens ?? estimateTokens(text),
+      totalTokens: data.usage?.total_tokens,
+      tokensEstimated: !data.usage,
       latencyMs,
       status: 'success'
     });
 
-    return JSON.parse(cleanedJson) as T;
-  }
-
-  /**
-   * OpenRouter Unified Caller (supports Claude, GPT, DeepSeek, etc. without CORS hurdles)
-   */
-  private async callOpenRouter<T>(
-    key: string,
-    model: string,
-    prompt: string,
-    systemInstruction: string,
-    featureName: string
-  ): Promise<T> {
-    const tStart = performance.now();
-    const endpoint = 'https://openrouter.ai/api/v1/chat/completions';
-
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`,
-        'HTTP-Referer': 'https://clsg-ir-studio.vercel.app',
-        'X-Title': 'CLSG-IR Studio'
-      },
-      body: JSON.stringify({
-        model: model || 'anthropic/claude-3.5-sonnet',
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: `${systemInstruction || 'Instructional Designer'}\nYou must respond strictly with valid JSON only.` },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.2
-      })
-    });
-
-    const latencyMs = Math.round(performance.now() - tStart);
-
-    if (!res.ok) {
-      const errText = await res.text();
-      adminTelemetryService.recordAICall({
-        model: `openrouter:${model}`,
-        feature: featureName,
-        promptTokens: Math.round(prompt.length / 4),
-        completionTokens: 0,
-        totalTokens: Math.round(prompt.length / 4),
-        costUsd: 0,
-        latencyMs,
-        status: 'error',
-        errorMessage: `${res.status}: ${errText.slice(0, 150)}`
-      });
-      throw new Error(`OpenRouter Error (${res.status}): ${errText}`);
-    }
-
-    const data = await res.json();
-    const text = data.choices?.[0]?.message?.content || '{}';
-    const cleanedJson = text.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim();
-
-    adminTelemetryService.recordAICall({
-      model: `openrouter:${model}`,
-      feature: featureName,
-      promptTokens: data.usage?.prompt_tokens || Math.round(prompt.length / 4),
-      completionTokens: data.usage?.completion_tokens || Math.round(text.length / 4),
-      totalTokens: data.usage?.total_tokens || 0,
-      costUsd: 0.002,
-      latencyMs,
-      status: 'success'
-    });
-
-    return JSON.parse(cleanedJson) as T;
+    return JSON.parse(stripJsonFences(text)) as T;
   }
 
   async generateLessonUnderstanding(

@@ -6,6 +6,98 @@
   body {
     @apply bg-slate-50 text-slate-900 antialiased font-sans;
   }
+  ::selection {
+    background: #e0e7ff; /* indigo-100 */
+    color: #1e1b4b;
+  }
+  :focus-visible {
+    outline-color: #6366f1;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+  input,
+  textarea {
+    caret-color: #4f46e5;
+  }
+}
+
+/* ------------------------------------------------------------------------
+ * Sổ đầu bài world: lecturer / learner surfaces (see DESIGN.md)
+ * --------------------------------------------------------------------- */
+.ledger-world {
+  font-family: 'Be Vietnam Pro', Inter, system-ui, sans-serif;
+  color: #1b2559;
+  font-variant-numeric: tabular-nums;
+}
+.ledger-world ::selection {
+  background: #d7e6da;
+  color: #10302a;
+}
+.ledger-world :focus-visible {
+  outline: 2px solid #2c5a47;
+  outline-offset: 2px;
+}
+.ledger-world input,
+.ledger-world textarea {
+  caret-color: #1b2559;
+}
+.ledger-world * {
+  scrollbar-color: #93aa98 transparent;
+}
+
+/* Printed ruling: thin green-gray lines every row, like the logbook's pre-printed page. */
+.ledger-ruled {
+  background-color: #f5f7f2;
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(2.75rem - 1px), #dfe6da calc(2.75rem - 1px), #dfe6da 2.75rem);
+}
+
+/* Time ruler: a tick every 10 seconds at the bar's scale (--tick is set inline). */
+.ledger-ticks {
+  background-image: repeating-linear-gradient(to right, rgba(255, 255, 255, 0.45) 0, rgba(255, 255, 255, 0.45) 1px, transparent 1px, transparent var(--tick, 12px));
+}
+
+/* Grade stamp: a circled, slightly rotated ink mark. */
+.ledger-stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.5rem;
+  padding: 0.1rem 0.6rem;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  font-family: 'Patrick Hand', 'Be Vietnam Pro', cursive;
+  font-size: 1.05rem;
+  line-height: 1.5rem;
+  transform: rotate(-5deg);
+  opacity: 0.92;
+  white-space: nowrap;
+}
+
+/* The stamp presses onto the entry once, when a lecture has just been graded. */
+@keyframes ledger-stamp-press {
+  0% {
+    transform: scale(1.7) rotate(-16deg);
+    opacity: 0;
+    filter: blur(2px);
+  }
+  60% {
+    opacity: 0.95;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(1) rotate(-5deg);
+    opacity: 0.92;
+  }
+}
+.ledger-stamp-press {
+  animation: ledger-stamp-press 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ledger-stamp-press {
+    animation: none;
+  }
 }
 
 /* Custom academic styling */

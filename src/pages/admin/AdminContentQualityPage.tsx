@@ -43,14 +43,19 @@ export const AdminContentQualityPage: React.FC = () => {
     return () => unsub();
   }, []);
 
+  const hasScan = data.scannedScenes > 0;
+  const overallScore = data.qualityMetrics.overallQualityScore;
+  const scanRate = (v: number) => (hasScan ? `${v}%` : '—');
+  const qualityTrend = adminTelemetryService.getQualityTrend();
+
   const qualityRateCards = [
-    { label: 'Overall Quality Score', value: `${data.qualityMetrics.overallQualityScore}/100`, status: 'safe', target: 'Target > 95' },
-    { label: 'Metadata Leakage Rate', value: `${data.qualityMetrics.metadataLeakageRate}%`, status: 'safe', target: '0% Allowed' },
-    { label: 'Invalid Character Rate (■)', value: `${data.qualityMetrics.invalidCharacterRate}%`, status: 'safe', target: '0% Allowed' },
-    { label: 'Duplicate Sentence Rate', value: `${data.qualityMetrics.duplicateRate}%`, status: 'safe', target: '0% Allowed' },
-    { label: 'Filler Overuse Rate', value: `${data.qualityMetrics.fillerRate}%`, status: 'safe', target: '< 2%' },
-    { label: 'Role Violation Rate', value: `${data.qualityMetrics.sectionRoleViolationRate}%`, status: 'safe', target: '< 1%' },
-    { label: 'Generation Error Rate', value: `${data.qualityMetrics.generationErrorRate}%`, status: 'safe', target: '< 2%' }
+    { label: 'Overall Quality Score', value: overallScore > 0 ? `${overallScore}/100` : '—', status: 'safe', target: 'Target > 95' },
+    { label: 'Metadata Leakage Rate', value: scanRate(data.qualityMetrics.metadataLeakageRate), status: 'safe', target: '0% Allowed' },
+    { label: 'Invalid Character Rate (■)', value: scanRate(data.qualityMetrics.invalidCharacterRate), status: 'safe', target: '0% Allowed' },
+    { label: 'Duplicate Sentence Rate', value: scanRate(data.qualityMetrics.duplicateRate), status: 'safe', target: '0% Allowed' },
+    { label: 'Filler Overuse Rate', value: scanRate(data.qualityMetrics.fillerRate), status: 'safe', target: '< 2%' },
+    { label: 'Role Violation Rate', value: scanRate(data.qualityMetrics.sectionRoleViolationRate), status: 'safe', target: '< 1%' },
+    { label: 'Generation Error Rate', value: adminTelemetryService.getAILlmData().totalRequests > 0 ? `${data.qualityMetrics.generationErrorRate}%` : '—', status: 'safe', target: '< 2%' }
   ];
 
   const filteredIssues = data.issues.filter((iss) => {
@@ -74,13 +79,13 @@ export const AdminContentQualityPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Content Quality Center</h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <h1 className="text-xl font-bold text-ink tracking-tight">Content Quality Center</h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-paper-band text-print border border-rule-strong">
+              <span className="w-1.5 h-1.5 rounded-full bg-print animate-pulse" />
               Dữ Liệu Thật (Purifier Real Audit)
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-ink-faint mt-1">
             Giám sát chất lượng sư phạm, phát hiện rò rỉ metadata, chuẩn hóa ký tự ■ và bảo vệ Zero-Leak cho mọi bài giảng.
           </p>
         </div>
@@ -89,16 +94,16 @@ export const AdminContentQualityPage: React.FC = () => {
           <button
             onClick={refresh}
             disabled={loading}
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition shadow-xs disabled:opacity-50"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-paper-sheet border border-rule text-xs font-medium text-ink-soft hover:bg-paper-band rounded-xl transition shadow-xs disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-ink-faint ${loading ? 'animate-spin text-print' : ''}`} />
             <span>{loading ? 'Đang quét...' : 'Quét Lại'}</span>
           </button>
           <a
             href={adminTelemetryService.getLangfuseTraceUrl()}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition shadow-xs self-start sm:self-auto"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-cover hover:bg-cover text-white text-xs font-semibold rounded-xl transition shadow-xs self-start sm:self-auto"
           >
             <Flame className="w-3.5 h-3.5" />
             <span>Langfuse Quality Traces</span>
@@ -110,10 +115,10 @@ export const AdminContentQualityPage: React.FC = () => {
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         {qualityRateCards.map((card, i) => (
-          <div key={i} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs space-y-1">
-            <span className="text-[11px] font-medium text-slate-500 line-clamp-1">{card.label}</span>
-            <div className="text-lg font-bold text-slate-900">{card.value}</div>
-            <div className="text-[10px] text-emerald-600 font-medium flex items-center space-x-1">
+          <div key={i} className="bg-paper-sheet p-3.5 rounded-xl border border-rule shadow-xs space-y-1">
+            <span className="text-xs font-medium text-ink-faint line-clamp-1">{card.label}</span>
+            <div className="text-lg font-bold text-ink">{card.value}</div>
+            <div className="text-[11px] text-print font-medium flex items-center space-x-1">
               <CheckCircle2 className="w-3 h-3" />
               <span>{card.target}</span>
             </div>
@@ -124,28 +129,21 @@ export const AdminContentQualityPage: React.FC = () => {
       {/* Quality Trend & Error Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Quality Trend */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="lg:col-span-2 bg-paper-sheet p-5 rounded-2xl border border-rule shadow-xs space-y-4">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+              <h2 className="text-xs font-bold text-ink uppercase tracking-wider">
                 Chất Lượng Sư Phạm & Tỷ Lệ Sạch Siêu Dữ Liệu Theo Thời Gian
               </h2>
-              <p className="text-[11px] text-slate-400">Xu hướng phục hồi và tỷ lệ Zero-Leak qua các bản cập nhật Purifier</p>
+              <p className="text-xs text-ink-faint">Điểm Quality Guard của từng bài giảng, sắp theo thời gian cập nhật</p>
             </div>
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700">
-              Score: 98.4 / 100
+            <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-paper-band text-print">
+              {overallScore > 0 ? `Score: ${overallScore} / 100` : 'Chưa có dữ liệu'}
             </span>
           </div>
 
           <CompactChart
-            data={[
-              { label: 'Tuần 1', value: 92.4 },
-              { label: 'Tuần 2', value: 93.8 },
-              { label: 'Tuần 3', value: 95.1 },
-              { label: 'Tuần 4', value: 96.5 },
-              { label: 'Tuần 5', value: 97.8 },
-              { label: 'Tuần 6', value: 98.4 }
-            ]}
+            data={qualityTrend}
             color="#10b981"
             fillColor="rgba(16, 185, 129, 0.08)"
             type="area"
@@ -155,24 +153,27 @@ export const AdminContentQualityPage: React.FC = () => {
         </div>
 
         {/* Error Distribution */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+        <div className="bg-paper-sheet p-5 rounded-2xl border border-rule shadow-xs space-y-4">
           <div>
-            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+            <h2 className="text-xs font-bold text-ink uppercase tracking-wider">
               Phân Bố Loại Lỗi Phát Hiện (Tự Động Làm Sạch)
             </h2>
-            <p className="text-[11px] text-slate-400">Phát hiện bởi ContentPurifierService & Guard</p>
+            <p className="text-xs text-ink-faint">Phát hiện bởi ContentPurifierService & Guard</p>
           </div>
 
           <div className="space-y-3 pt-2">
+            {data.errorDistribution.length === 0 && (
+              <div className="text-xs text-ink-faint text-center py-6">Chưa có dữ liệu</div>
+            )}
             {data.errorDistribution.map((item) => (
               <div key={item.type} className="space-y-1">
                 <div className="flex justify-between text-xs">
-                  <span className="font-medium text-slate-700">{item.type}</span>
-                  <span className="font-mono text-slate-500">
+                  <span className="font-medium text-ink-soft">{item.type}</span>
+                  <span className="font-mono text-ink-faint">
                     {item.count} vụ ({item.percentage}%)
                   </span>
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                <div className="w-full bg-paper-band rounded-full h-1.5 overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{
@@ -188,13 +189,13 @@ export const AdminContentQualityPage: React.FC = () => {
       </div>
 
       {/* Issues Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden space-y-4 p-5">
+      <div className="bg-paper-sheet rounded-2xl border border-rule shadow-xs overflow-hidden space-y-4 p-5">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
-            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+            <h2 className="text-xs font-bold text-ink uppercase tracking-wider">
               Nhật Ký Sự Cố Nội Dung Đã Ghi Nhận (Recent Content Issues)
             </h2>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-ink-faint">
               Nhấp vào từng dòng để mở so sánh chi tiết Raw Output vs Cleaned Output và Trace ID
             </p>
           </div>
@@ -202,20 +203,20 @@ export const AdminContentQualityPage: React.FC = () => {
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-ink-faint absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Lọc sự cố..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 pr-2.5 py-1 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                className="pl-8 pr-2.5 py-1 text-xs bg-paper-band border border-rule rounded-lg text-ink-soft placeholder-ink-faint focus:outline-none focus:border-print"
               />
             </div>
 
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-700 focus:outline-none"
+              className="text-xs bg-paper-band border border-rule rounded-lg px-2.5 py-1 text-ink-soft focus:outline-none"
             >
               <option value="all">Tất cả loại lỗi</option>
               <option value="INVALID_CHARACTER">INVALID_CHARACTER (■ / 1^-4)</option>
@@ -228,7 +229,7 @@ export const AdminContentQualityPage: React.FC = () => {
             <select
               value={filterSeverity}
               onChange={(e) => setFilterSeverity(e.target.value)}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-700 focus:outline-none"
+              className="text-xs bg-paper-band border border-rule rounded-lg px-2.5 py-1 text-ink-soft focus:outline-none"
             >
               <option value="all">Tất cả mức độ</option>
               <option value="critical">Critical</option>
@@ -240,10 +241,10 @@ export const AdminContentQualityPage: React.FC = () => {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto border border-slate-100 rounded-xl">
+        <div className="overflow-x-auto border border-rule rounded-xl">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
+              <tr className="bg-paper-band border-b border-rule text-ink-faint font-semibold uppercase text-[11px] tracking-wider">
                 <th className="py-2.5 px-3">Thời gian</th>
                 <th className="py-2.5 px-3">Bài giảng & Phân cảnh</th>
                 <th className="py-2.5 px-3">Loại sự cố</th>
@@ -253,28 +254,28 @@ export const AdminContentQualityPage: React.FC = () => {
                 <th className="py-2.5 px-3 text-right">Thao tác</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-rule">
               {filteredIssues.map((issue) => (
                 <tr
                   key={issue.id}
                   onClick={() => setSelectedIssue(issue)}
-                  className="hover:bg-blue-50/40 cursor-pointer transition"
+                  className="hover:bg-paper-band cursor-pointer transition"
                 >
-                  <td className="py-3 px-3 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                  <td className="py-3 px-3 font-mono text-xs text-ink-faint whitespace-nowrap">
                     {issue.timestamp}
                   </td>
                   <td className="py-3 px-3">
-                    <div className="font-semibold text-slate-800">{issue.lessonTitle}</div>
-                    <div className="text-[10px] font-mono text-slate-400">{issue.sectionId}</div>
+                    <div className="font-semibold text-ink">{issue.lessonTitle}</div>
+                    <div className="text-[11px] font-mono text-ink-faint">{issue.sectionId}</div>
                   </td>
                   <td className="py-3 px-3 whitespace-nowrap">
                     <span
-                      className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                      className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold uppercase ${
                         issue.issueType === 'INVALID_CHARACTER'
-                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                          ? 'bg-pen-soft text-pen border border-pen-line'
                           : issue.issueType === 'METADATA_LEAK'
-                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                          : 'bg-blue-100 text-blue-800 border border-blue-200'
+                          ? 'bg-pen-soft text-pen border border-pen-line'
+                          : 'bg-paper-band text-print border border-rule-strong'
                       }`}
                     >
                       {issue.issueType}
@@ -282,29 +283,29 @@ export const AdminContentQualityPage: React.FC = () => {
                   </td>
                   <td className="py-3 px-3 whitespace-nowrap">
                     <span
-                      className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-semibold uppercase ${
+                      className={`inline-block px-1.5 py-0.2 rounded text-[11px] font-semibold uppercase ${
                         issue.severity === 'critical'
-                          ? 'text-rose-600'
+                          ? 'text-pen'
                           : issue.severity === 'high'
-                          ? 'text-amber-600'
-                          : 'text-slate-600'
+                          ? 'text-pen'
+                          : 'text-ink-soft'
                       }`}
                     >
                       {issue.severity}
                     </span>
                   </td>
                   <td className="py-3 px-3">
-                    <div className="font-mono text-[11px] text-slate-700">{issue.model}</div>
-                    <div className="text-[10px] text-slate-400">{issue.promptVersion}</div>
+                    <div className="font-mono text-xs text-ink-soft">{issue.model}</div>
+                    <div className="text-[11px] text-ink-faint">{issue.promptVersion}</div>
                   </td>
                   <td className="py-3 px-3 whitespace-nowrap">
                     {issue.resolved ? (
-                      <span className="inline-flex items-center space-x-1 text-emerald-600 font-medium text-[11px]">
+                      <span className="inline-flex items-center space-x-1 text-print font-medium text-xs">
                         <Check className="w-3.5 h-3.5" />
                         <span>Đã làm sạch</span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center space-x-1 text-amber-600 font-medium text-[11px]">
+                      <span className="inline-flex items-center space-x-1 text-pen font-medium text-xs">
                         <AlertTriangle className="w-3.5 h-3.5" />
                         <span>Chờ xử lý</span>
                       </span>
@@ -316,13 +317,20 @@ export const AdminContentQualityPage: React.FC = () => {
                         e.stopPropagation();
                         setSelectedIssue(issue);
                       }}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition"
+                      className="px-2.5 py-1 bg-paper-band hover:bg-rule text-ink-soft rounded-lg text-xs font-medium transition"
                     >
                       Xem chi tiết
                     </button>
                   </td>
                 </tr>
               ))}
+              {filteredIssues.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-6 px-3 text-center text-ink-faint">
+                    {hasScan ? 'Không có sự cố nội dung nào được phát hiện' : 'Chưa có dữ liệu'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -330,19 +338,19 @@ export const AdminContentQualityPage: React.FC = () => {
 
       {/* Issue Detail Modal with Raw vs Clean Diff */}
       {selectedIssue && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white max-w-2xl w-full rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-cover  flex items-center justify-center p-4">
+          <div className="bg-paper-sheet max-w-2xl w-full rounded-2xl border border-rule shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div className="px-6 py-4 border-b border-rule flex items-center justify-between bg-paper-band">
               <div className="flex items-center space-x-2">
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-100 text-blue-700">
+                <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-paper-band text-print">
                   {selectedIssue.issueType}
                 </span>
-                <h3 className="text-sm font-bold text-slate-900">Chi Tiết Sự Cố Nội Dung</h3>
+                <h3 className="text-sm font-bold text-ink">Chi Tiết Sự Cố Nội Dung</h3>
               </div>
               <button
                 onClick={() => setSelectedIssue(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                className="p-1 text-ink-faint hover:text-ink-soft rounded-lg hover:bg-paper-band"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -351,52 +359,52 @@ export const AdminContentQualityPage: React.FC = () => {
             {/* Modal Body */}
             <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto text-xs">
               {/* Meta Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-paper-band p-3.5 rounded-xl border border-rule/80">
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Bài giảng</span>
-                  <div className="font-semibold text-slate-800 truncate">{selectedIssue.lessonTitle}</div>
+                  <span className="text-[11px] text-ink-faint uppercase font-semibold">Bài giảng</span>
+                  <div className="font-semibold text-ink truncate">{selectedIssue.lessonTitle}</div>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Phân cảnh (Section)</span>
-                  <div className="font-mono text-slate-800">{selectedIssue.sectionId}</div>
+                  <span className="text-[11px] text-ink-faint uppercase font-semibold">Phân cảnh (Section)</span>
+                  <div className="font-mono text-ink">{selectedIssue.sectionId}</div>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Mô hình AI</span>
-                  <div className="font-mono text-slate-800">{selectedIssue.model}</div>
+                  <span className="text-[11px] text-ink-faint uppercase font-semibold">Mô hình AI</span>
+                  <div className="font-mono text-ink">{selectedIssue.model}</div>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Prompt Version</span>
-                  <div className="font-mono text-slate-800">{selectedIssue.promptVersion}</div>
+                  <span className="text-[11px] text-ink-faint uppercase font-semibold">Prompt Version</span>
+                  <div className="font-mono text-ink">{selectedIssue.promptVersion}</div>
                 </div>
               </div>
 
               {/* Side-by-Side: Raw vs Cleaned Output */}
               <div className="space-y-3">
-                <div className="flex items-center space-x-1.5 font-bold text-slate-800">
-                  <SplitSquareVertical className="w-4 h-4 text-blue-600" />
+                <div className="flex items-center space-x-1.5 font-bold text-ink">
+                  <SplitSquareVertical className="w-4 h-4 text-print" />
                   <span>So Sánh Đầu Ra (Raw LLM Output vs Cleaned Learner-Facing)</span>
                 </div>
 
                 <div className="space-y-2">
-                  <div className="p-3.5 bg-rose-50/60 border border-rose-200 rounded-xl space-y-1">
-                    <div className="flex justify-between items-center text-[10px] font-bold text-rose-700 uppercase">
+                  <div className="p-3.5 bg-pen-soft border border-pen-line rounded-xl space-y-1">
+                    <div className="flex justify-between items-center text-[11px] font-bold text-pen uppercase">
                       <span>1. Raw Output (Trước khi xử lý)</span>
-                      <span className="text-rose-500">Chứa lỗi ký tự / rò rỉ metadata</span>
+                      <span className="text-pen">Chứa lỗi ký tự / rò rỉ metadata</span>
                     </div>
-                    <p className="font-mono text-xs text-rose-900 leading-relaxed break-words">
+                    <p className="font-mono text-xs text-pen leading-relaxed break-words">
                       {selectedIssue.rawOutput}
                     </p>
                   </div>
 
-                  <div className="p-3.5 bg-emerald-50/60 border border-emerald-200 rounded-xl space-y-1">
-                    <div className="flex justify-between items-center text-[10px] font-bold text-emerald-700 uppercase">
+                  <div className="p-3.5 bg-paper-band border border-rule-strong rounded-xl space-y-1">
+                    <div className="flex justify-between items-center text-[11px] font-bold text-print uppercase">
                       <span>2. Cleaned Output (Sau khi qua ContentPurifierService)</span>
-                      <span className="text-emerald-600 flex items-center space-x-1">
+                      <span className="text-print flex items-center space-x-1">
                         <Check className="w-3 h-3" />
                         <span>Học viên nhìn thấy</span>
                       </span>
                     </div>
-                    <p className="font-mono text-xs text-emerald-950 leading-relaxed break-words">
+                    <p className="font-mono text-xs text-cover leading-relaxed break-words">
                       {selectedIssue.cleanedOutput}
                     </p>
                   </div>
@@ -404,10 +412,10 @@ export const AdminContentQualityPage: React.FC = () => {
               </div>
 
               {/* Trace Information */}
-              <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              <div className="flex items-center justify-between p-3 bg-paper-band border border-rule rounded-xl">
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Langfuse Trace ID</span>
-                  <div className="font-mono text-xs text-slate-700 font-semibold">{selectedIssue.traceId || 'N/A'}</div>
+                  <span className="text-[11px] text-ink-faint uppercase font-semibold">Langfuse Trace ID</span>
+                  <div className="font-mono text-xs text-ink-soft font-semibold">{selectedIssue.traceId || 'N/A'}</div>
                 </div>
 
                 {selectedIssue.traceId && (
@@ -415,7 +423,7 @@ export const AdminContentQualityPage: React.FC = () => {
                     href={adminTelemetryService.getLangfuseTraceUrl(selectedIssue.traceId)}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-xs transition shadow-xs"
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-cover hover:bg-cover text-white rounded-lg font-semibold text-xs transition shadow-xs"
                   >
                     <Flame className="w-3.5 h-3.5" />
                     <span>View in Langfuse</span>
@@ -426,10 +434,10 @@ export const AdminContentQualityPage: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
+            <div className="px-6 py-3 border-t border-rule bg-paper-band flex justify-end">
               <button
                 onClick={() => setSelectedIssue(null)}
-                className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-medium text-xs rounded-xl hover:bg-slate-100 transition shadow-xs"
+                className="px-4 py-2 bg-paper-sheet border border-rule text-ink-soft font-medium text-xs rounded-xl hover:bg-paper-band transition shadow-xs"
               >
                 Đóng
               </button>

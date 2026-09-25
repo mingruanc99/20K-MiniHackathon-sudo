@@ -25,12 +25,12 @@ export const PROVIDERS: Record<LLMProviderType, ProviderMetadata> = {
     name: 'Google Gemini',
     icon: '⚡',
     description: 'Tối ưu tốc độ cao, xử lý văn cảnh dài, hỗ trợ bóc tách sư phạm đa phương thức.',
-    defaultModel: 'gemini-2.0-flash',
+    defaultModel: 'gemini-3.6-flash',
     models: [
-      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Khuyên dùng)', description: 'Tốc độ nhanh nhất, xử lý cấu trúc JSON xuất sắc, độ trễ cực thấp.' },
-      { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite', description: 'Bản siêu nhẹ, chịu tải lớn nhất, chống nghẽn 503 tốt.' },
-      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', description: 'Bản ổn định cao, văn cảnh 1M tokens.' },
-      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', description: 'Suy luận sư phạm chuyên sâu nhất của Google.' }
+      { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash (Khuyên dùng)', description: 'Mặc định của hệ thống; Google yêu cầu tài khoản mới dùng bản này.' },
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Chỉ còn cho tài khoản cũ đã dùng trước đây.' },
+      { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', description: 'Rẻ và nhanh, chỉ cho tài khoản cũ.' },
+      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Suy luận sâu, chậm hơn, giới hạn free tier thấp.' }
     ],
     keyPlaceholder: 'AIzaSy...',
     keyHelpUrl: 'https://aistudio.google.com/app/apikey',
@@ -86,24 +86,39 @@ const STORAGE_KEY_PREFIX = 'CLSG_API_KEY_';
 const ACTIVE_PROVIDER_KEY = 'CLSG_ACTIVE_LLM_PROVIDER';
 const ACTIVE_MODEL_PREFIX = 'CLSG_ACTIVE_MODEL_';
 
-// Protected key resolution: runtime decoded to preserve default key without triggering scanner leaks
-const resolveDefaultGeminiKey = (): string => {
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY) {
-    return String((import.meta as any).env.VITE_GEMINI_API_KEY).trim();
+/**
+ * Shared Gemini key: lives only on the server (Vercel env GEMINI_API_KEY) behind /api/llm/gemini.
+ * Nothing key-like is ever compiled into the bundle (no embedded default, no VITE_ variable).
+ * The probe result is cached; until it resolves the app behaves as "no shared key".
+ */
+export const GEMINI_PROXY_ENDPOINT = '/api/llm/gemini';
+let serverProxyConfigured = false;
+let proxyProbe: Promise<boolean> | null = null;
+
+export function probeGeminiProxy(): Promise<boolean> {
+  if (typeof window === 'undefined' || typeof fetch !== 'function') return Promise.resolve(false);
+  if (!proxyProbe) {
+    proxyProbe = fetch(GEMINI_PROXY_ENDPOINT, { method: 'GET' })
+      .then(async (r) => {
+        const ct = r.headers.get('content-type') || '';
+        if (!r.ok || !ct.includes('application/json')) return false; // SPA fallback / vite dev
+        const data = await r.json();
+        return Boolean(data?.configured);
+      })
+      .catch(() => false)
+      .then((ok) => {
+        serverProxyConfigured = ok;
+        return ok;
+      });
   }
-  try {
-    const b64 = 'QVEuQWI4Uk42STkxZ1BpTzNNZkh1cjluT2xkenFONmFRVGREbk9Ba012aUdQWE1ZaXE0WUE=';
-    if (typeof atob === 'function') {
-      return atob(b64);
-    }
-    if (typeof Buffer !== 'undefined') {
-      return Buffer.from(b64, 'base64').toString('utf-8');
-    }
-  } catch {
-    // fallback
-  }
-  return '';
-};
+  return proxyProbe;
+}
+
+export const isGeminiProxyConfigured = () => serverProxyConfigured;
+
+if (typeof window !== 'undefined') {
+  probeGeminiProxy();
+}
 
 export interface ActiveAIState {
   provider: LLMProviderType;
@@ -136,11 +151,12 @@ export const apiKeyService = {
     const p = provider || this.getActiveProvider();
     if (typeof window !== 'undefined' && window.localStorage) {
       const stored = window.localStorage.getItem(`${ACTIVE_MODEL_PREFIX}${p}`);
-      if (stored && stored.trim()) {
+      // Gemini 1.5 models are retired (404); migrate saved selections to the current default.
+      if (stored && stored.trim() && !/^gemini-1\.5/.test(stored.trim())) {
         return stored.trim();
       }
     }
-    return PROVIDERS[p]?.defaultModel || 'gemini-2.0-flash';
+    return PROVIDERS[p]?.defaultModel || 'gemini-3.6-flash';
   },
 
   setActiveModel(provider: LLMProviderType, model: string): void {
@@ -167,11 +183,9 @@ export const apiKeyService = {
       }
     }
 
-    if (p === 'gemini') {
-      if (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
-        return String(process.env.GEMINI_API_KEY).trim();
-      }
-      return resolveDefaultGeminiKey();
+    // Node test runs may pass a key through the environment; browsers never read one from the bundle.
+    if (p === 'gemini' && typeof window === 'undefined' && typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
+      return String(process.env.GEMINI_API_KEY).trim();
     }
 
     if (p === 'claude' && typeof process !== 'undefined' && process.env?.ANTHROPIC_API_KEY) {
@@ -244,7 +258,8 @@ export const apiKeyService = {
 
     try {
       if (provider === 'gemini') {
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+        // Key goes in the header only: query strings end up in logs and browser history.
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: {

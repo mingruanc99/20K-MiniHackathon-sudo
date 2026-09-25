@@ -153,17 +153,17 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="space-y-8">
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-paper-sheet border border-rule rounded-2xl p-6 shadow-xs">
         <div>
-          <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider">Bảng Điều Khiển Sư Phạm</span>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Quản Lý Bài Giảng Video</h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <span className="text-xs font-semibold text-print uppercase tracking-wider">Bảng Điều Khiển Sư Phạm</span>
+          <h1 className="text-2xl font-bold text-ink tracking-tight">Quản Lý Bài Giảng Video</h1>
+          <p className="text-xs text-ink-faint mt-1">
             Chuyển đổi bài giảng slide (.pptx, .pdf) thành cấu trúc trung gian CLSG-IR chuẩn hóa sư phạm cho AI Video.
           </p>
         </div>
         <Link
           to="/projects/new"
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm transition shrink-0"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-cover hover:bg-cover text-white font-semibold text-xs shadow-sm transition shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Tạo Bài Giảng Mới</span>
@@ -171,9 +171,9 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {errorMessage && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center justify-between">
+        <div className="p-4 rounded-xl bg-pen-soft border border-pen-line text-xs text-pen flex items-center justify-between">
           <span>{errorMessage}</span>
-          <button onClick={() => setErrorMessage('')} className="font-bold underline text-[11px]">Đóng</button>
+          <button onClick={() => setErrorMessage('')} className="font-bold underline text-xs">Đóng</button>
         </div>
       )}
 
@@ -186,8 +186,8 @@ export const DashboardPage: React.FC = () => {
         onDrop={handleDrop}
         className={`block relative border-2 border-dashed rounded-2xl p-8 transition text-center cursor-pointer ${
           isDragOver
-            ? 'border-indigo-600 bg-indigo-100/60 scale-[1.01] shadow-md ring-4 ring-indigo-100'
-            : 'border-indigo-300 hover:border-indigo-500 bg-gradient-to-b from-indigo-50/40 via-white to-indigo-50/20'
+            ? 'border-print bg-paper-band scale-[1.01] shadow-md ring-4 ring-rule-strong'
+            : 'border-rule-strong hover:border-print  bg-paper-band via-white '
         }`}
       >
         <input
@@ -203,25 +203,25 @@ export const DashboardPage: React.FC = () => {
         />
 
         <div className="max-w-xl mx-auto space-y-4 pointer-events-none">
-          <div className="w-16 h-16 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto shadow-xs">
+          <div className="w-16 h-16 rounded-2xl bg-paper-band text-print flex items-center justify-center mx-auto shadow-xs">
             {uploading ? (
-              <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+              <Loader2 className="w-8 h-8 animate-spin text-print" />
             ) : (
-              <UploadCloud className="w-8 h-8 text-indigo-600" />
+              <UploadCloud className="w-8 h-8 text-print" />
             )}
           </div>
 
           <div>
-            <h3 className="text-base font-bold text-slate-900">
+            <h3 className="text-base font-bold text-ink">
               {uploading ? uploadStatus : 'Kéo & Thả hoặc Bấm vào đây để Tải lên File Slide (.pptx, .pdf)'}
             </h3>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-ink-faint mt-1">
               Hỗ trợ <code>.pptx</code>, <code>.pdf</code>, <code>.docx</code>, <code>.md</code> — <strong>Không giới hạn số lượng slide</strong> (hỗ trợ từ 1 đến 100+ slides). Hệ thống sẽ đọc trực tiếp toàn bộ các slide/trang, trích xuất cấu trúc và phân tích sư phạm nhanh chóng.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2 pointer-events-auto">
-            <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm transition">
+            <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cover hover:bg-cover text-white font-semibold text-xs shadow-sm transition">
               <UploadCloud className="w-4 h-4" />
               <span>Duyệt file từ máy tính</span>
             </span>
@@ -229,9 +229,9 @@ export const DashboardPage: React.FC = () => {
             <Link
               to="/projects/new"
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-semibold text-xs transition"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-paper-band hover:bg-paper-band text-navy border border-rule-strong font-semibold text-xs transition"
             >
-              <Sparkles className="w-4 h-4 text-emerald-600" />
+              <Sparkles className="w-4 h-4 text-print" />
               <span>⚡ Hoặc chạy Demo CNN 1-Click (5 Slides)</span>
             </Link>
           </div>
@@ -240,92 +240,92 @@ export const DashboardPage: React.FC = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+        <div className="bg-paper-sheet border border-rule rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium">Tổng số dự án</span>
-            <BookOpen className="w-4 h-4 text-indigo-600" />
+            <span className="text-xs text-ink-faint font-medium">Tổng số dự án</span>
+            <BookOpen className="w-4 h-4 text-print" />
           </div>
-          <div className="text-2xl font-bold text-slate-900 mt-2">{projects.length}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Bài giảng sư phạm</div>
+          <div className="text-2xl font-bold text-navy mt-2">{projects.length}</div>
+          <div className="text-xs text-ink-faint mt-0.5">Bài giảng sư phạm</div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+        <div className="bg-paper-sheet border border-rule rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium">Đã xác thực CLSG-IR</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span className="text-xs text-ink-faint font-medium">Đã xác thực CLSG-IR</span>
+            <CheckCircle2 className="w-4 h-4 text-print" />
           </div>
-          <div className="text-2xl font-bold text-slate-900 mt-2">{verifiedCount}</div>
-          <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Đạt chuẩn sư phạm & DAR-P</div>
+          <div className="text-2xl font-bold text-navy mt-2">{verifiedCount}</div>
+          <div className="text-xs text-print font-medium mt-0.5">Đạt chuẩn sư phạm & DAR-P</div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+        <div className="bg-paper-sheet border border-rule rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium">Hàng đợi xử lý</span>
-            <Clock className="w-4 h-4 text-blue-600" />
+            <span className="text-xs text-ink-faint font-medium">Hàng đợi xử lý</span>
+            <Clock className="w-4 h-4 text-print" />
           </div>
-          <div className="text-2xl font-bold text-slate-900 mt-2">{processingCount}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Tác vụ đang chạy</div>
+          <div className="text-2xl font-bold text-navy mt-2">{processingCount}</div>
+          <div className="text-xs text-ink-faint mt-0.5">Tác vụ đang chạy</div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+        <div className="bg-paper-sheet border border-rule rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500 font-medium">Tổng thời lượng video</span>
-            <Video className="w-4 h-4 text-purple-600" />
+            <span className="text-xs text-ink-faint font-medium">Tổng thời lượng video</span>
+            <Video className="w-4 h-4 text-print" />
           </div>
-          <div className="text-2xl font-bold text-slate-900 mt-2">{Math.round(totalSeconds / 60)} phút</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Thời lượng video tổng hợp</div>
+          <div className="text-2xl font-bold text-navy mt-2">{Math.round(totalSeconds / 60)} phút</div>
+          <div className="text-xs text-ink-faint mt-0.5">Thời lượng video tổng hợp</div>
         </div>
       </div>
 
       {/* Projects List */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Danh Sách Bài Giảng Gần Đây</h2>
-          <span className="text-xs text-slate-400">Tìm thấy {projects.length} bài giảng</span>
+      <div className="bg-paper-sheet border border-rule rounded-2xl shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-rule flex items-center justify-between">
+          <h2 className="text-sm font-bold text-ink uppercase tracking-wider">Danh Sách Bài Giảng Gần Đây</h2>
+          <span className="text-xs text-ink-faint">Tìm thấy {projects.length} bài giảng</span>
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-xs text-slate-500">Đang tải danh sách bài giảng...</div>
+          <div className="p-8 text-center text-xs text-ink-faint">Đang tải danh sách bài giảng...</div>
         ) : projects.length === 0 ? (
           <div className="p-12 text-center space-y-3">
-            <BookOpen className="w-10 h-10 text-slate-300 mx-auto" />
-            <div className="text-sm font-semibold text-slate-700">Chưa có bài giảng nào</div>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+            <BookOpen className="w-10 h-10 text-rule-strong mx-auto" />
+            <div className="text-sm font-semibold text-ink-soft">Chưa có bài giảng nào</div>
+            <p className="text-xs text-ink-faint max-w-sm mx-auto">
               Bắt đầu bằng cách kéo thả file bài giảng (.pptx, .pdf) hoặc bấm nút trải nghiệm Demo CNN 1-Click.
             </p>
             <Link
               to="/projects/new"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition shadow-xs"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-cover text-white text-xs font-semibold hover:bg-cover transition shadow-xs"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Tạo bài giảng đầu tiên</span>
             </Link>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-rule">
             {projects.map((p) => (
               <div
                 key={p.projectId}
                 onClick={() => navigate(`/projects/${p.projectId}`)}
-                className="p-5 hover:bg-slate-50/80 transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
+                className="p-5 hover:bg-paper-band transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
               >
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                    <span className="text-[11px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-paper-band text-ink-soft">
                       {p.source?.fileType || 'pptx'}
                     </span>
-                    <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition">
+                    <h3 className="text-sm font-bold text-ink group-hover:text-print transition">
                       {p.title}
                     </h3>
                     <StatusBadge status={p.status} />
                   </div>
-                  <p className="text-xs text-slate-500 line-clamp-1">{p.description || 'Dự án bài giảng sư phạm'}</p>
+                  <p className="text-xs text-ink-faint line-clamp-1">{p.description || 'Dự án bài giảng sư phạm'}</p>
                 </div>
 
-                <div className="flex items-center gap-6 text-xs text-slate-500 shrink-0">
+                <div className="flex items-center gap-6 text-xs text-ink-faint shrink-0">
                   <div className="text-right hidden md:block">
-                    <div className="font-mono text-slate-700 font-semibold">{p.configuration?.targetDurationSeconds || 180}s ({Math.round((p.configuration?.targetDurationSeconds || 180) / 60)} phút)</div>
-                    <div className="text-[10px] text-slate-400 capitalize">
+                    <div className="font-mono text-ink-soft font-semibold">{p.configuration?.targetDurationSeconds || 180}s ({Math.round((p.configuration?.targetDurationSeconds || 180) / 60)} phút)</div>
+                    <div className="text-[11px] text-ink-faint capitalize">
                       {p.configuration?.learnerLevel === 'beginner' ? 'Mới bắt đầu' : p.configuration?.learnerLevel === 'undergraduate' ? 'Đại học' : p.configuration?.learnerLevel === 'graduate' ? 'Sau đại học' : 'Chuyên nghiệp'}
                     </div>
                   </div>
@@ -334,11 +334,11 @@ export const DashboardPage: React.FC = () => {
                     <button
                       onClick={(e) => handleDelete(e, p.projectId)}
                       title="Xoá bài giảng"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                      className="p-1.5 rounded-lg text-ink-faint hover:text-pen hover:bg-pen-soft transition"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
-                    <span className="flex items-center gap-1 font-semibold text-indigo-600 text-xs group-hover:translate-x-0.5 transition">
+                    <span className="flex items-center gap-1 font-semibold text-print text-xs group-hover:translate-x-0.5 transition">
                       Mở thiết kế <ArrowRight className="w-3.5 h-3.5" />
                     </span>
                   </div>

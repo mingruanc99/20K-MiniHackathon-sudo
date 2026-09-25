@@ -80,16 +80,16 @@ export const AdminLangfusePage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center space-x-2">
-              <Flame className="w-5 h-5 text-orange-500" />
+            <h1 className="text-xl font-bold text-ink tracking-tight flex items-center space-x-2">
+              <Flame className="w-5 h-5 text-pen" />
               <span>Langfuse AI Observability Hub</span>
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-paper-band text-print border border-rule-strong">
+              <span className="w-1.5 h-1.5 rounded-full bg-print animate-pulse" />
               Live Cloud Connected
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-ink-faint mt-1">
             Trung tâm kết nối và giám sát dấu vết AI (Traces, Generations, Latency, Scores) theo kiến trúc SDK Langfuse chính thống từ các bài giảng thực tế.
           </p>
         </div>
@@ -98,57 +98,57 @@ export const AdminLangfusePage: React.FC = () => {
           <button
             onClick={handleSendTestTrace}
             disabled={testSending}
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-orange-50 border border-orange-200 text-xs font-medium text-orange-700 hover:bg-orange-100 rounded-xl transition shadow-xs disabled:opacity-50"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-pen-soft border border-pen-line text-xs font-medium text-pen hover:bg-pen-soft rounded-xl transition shadow-xs disabled:opacity-50"
             title="Gửi một sự kiện trace mẫu lên Langfuse Cloud để kiểm tra kết nối API"
           >
-            <Send className={`w-3.5 h-3.5 text-orange-600 ${testSending ? 'animate-bounce' : ''}`} />
+            <Send className={`w-3.5 h-3.5 text-pen ${testSending ? 'animate-pulse' : ''}`} />
             <span>{testSending ? 'Đang gửi...' : 'Gửi Trace Test'}</span>
           </button>
           <button
             onClick={refresh}
             disabled={loading}
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition shadow-xs disabled:opacity-50"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-paper-sheet border border-rule text-xs font-medium text-ink-soft hover:bg-paper-band rounded-xl transition shadow-xs disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-ink-faint ${loading ? 'animate-spin text-print' : ''}`} />
             <span>{loading ? 'Đang đồng bộ...' : 'Làm Mới'}</span>
           </button>
           <a
             href={langfuse.summary.projectUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center space-x-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl transition shadow-xs self-start sm:self-auto"
+            className="inline-flex items-center space-x-2 px-4 py-2 bg-cover hover:bg-cover-deep text-white text-xs font-semibold rounded-xl transition shadow-xs self-start sm:self-auto"
           >
             <span>Open Langfuse Cloud</span>
-            <ArrowUpRight className="w-4 h-4 text-orange-400" />
+            <ArrowUpRight className="w-4 h-4 text-pen-line" />
           </a>
         </div>
       </div>
 
       {/* Success Notification */}
       {testSuccess && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center space-x-2 animate-in fade-in duration-300">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+        <div className="p-3 bg-paper-band border border-rule-strong rounded-xl text-xs text-print flex items-center space-x-2 animate-in fade-in duration-300">
+          <CheckCircle2 className="w-4 h-4 text-print shrink-0" />
           <span className="font-medium">{testSuccess}</span>
         </div>
       )}
 
       {/* Live Cloud Project Credentials & Connection Card */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-5 shadow-sm border border-slate-700/60 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-700/50">
+      <div className=" bg-cover   text-white rounded-2xl p-5 shadow-sm border border-cover-deep/60 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-cover-deep/50">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-400/30 flex items-center justify-center text-orange-400">
+            <div className="w-10 h-10 rounded-xl bg-pen border border-pen/30 flex items-center justify-center text-pen-line">
               <Cloud className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-bold text-sm text-white tracking-wide">{projectConfig.orgName} / {projectConfig.projectName}</span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-print text-print-soft border border-print/30">
                   Cloud Live
                 </span>
               </div>
-              <div className="text-[11px] text-slate-300 font-mono mt-0.5 flex items-center space-x-2">
+              <div className="text-xs text-paper/80 font-mono mt-0.5 flex items-center space-x-2">
                 <span>Project ID:</span>
-                <span className="text-orange-300">{projectConfig.projectId}</span>
+                <span className="text-pen-line">{projectConfig.projectId}</span>
                 <span>•</span>
                 <span>Host: {projectConfig.baseUrl}</span>
               </div>
@@ -160,170 +160,170 @@ export const AdminLangfusePage: React.FC = () => {
               href={projectConfig.tracesUrl}
               target="_blank"
               rel="noreferrer"
-              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium inline-flex items-center space-x-1.5 transition border border-white/10"
+              className="px-3 py-1.5 bg-cover-deep hover:bg-cover-deep text-ink rounded-lg text-xs font-medium inline-flex items-center space-x-1.5 transition border border-white/10"
             >
               <span>Xem Traces Cloud</span>
-              <ArrowUpRight className="w-3.5 h-3.5 text-orange-400" />
+              <ArrowUpRight className="w-3.5 h-3.5 text-pen" />
             </a>
             <a
               href={projectConfig.generationsUrl}
               target="_blank"
               rel="noreferrer"
-              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium inline-flex items-center space-x-1.5 transition border border-white/10"
+              className="px-3 py-1.5 bg-cover-deep hover:bg-cover-deep text-ink rounded-lg text-xs font-medium inline-flex items-center space-x-1.5 transition border border-white/10"
             >
               <span>Xem Generations</span>
-              <ArrowUpRight className="w-3.5 h-3.5 text-orange-400" />
+              <ArrowUpRight className="w-3.5 h-3.5 text-pen" />
             </a>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-          <div className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-1">
-            <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold flex items-center space-x-1">
-              <Key className="w-3 h-3 text-emerald-400" />
+          <div className="p-3 bg-cover-deep rounded-xl border border-white/10 space-y-1">
+            <div className="text-[11px] text-ink-faint uppercase tracking-wider font-semibold flex items-center space-x-1">
+              <Key className="w-3 h-3 text-print-soft" />
               <span>Public Key (Client & Telemetry)</span>
             </div>
-            <div className="font-mono text-emerald-300 text-[11px] select-all truncate">{projectConfig.publicKey}</div>
+            <div className="font-mono text-print-soft text-xs select-all truncate">{projectConfig.publicKey}</div>
           </div>
 
-          <div className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-1">
-            <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold flex items-center space-x-1">
-              <Shield className="w-3 h-3 text-amber-400" />
+          <div className="p-3 bg-cover-deep rounded-xl border border-white/10 space-y-1">
+            <div className="text-[11px] text-ink-faint uppercase tracking-wider font-semibold flex items-center space-x-1">
+              <Shield className="w-3 h-3 text-pen" />
               <span>Secret Key (Ingestion Auth)</span>
             </div>
-            <div className="font-mono text-amber-300 text-[11px] select-all truncate">{projectConfig.secretKeyMasked}</div>
+            <div className="font-mono text-pen text-xs select-all truncate">{projectConfig.secretKeyMasked}</div>
           </div>
 
-          <div className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-1">
-            <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold flex items-center space-x-1">
-              <Database className="w-3 h-3 text-sky-400" />
+          <div className="p-3 bg-cover-deep rounded-xl border border-white/10 space-y-1">
+            <div className="text-[11px] text-ink-faint uppercase tracking-wider font-semibold flex items-center space-x-1">
+              <Database className="w-3 h-3 text-print-soft" />
               <span>Cấu Hình Môi Trường (.env)</span>
             </div>
-            <div className="font-mono text-sky-300 text-[11px] truncate">LANGFUSE_SECRET_KEY / PUBLIC_KEY [OK]</div>
+            <div className="font-mono text-navy text-xs truncate">LANGFUSE_SECRET_KEY / PUBLIC_KEY [OK]</div>
           </div>
         </div>
       </div>
 
       {/* Summary KPI Bar */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[11px] font-medium text-slate-500">Total Traces</span>
-          <div className="text-xl font-bold font-mono text-slate-900">{langfuse.summary.totalTraces.toLocaleString()}</div>
-          <span className="text-[10px] text-emerald-600 font-medium">100% Tracked</span>
+        <div className="bg-paper-sheet p-4 rounded-xl border border-rule shadow-xs space-y-1">
+          <span className="text-xs font-medium text-ink-faint">Total Traces</span>
+          <div className="text-xl font-bold font-mono text-navy">{langfuse.summary.totalTraces.toLocaleString()}</div>
+          <span className="text-[11px] text-print font-medium">100% Tracked</span>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[11px] font-medium text-slate-500">Generations Spans</span>
-          <div className="text-xl font-bold font-mono text-slate-900">{langfuse.summary.totalGenerations.toLocaleString()}</div>
-          <span className="text-[10px] text-blue-600 font-medium">2.0 spans / trace</span>
+        <div className="bg-paper-sheet p-4 rounded-xl border border-rule shadow-xs space-y-1">
+          <span className="text-xs font-medium text-ink-faint">Generations Spans</span>
+          <div className="text-xl font-bold font-mono text-navy">{langfuse.summary.totalGenerations.toLocaleString()}</div>
+          <span className="text-[11px] text-print font-medium">2.0 spans / trace</span>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[11px] font-medium text-slate-500">Total Telemetry Cost</span>
-          <div className="text-xl font-bold font-mono text-emerald-600">${langfuse.summary.totalCost.toFixed(2)}</div>
-          <span className="text-[10px] text-slate-400">Gemini Pro & Flash</span>
+        <div className="bg-paper-sheet p-4 rounded-xl border border-rule shadow-xs space-y-1">
+          <span className="text-xs font-medium text-ink-faint">Total Telemetry Cost</span>
+          <div className="text-xl font-bold font-mono text-navy">${langfuse.summary.totalCost.toFixed(2)}</div>
+          <span className="text-[11px] text-ink-faint">Gemini Pro & Flash</span>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[11px] font-medium text-slate-500">Avg Trace Latency</span>
-          <div className="text-xl font-bold font-mono text-slate-900">{langfuse.summary.avgLatencyMs}ms</div>
-          <span className="text-[10px] text-slate-400">E2E Generation</span>
+        <div className="bg-paper-sheet p-4 rounded-xl border border-rule shadow-xs space-y-1">
+          <span className="text-xs font-medium text-ink-faint">Avg Trace Latency</span>
+          <div className="text-xl font-bold font-mono text-navy">{langfuse.summary.avgLatencyMs}ms</div>
+          <span className="text-[11px] text-ink-faint">E2E Generation</span>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-1">
-          <span className="text-[11px] font-medium text-slate-500">Quality Score</span>
-          <div className="text-xl font-bold font-mono text-blue-700">{langfuse.summary.qualityScore}/100</div>
-          <span className="text-[10px] text-emerald-600 font-medium">Zero-Leak Guarded</span>
+        <div className="bg-paper-sheet p-4 rounded-xl border border-rule shadow-xs space-y-1">
+          <span className="text-xs font-medium text-ink-faint">Quality Score</span>
+          <div className="text-xl font-bold font-mono text-navy">{langfuse.summary.qualityScore}/100</div>
+          <span className="text-[11px] text-print font-medium">Zero-Leak Guarded</span>
         </div>
       </div>
 
       {/* Architecture & Trace Hierarchy Explanation */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
+      <div className="bg-paper-sheet rounded-2xl border border-rule shadow-xs p-5 space-y-4">
         <div>
-          <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-1.5">
-            <Workflow className="w-4 h-4 text-blue-600" />
+          <h2 className="text-xs font-bold text-ink uppercase tracking-wider flex items-center space-x-1.5">
+            <Workflow className="w-4 h-4 text-print" />
             <span>Kiến Trúc Dữ Liệu Phân Cấp (Hierarchical Trace Data Model)</span>
           </h2>
-          <p className="text-[11px] text-slate-400 mt-0.5">
+          <p className="text-xs text-ink-faint mt-0.5">
             Cấu trúc cây dấu vết tuân thủ chuẩn phân cấp Langfuse v2, tách biệt 100% siêu dữ liệu kiểm thử khỏi nội dung giảng dạy.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-            <div className="flex items-center space-x-1.5 font-bold text-slate-800">
-              <span className="w-5 h-5 rounded bg-blue-100 text-blue-700 flex items-center justify-center font-mono text-[10px]">1</span>
+          <div className="p-3 bg-paper-band border border-rule rounded-xl space-y-1.5">
+            <div className="flex items-center space-x-1.5 font-bold text-ink">
+              <span className="w-5 h-5 rounded bg-paper-band text-print flex items-center justify-center font-mono text-[11px]">1</span>
               <span>Session Level</span>
             </div>
-            <p className="text-[11px] text-slate-500">
-              Đại diện cho phiên làm việc tạo bài giảng của người dùng. Chứa <code className="text-blue-600 font-mono text-[10px]">user_id</code>, <code className="text-blue-600 font-mono text-[10px]">session_id</code>.
+            <p className="text-xs text-ink-faint">
+              Đại diện cho phiên làm việc tạo bài giảng của người dùng. Chứa <code className="text-print font-mono text-[11px]">user_id</code>, <code className="text-print font-mono text-[11px]">session_id</code>.
             </p>
           </div>
 
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-            <div className="flex items-center space-x-1.5 font-bold text-slate-800">
-              <span className="w-5 h-5 rounded bg-indigo-100 text-indigo-700 flex items-center justify-center font-mono text-[10px]">2</span>
+          <div className="p-3 bg-paper-band border border-rule rounded-xl space-y-1.5">
+            <div className="flex items-center space-x-1.5 font-bold text-ink">
+              <span className="w-5 h-5 rounded bg-paper-band text-print flex items-center justify-center font-mono text-[11px]">2</span>
               <span>Lesson Generation Trace</span>
             </div>
-            <p className="text-[11px] text-slate-500">
-              Root trace bao quát toàn bộ bài giảng. Lưu trữ <code className="text-indigo-600 font-mono text-[10px]">lesson_id</code>, <code className="text-indigo-600 font-mono text-[10px]">blueprint_id</code>, tổng thời lượng DAR-P.
+            <p className="text-xs text-ink-faint">
+              Root trace bao quát toàn bộ bài giảng. Lưu trữ <code className="text-print font-mono text-[11px]">lesson_id</code>, <code className="text-print font-mono text-[11px]">blueprint_id</code>, tổng thời lượng DAR-P.
             </p>
           </div>
 
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-            <div className="flex items-center space-x-1.5 font-bold text-slate-800">
-              <span className="w-5 h-5 rounded bg-sky-100 text-sky-700 flex items-center justify-center font-mono text-[10px]">3</span>
+          <div className="p-3 bg-paper-band border border-rule rounded-xl space-y-1.5">
+            <div className="flex items-center space-x-1.5 font-bold text-ink">
+              <span className="w-5 h-5 rounded bg-paper-band text-print flex items-center justify-center font-mono text-[11px]">3</span>
               <span>Section Generation Spans</span>
             </div>
-            <p className="text-[11px] text-slate-500">
-              Nhánh con theo từng phân cảnh (<code className="text-sky-600 font-mono text-[10px]">S1, S2...</code>). Ghi nhận <code className="text-sky-600 font-mono text-[10px]">slide_role</code>, <code className="text-sky-600 font-mono text-[10px]">prompt_version</code>.
+            <p className="text-xs text-ink-faint">
+              Nhánh con theo từng phân cảnh (<code className="text-print font-mono text-[11px]">S1, S2...</code>). Ghi nhận <code className="text-print font-mono text-[11px]">slide_role</code>, <code className="text-print font-mono text-[11px]">prompt_version</code>.
             </p>
           </div>
 
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-            <div className="flex items-center space-x-1.5 font-bold text-slate-800">
-              <span className="w-5 h-5 rounded bg-emerald-100 text-emerald-700 flex items-center justify-center font-mono text-[10px]">4</span>
+          <div className="p-3 bg-paper-band border border-rule rounded-xl space-y-1.5">
+            <div className="flex items-center space-x-1.5 font-bold text-ink">
+              <span className="w-5 h-5 rounded bg-paper-band text-print flex items-center justify-center font-mono text-[11px]">4</span>
               <span>Purifier & Eval Scores</span>
             </div>
-            <p className="text-[11px] text-slate-500">
+            <p className="text-xs text-ink-faint">
               Chấm điểm tự động và gắn nhãn xử lý (Purification, Zero-Leak validation, DAR-P accuracy, LLM-as-a-judge score).
             </p>
           </div>
         </div>
 
-        <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start space-x-2">
-          <Shield className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <p className="leading-relaxed text-[11px]">
-            <strong>Nguyên tắc bảo vệ bảo mật:</strong> Secret key của Langfuse (<code className="font-mono text-[10px]">LANGFUSE_SECRET_KEY</code>) được giữ hoàn toàn ở backend/serverless layer. Frontend chỉ giao tiếp qua deep-links và telemetry endpoint an toàn.
+        <div className="p-3 bg-pen-soft border border-pen-line rounded-xl text-xs text-pen flex items-start space-x-2">
+          <Shield className="w-4 h-4 text-pen shrink-0 mt-0.5" />
+          <p className="leading-relaxed text-xs">
+            <strong>Nguyên tắc bảo vệ bảo mật:</strong> Secret key của Langfuse (<code className="font-mono text-[11px]">LANGFUSE_SECRET_KEY</code>) được giữ hoàn toàn ở backend/serverless layer. Frontend chỉ giao tiếp qua deep-links và telemetry endpoint an toàn.
           </p>
         </div>
       </div>
 
       {/* Live Traces Table with Deep Links */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
+      <div className="bg-paper-sheet rounded-2xl border border-rule shadow-xs p-5 space-y-4">
         <div className="flex justify-between items-center">
           <div>
-            <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+            <h2 className="text-xs font-bold text-ink uppercase tracking-wider">
               Danh Sách Traces Hoạt Động Gần Đây (Live Langfuse Traces)
             </h2>
-            <p className="text-[11px] text-slate-400">Deep link trực tiếp đến trang kiểm tra chi tiết trên Langfuse Cloud</p>
+            <p className="text-xs text-ink-faint">Deep link trực tiếp đến trang kiểm tra chi tiết trên Langfuse Cloud</p>
           </div>
 
           <a
             href={langfuse.summary.projectUrl}
             target="_blank"
             rel="noreferrer"
-            className="text-xs text-blue-600 hover:underline font-semibold inline-flex items-center space-x-1"
+            className="text-xs text-navy hover:underline font-semibold inline-flex items-center space-x-1"
           >
             <span>Mở toàn bộ danh sách trong Langfuse</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
           </a>
         </div>
 
-        <div className="overflow-x-auto border border-slate-100 rounded-xl">
+        <div className="overflow-x-auto border border-rule rounded-xl">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
+              <tr className="bg-paper-band border-b border-rule text-ink-faint font-semibold uppercase text-[11px] tracking-wider">
                 <th className="py-3 px-3">Trace ID</th>
                 <th className="py-3 px-3">Tên Tác Vụ</th>
                 <th className="py-3 px-3">Session & User</th>
@@ -334,27 +334,27 @@ export const AdminLangfusePage: React.FC = () => {
                 <th className="py-3 px-3 text-right">Deep Link</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-rule">
               {langfuse.traces.map((trace) => (
-                <tr key={trace.traceId} className="hover:bg-slate-50/60 transition">
-                  <td className="py-3 px-3 font-mono font-semibold text-slate-700 whitespace-nowrap">
+                <tr key={trace.traceId} className="hover:bg-paper-band transition">
+                  <td className="py-3 px-3 font-mono font-semibold text-ink-soft whitespace-nowrap">
                     {trace.traceId}
                   </td>
-                  <td className="py-3 px-3 font-medium text-slate-800">
+                  <td className="py-3 px-3 font-medium text-ink">
                     <div>{trace.name}</div>
-                    <div className="text-[10px] text-slate-400 font-mono">{trace.timestamp}</div>
+                    <div className="text-[11px] text-ink-faint font-mono">{trace.timestamp}</div>
                   </td>
                   <td className="py-3 px-3">
-                    <div className="font-mono text-[11px] text-slate-700">{trace.sessionId}</div>
-                    <div className="text-[10px] text-slate-400 truncate max-w-[150px]">{trace.userId}</div>
+                    <div className="font-mono text-xs text-ink-soft">{trace.sessionId}</div>
+                    <div className="text-[11px] text-ink-faint truncate max-w-[150px]">{trace.userId}</div>
                   </td>
-                  <td className="py-3 px-3 whitespace-nowrap font-mono text-[11px] text-slate-700">
+                  <td className="py-3 px-3 whitespace-nowrap font-mono text-xs text-ink-soft">
                     {trace.model}
                   </td>
-                  <td className="py-3 px-3 whitespace-nowrap font-mono text-slate-700">
+                  <td className="py-3 px-3 whitespace-nowrap font-mono text-ink-soft">
                     {trace.latencyMs}ms
                   </td>
-                  <td className="py-3 px-3 whitespace-nowrap font-mono text-emerald-600 font-semibold">
+                  <td className="py-3 px-3 whitespace-nowrap font-mono text-print font-semibold">
                     ${trace.totalCost.toFixed(4)}
                   </td>
                   <td className="py-3 px-3">
@@ -362,7 +362,7 @@ export const AdminLangfusePage: React.FC = () => {
                       {trace.tags.map((tag) => (
                         <span
                           key={tag}
-                          className="px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded text-[9px] font-mono"
+                          className="px-1.5 py-0.2 bg-paper-band text-ink-soft rounded text-[11px] font-mono"
                         >
                           {tag}
                         </span>
@@ -374,11 +374,11 @@ export const AdminLangfusePage: React.FC = () => {
                       href={trace.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center space-x-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold transition"
+                      className="inline-flex items-center space-x-1 px-2.5 py-1 bg-paper-band hover:bg-paper-band text-navy rounded-lg text-xs font-semibold transition"
                     >
-                      <Flame className="w-3.5 h-3.5 text-blue-600" />
+                      <Flame className="w-3.5 h-3.5 text-print" />
                       <span>Trace</span>
-                      <ArrowUpRight className="w-3 h-3 text-blue-400" />
+                      <ArrowUpRight className="w-3 h-3 text-print-soft" />
                     </a>
                   </td>
                 </tr>

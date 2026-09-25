@@ -56,20 +56,8 @@ export interface RealTTSRecord {
 
 type TelemetryListener = () => void;
 
-const encodeBasicAuth = (user: string, pass: string): string => {
-  if (typeof btoa === 'function') {
-    return btoa(`${user}:${pass}`);
-  }
-  if (typeof Buffer !== 'undefined') {
-    return Buffer.from(`${user}:${pass}`).toString('base64');
-  }
-  return '';
-};
-
 export class AdminTelemetryService {
   private readonly DEFAULT_PROJECT_ID = 'cmucynwfb02llad0dhxexgdr2';
-  private readonly DEFAULT_PUBLIC_KEY = 'pk-lf-3aa955e0-06df-4694-86be-4421d3259363';
-  private readonly DEFAULT_SECRET_KEY = 'sk-lf-c815cfe1-df80-4287-bc2a-f5ee46e4e410';
   private readonly DEFAULT_BASE_URL = 'https://cloud.langfuse.com';
 
   public get LANGFUSE_PROJECT_ID(): string {
@@ -81,14 +69,11 @@ export class AdminTelemetryService {
   public get LANGFUSE_PUBLIC_KEY(): string {
     const fromMeta = typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_LANGFUSE_PUBLIC_KEY;
     const fromProcess = typeof process !== 'undefined' && process.env?.LANGFUSE_PUBLIC_KEY;
-    return fromMeta || fromProcess || this.DEFAULT_PUBLIC_KEY;
+    return fromMeta || fromProcess || '';
   }
 
-  public get LANGFUSE_SECRET_KEY(): string {
-    const fromMeta = typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_LANGFUSE_SECRET_KEY;
-    const fromProcess = typeof process !== 'undefined' && process.env?.LANGFUSE_SECRET_KEY;
-    return fromMeta || fromProcess || this.DEFAULT_SECRET_KEY;
-  }
+  /** The Langfuse secret key never ships to the browser: ingestion goes through this serverless route. */
+  private readonly LANGFUSE_INGEST_ENDPOINT = '/api/telemetry/langfuse';
 
   public get LANGFUSE_BASE_URL(): string {
     return `https://cloud.langfuse.com/project/${this.LANGFUSE_PROJECT_ID}`;
@@ -154,7 +139,14 @@ export class AdminTelemetryService {
       // 2. AI Calls
       const rawCalls = localStorage.getItem(this.STORAGE_AI_CALLS);
       if (rawCalls) {
-        this.cachedAICalls = JSON.parse(rawCalls);
+        const parsed: RealAICallRecord[] = JSON.parse(rawCalls);
+        // Drop records fabricated by an older syncRealData() that synthesised
+        // calls from project executionLogs (ids `log_<projectId>_<n>`, fixed
+        // 850/420 tokens, $0.00019). They were never real measurements.
+        this.cachedAICalls = parsed.filter((c) => !this.isFabricatedCall(c));
+        if (this.cachedAICalls.length !== parsed.length) {
+          this.saveAICallsToStorage();
+        }
       }
 
       // 3. Errors
@@ -217,13 +209,13 @@ export class AdminTelemetryService {
 
   private saveAICallsToStorage() {
     if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem(this.STORAGE_AI_CALLS, JSON.stringify(this.cachedAICalls.slice(-200)));
+      localStorage.setItem(this.STORAGE_AI_CALLS, JSON.stringify(this.cachedAICalls.slice(0, 200)));
     }
   }
 
   private saveErrorsToStorage() {
     if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem(this.STORAGE_ERRORS, JSON.stringify(this.cachedErrors.slice(-100)));
+      localStorage.setItem(this.STORAGE_ERRORS, JSON.stringify(this.cachedErrors.slice(0, 100)));
     }
   }
 
@@ -231,6 +223,154 @@ export class AdminTelemetryService {
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.setItem(this.STORAGE_TTS, JSON.stringify(this.cachedTTS.slice(-100)));
     }
+  }
+
+  // --------------------------------------------------------------------------
+  // Helpers for honest aggregation (no invented numbers)
+  // --------------------------------------------------------------------------
+
+  /** Builtin demo lesson seeded by projectService; never counted as a real lesson. */
+  private readonly DEMO_PROJECT_ID = 'proj_demo_cnn_001';
+
+  private isFabricatedCall(c: RealAICallRecord): boolean {
+    return (
+      typeof c?.id === 'string' &&
+      c.id.startsWith('log_') &&
+      c.promptTokens === 850 &&
+      c.completionTokens === 420
+    );
+  }
+
+  /** Projects that count toward aggregates (demo project excluded). */
+  private realProjects(): Project[] {
+    return this.cachedProjects.filter((p) => p.projectId !== this.DEMO_PROJECT_ID);
+  }
+
+  /** Converts a 0..1 (or already 0..100) score to a 0..100 value with 1 decimal. */
+  private toPct(v: number): number {
+    const pct = v <= 1 ? v * 100 : v;
+    return Math.round(pct * 10) / 10;
+  }
+
+  /** Real overall quality score of a project (0..100) or null when not evaluated. */
+  private projectQuality(p: Project): number | null {
+    const raw = p.qualityReport?.overall_quality_score ?? (p.qualityReport as any)?.overall_score;
+    return typeof raw === 'number' && Number.isFinite(raw) ? this.toPct(raw) : null;
+  }
+
+  private round(v: number, decimals: number): number {
+    const f = Math.pow(10, decimals);
+    return Math.round(v * f) / f;
+  }
+
+  private callsForLesson(lessonId: string): RealAICallRecord[] {
+    return this.cachedAICalls.filter((c) => c.lessonId === lessonId);
+  }
+
+  private mostCommonModel(calls: RealAICallRecord[]): string {
+    if (calls.length === 0) return '—';
+    const counts = new Map<string, number>();
+    calls.forEach((c) => counts.set(c.model || 'unknown', (counts.get(c.model || 'unknown') || 0) + 1));
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0][0];
+  }
+
+  /**
+   * Average real overall quality (0..100) across evaluated, non-demo projects;
+   * null when no project has a quality report yet.
+   */
+  public getAverageQualityScore(): number | null {
+    const scores = this.realProjects()
+      .map((p) => this.projectQuality(p))
+      .filter((s): s is number => s !== null);
+    if (scores.length === 0) return null;
+    return this.round(scores.reduce((a, b) => a + b, 0) / scores.length, 1);
+  }
+
+  /** Real per-project overall quality scores ordered by updatedAt (oldest first). */
+  public getQualityTrend(limit = 12): { label: string; value: number }[] {
+    return this.realProjects()
+      .map((p) => ({ p, q: this.projectQuality(p) }))
+      .filter((x): x is { p: Project; q: number } => x.q !== null)
+      .sort((a, b) => new Date(a.p.updatedAt).getTime() - new Date(b.p.updatedAt).getTime())
+      .slice(-limit)
+      .map(({ p, q }) => ({
+        label: `${p.title.slice(0, 18)}${p.title.length > 18 ? '…' : ''} (${new Date(p.updatedAt).toLocaleDateString('vi-VN')})`,
+        value: q
+      }));
+  }
+
+  /** Time buckets covering the selected window, ending now. */
+  private buildBuckets(timeFilter: TimeFilter): { start: number; end: number; label: string }[] {
+    const now = new Date();
+    const HOUR = 3600 * 1000;
+    const DAY = 24 * HOUR;
+    let count: number;
+    let size: number;
+    let firstStart: number;
+    if (timeFilter === 'today') {
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      count = 12;
+      size = 2 * HOUR;
+      firstStart = startOfDay;
+    } else {
+      const days = timeFilter === '7d' ? 7 : timeFilter === '30d' ? 30 : 90;
+      count = timeFilter === '7d' ? 7 : timeFilter === '30d' ? 15 : 18;
+      size = (days / count) * DAY;
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + DAY;
+      firstStart = endOfDay - days * DAY;
+    }
+    return Array.from({ length: count }, (_, i) => {
+      const start = firstStart + i * size;
+      const d = new Date(start);
+      const label = timeFilter === 'today'
+        ? `${d.getHours()}:00`
+        : `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+      return { start, end: start + size, label };
+    });
+  }
+
+  private inBucket(ts: string | undefined, b: { start: number; end: number }): boolean {
+    if (!ts) return false;
+    const t = new Date(ts).getTime();
+    return Number.isFinite(t) && t >= b.start && t < b.end;
+  }
+
+  /**
+   * Real time-bucketed AI call series (requests, cost, avg latency, error rate).
+   * Empty arrays when there are no recorded calls in the window.
+   */
+  public getAILlmTimeSeries(timeFilter: TimeFilter = '7d') {
+    const buckets = this.buildBuckets(timeFilter);
+    const perBucket = buckets.map((b) => ({ b, calls: this.cachedAICalls.filter((c) => this.inBucket(c.timestamp, b)) }));
+    const hasAny = perBucket.some((x) => x.calls.length > 0);
+    if (!hasAny) {
+      return { requests: [], cost: [], latency: [], errorRate: [] } as {
+        requests: { label: string; value: number }[];
+        cost: { label: string; value: number }[];
+        latency: { label: string; value: number }[];
+        errorRate: { label: string; value: number }[];
+      };
+    }
+    return {
+      requests: perBucket.map(({ b, calls }) => ({ label: b.label, value: calls.length })),
+      cost: perBucket.map(({ b, calls }) => ({
+        label: b.label,
+        value: this.round(calls.reduce((s, c) => s + (c.costUsd || 0), 0), 4)
+      })),
+      // Latency only for buckets that actually had calls (no invented zeros).
+      latency: perBucket
+        .filter(({ calls }) => calls.length > 0)
+        .map(({ b, calls }) => ({
+          label: b.label,
+          value: Math.round(calls.reduce((s, c) => s + (c.latencyMs || 0), 0) / calls.length)
+        })),
+      errorRate: perBucket.map(({ b, calls }) => ({
+        label: b.label,
+        value: calls.length > 0
+          ? this.round((calls.filter((c) => c.status === 'error').length / calls.length) * 100, 1)
+          : 0
+      }))
+    };
   }
 
   /**
@@ -241,33 +381,8 @@ export class AdminTelemetryService {
       const allProjects = await projectService.listAllProjects();
       this.cachedProjects = allProjects;
 
-      // Extract execution logs and seed AI calls if empty
-      if (this.cachedAICalls.length === 0) {
-        allProjects.forEach((proj) => {
-          if (proj.executionLogs && Array.isArray(proj.executionLogs)) {
-            proj.executionLogs.forEach((log, index) => {
-              this.cachedAICalls.push({
-                id: `log_${proj.projectId}_${index}`,
-                timestamp: proj.createdAt || new Date().toISOString(),
-                model: 'gemini-flash-latest',
-                feature: log.stage,
-                promptTokens: 850,
-                completionTokens: 420,
-                totalTokens: 1270,
-                costUsd: 0.00019,
-                latencyMs: Math.round((log.duration_sec || 0.8) * 1000),
-                status: 'success',
-                lessonId: proj.projectId,
-                lessonTitle: proj.title,
-                traceId: `tr_${proj.projectId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`
-              });
-            });
-          }
-        });
-        if (this.cachedAICalls.length > 0) {
-          this.saveAICallsToStorage();
-        }
-      }
+      // AI call records come only from real provider calls (recordAICall).
+      // Pipeline executionLogs are NOT converted into synthetic AI calls.
 
       // Update users project counts & activities
       this.updateUsersFromProjects(allProjects);
@@ -281,6 +396,8 @@ export class AdminTelemetryService {
 
   private updateUsersFromProjects(projects: Project[]) {
     this.ensureBootstrapAdmin();
+
+    projects = projects.filter((p) => p.projectId !== this.DEMO_PROJECT_ID);
 
     projects.forEach((p) => {
       const authorId = p.userId || 'admin_hkthien_husc';
@@ -317,11 +434,8 @@ export class AdminTelemetryService {
       const userCalls = this.cachedAICalls.filter((c) =>
         userProjects.some((p) => p.projectId === c.lessonId)
       );
-      u.aiRequestsCount = userCalls.length || (u.lessonsCount * 4);
-      u.totalCost = Math.round(userCalls.reduce((sum, c) => sum + c.costUsd, 0) * 10000) / 10000;
-      if (u.totalCost === 0 && u.lessonsCount > 0) {
-        u.totalCost = Math.round(u.lessonsCount * 0.0012 * 10000) / 10000;
-      }
+      u.aiRequestsCount = userCalls.length;
+      u.totalCost = Math.round(userCalls.reduce((sum, c) => sum + (c.costUsd || 0), 0) * 10000) / 10000;
     });
 
     this.saveUsersToStorage();
@@ -465,9 +579,7 @@ export class AdminTelemetryService {
    */
   public async pushToLangfuseCloud(call: RealAICallRecord): Promise<void> {
     try {
-      const auth = encodeBasicAuth(this.LANGFUSE_PUBLIC_KEY, this.LANGFUSE_SECRET_KEY);
-      if (!auth) return;
-
+      if (typeof window === 'undefined') return;
       const timestamp = call.timestamp || new Date().toISOString();
       const body = {
         batch: [
@@ -478,7 +590,7 @@ export class AdminTelemetryService {
             body: {
               id: call.traceId,
               name: `LLM Call: ${call.feature}`,
-              userId: 'hkthien@husc.edu.vn',
+              userId: 'clsg-ir-app',
               sessionId: call.lessonId ? `sess_${call.lessonId.slice(-6)}` : 'sess_clsg_ir',
               tags: ['production', 'clsg-ir', 'zero-leak', 'gemini-telemetry'],
               metadata: {
@@ -499,7 +611,7 @@ export class AdminTelemetryService {
               traceId: call.traceId,
               name: call.feature,
               model: call.model,
-              startTime: new Date(Date.now() - (call.latencyMs || 650)).toISOString(),
+              startTime: new Date(Date.now() - (call.latencyMs || 0)).toISOString(),
               endTime: timestamp,
               usage: {
                 promptTokens: call.promptTokens,
@@ -511,12 +623,9 @@ export class AdminTelemetryService {
         ]
       };
 
-      await fetch('https://cloud.langfuse.com/api/public/ingestion', {
+      await fetch(this.LANGFUSE_INGEST_ENDPOINT, {
         method: 'POST',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
     } catch {
@@ -533,8 +642,8 @@ export class AdminTelemetryService {
       projectName: 'My Project',
       orgName: "Hồ's Organization",
       publicKey: this.LANGFUSE_PUBLIC_KEY,
-      publicKeyMasked: `${this.LANGFUSE_PUBLIC_KEY.slice(0, 10)}...${this.LANGFUSE_PUBLIC_KEY.slice(-6)}`,
-      secretKeyMasked: `${this.LANGFUSE_SECRET_KEY.slice(0, 9)}...${this.LANGFUSE_SECRET_KEY.slice(-6)}`,
+      publicKeyMasked: this.LANGFUSE_PUBLIC_KEY ? `${this.LANGFUSE_PUBLIC_KEY.slice(0, 10)}...${this.LANGFUSE_PUBLIC_KEY.slice(-6)}` : '(chưa cấu hình)',
+      secretKeyMasked: 'lưu trên server (LANGFUSE_SECRET_KEY)',
       baseUrl: 'https://cloud.langfuse.com',
       projectUrl: this.LANGFUSE_BASE_URL,
       tracesUrl: `${this.LANGFUSE_BASE_URL}/traces`,
@@ -566,42 +675,31 @@ export class AdminTelemetryService {
    * Returns REAL overview KPIs computed from actual projects, users, AI calls, and errors.
    */
   getOverviewKPIs(timeFilter: TimeFilter): AdminOverviewKPIs {
-    const totalUsers = Math.max(1, this.cachedUsers.length);
-    const activeUsers = Math.max(1, this.cachedUsers.filter((u) => u.activityStatus === 'active').length);
-    const totalLessons = this.cachedProjects.length;
-    const publishedLessons = this.cachedProjects.filter(
+    // Note: KPIs are all-time totals; timeFilter only affects the trend charts.
+    const projects = this.realProjects();
+    const totalUsers = this.cachedUsers.length;
+    const activeUsers = this.cachedUsers.filter((u) => u.activityStatus === 'active').length;
+    const totalLessons = projects.length;
+    const publishedLessons = projects.filter(
       (p) => p.status === 'verified' || (p.status as any) === 'completed'
     ).length;
 
     const totalAICalls = this.cachedAICalls.length;
-    const aiRequests = totalAICalls > 0 ? totalAICalls : (totalLessons * 4);
+    const aiRequests = totalAICalls;
 
-    const totalCost = this.cachedAICalls.reduce((sum, c) => sum + (c.costUsd || 0), 0);
-    const aiCost = totalCost > 0 ? Math.round(totalCost * 1000) / 1000 : (totalLessons * 0.0012);
+    const aiCost = this.cachedAICalls.reduce((sum, c) => sum + (c.costUsd || 0), 0);
 
+    // 0 = no recorded calls (UI renders "—")
     const avgLatencyMs = totalAICalls > 0
       ? Math.round(this.cachedAICalls.reduce((sum, c) => sum + (c.latencyMs || 0), 0) / totalAICalls)
-      : 820;
+      : 0;
 
-    const errorCount = this.cachedAICalls.filter((c) => c.status === 'error').length +
-      this.cachedErrors.filter((e) => e.status !== 'resolved').length;
-    const errorRate = totalAICalls > 0
-      ? Math.round((errorCount / Math.max(1, totalAICalls)) * 1000) / 10
-      : (this.cachedErrors.length > 0 ? 1.2 : 0.0);
+    // Error rate = failed AI calls / recorded AI calls (%). 0 when no calls.
+    const failedCalls = this.cachedAICalls.filter((c) => c.status === 'error').length;
+    const errorRate = totalAICalls > 0 ? this.round((failedCalls / totalAICalls) * 100, 1) : 0;
 
-    // Calculate real average quality score from projects
-    let sumQuality = 0;
-    let qualityCount = 0;
-    this.cachedProjects.forEach((p) => {
-      const score = p.qualityReport?.overall_quality_score || (p.qualityReport as any)?.overall_score;
-      if (score) {
-        sumQuality += score * 100;
-        qualityCount++;
-      }
-    });
-    const contentQualityScore = qualityCount > 0
-      ? Math.round((sumQuality / qualityCount) * 10) / 10
-      : 98.4;
+    // Real average quality from Module 4 reports; 0 = no evaluated lesson (UI renders "—")
+    const contentQualityScore = this.getAverageQualityScore() ?? 0;
 
     return {
       totalUsers,
@@ -609,7 +707,7 @@ export class AdminTelemetryService {
       totalLessons,
       publishedLessons,
       aiRequests,
-      aiCost: Math.round(aiCost * 100) / 100,
+      aiCost: this.round(aiCost, 4),
       avgLatencyMs,
       errorRate,
       contentQualityScore
@@ -620,43 +718,50 @@ export class AdminTelemetryService {
    * Returns trend chart series reflecting real historical data distribution.
    */
   getOverviewCharts(timeFilter: TimeFilter) {
-    const pointsCount = timeFilter === 'today' ? 12 : timeFilter === '7d' ? 7 : timeFilter === '30d' ? 15 : 18;
-    const labels = Array.from({ length: pointsCount }, (_, i) => {
-      if (timeFilter === 'today') return `${i * 2}:00`;
-      if (timeFilter === '7d') return `Ngày ${i + 1}`;
-      return `T${i + 1}`;
-    });
+    type Point = { label: string; value: number };
+    const buckets = this.buildBuckets(timeFilter);
+    const projects = this.realProjects();
+    // A series with no data at all is returned empty so the chart shows its empty state.
+    const orEmpty = (series: Point[]): Point[] => (series.some((p) => p.value !== 0) ? series : []);
 
-    const totalLessons = this.cachedProjects.length;
-    const totalUsers = Math.max(1, this.cachedUsers.length);
-    const totalRequests = this.cachedAICalls.length || (totalLessons * 4);
-    const totalCost = this.cachedAICalls.reduce((sum, c) => sum + c.costUsd, 0) || (totalLessons * 0.0012);
+    // Active users = distinct authors that created/updated a lesson in the bucket.
+    const users = orEmpty(buckets.map((b) => ({
+      label: b.label,
+      value: new Set(
+        projects
+          .filter((p) => this.inBucket(p.createdAt, b) || this.inBucket(p.updatedAt, b))
+          .map((p) => p.userId || 'unknown')
+      ).size
+    })));
+
+    // Lessons created in the bucket.
+    const lessons = orEmpty(buckets.map((b) => ({
+      label: b.label,
+      value: projects.filter((p) => this.inBucket(p.createdAt, b)).length
+    })));
+
+    const ai = this.getAILlmTimeSeries(timeFilter);
+
+    // Average real quality of lessons last updated in the bucket (only buckets with data).
+    const quality: Point[] = buckets
+      .map((b) => {
+        const scores = projects
+          .filter((p) => this.inBucket(p.updatedAt, b))
+          .map((p) => this.projectQuality(p))
+          .filter((s): s is number => s !== null);
+        return scores.length > 0
+          ? { label: b.label, value: this.round(scores.reduce((a, c) => a + c, 0) / scores.length, 1) }
+          : null;
+      })
+      .filter((x): x is Point => x !== null);
 
     return {
-      users: labels.map((label, idx) => ({
-        label,
-        value: Math.max(1, Math.round((totalUsers / pointsCount) * (idx + 1)))
-      })),
-      lessons: labels.map((label, idx) => ({
-        label,
-        value: idx === pointsCount - 1 ? totalLessons : Math.floor((totalLessons / pointsCount) * (idx + 1))
-      })),
-      requests: labels.map((label, idx) => ({
-        label,
-        value: Math.max(1, Math.round((totalRequests / pointsCount) * (idx + 1)))
-      })),
-      cost: labels.map((label, idx) => ({
-        label,
-        value: Math.round(((totalCost / pointsCount) * (idx + 1)) * 1000) / 1000
-      })),
-      quality: labels.map((label, idx) => ({
-        label,
-        value: 98.4
-      })),
-      errorRate: labels.map((label, idx) => ({
-        label,
-        value: this.cachedErrors.length > 0 ? 1.5 : 0.0
-      }))
+      users,
+      lessons,
+      requests: ai.requests,
+      cost: ai.cost,
+      quality,
+      errorRate: ai.errorRate
     };
   }
 
@@ -700,12 +805,15 @@ export class AdminTelemetryService {
       ? 'Huỳnh Khắc Thiên (Admin)'
       : (p.userId || 'Tác giả');
 
-    const rawScore = p.qualityReport?.overall_quality_score || (p.qualityReport as any)?.overall_score;
-    const qualityScore = rawScore
-      ? Math.round(rawScore * 1000) / 10
-      : 98.4;
+    // 0 = lesson not evaluated yet (UI renders "—")
+    const qualityScore = this.projectQuality(p) ?? 0;
+    const lessonCalls = this.callsForLesson(p.projectId);
+    const lessonCost = lessonCalls.reduce((s, c) => s + (c.costUsd || 0), 0);
+    const lessonLatency = lessonCalls.length > 0
+      ? Math.round(lessonCalls.reduce((s, c) => s + (c.latencyMs || 0), 0) / lessonCalls.length)
+      : 0;
 
-    const sectionsCount = sections.length || (p.canonicalDocument?.sections?.length || p.documentTree?.sections?.length || 1);
+    const sectionsCount = sections.length || (p.canonicalDocument?.sections?.length || p.documentTree?.sections?.length || 0);
 
     const isPublished = p.status === 'verified' || (p.status as any) === 'completed';
     const isGenerating = p.status === 'generating' || p.status === 'validating' || p.status === 'planning' || (p.status as any) === 'processing';
@@ -725,10 +833,10 @@ export class AdminTelemetryService {
         ? 'Failed'
         : 'Draft',
       qualityScore,
-      aiCost: Math.round((sectionsCount * 0.0008) * 10000) / 10000,
-      latencyMs: 820,
-      model: 'gemini-flash-latest',
-      promptVersion: 'section_generator:v2.1',
+      aiCost: this.round(lessonCost, 4),
+      latencyMs: lessonLatency,
+      model: this.mostCommonModel(lessonCalls),
+      promptVersion: '—',
       traceId: `tr_${p.projectId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`,
       lastUpdated: p.updatedAt ? new Date(p.updatedAt).toLocaleString('vi-VN') : 'Vừa xong',
       sections
@@ -758,6 +866,8 @@ export class AdminTelemetryService {
     };
     errorDistribution: { type: string; count: number; percentage: number; color: string }[];
     issues: ContentQualityIssue[];
+    /** Number of real (non-demo) narrated scenes scanned by the purifier. */
+    scannedScenes: number;
   } {
     const issues: ContentQualityIssue[] = [];
     let detectedLeaks = 0;
@@ -765,13 +875,16 @@ export class AdminTelemetryService {
     let detectedDuplicates = 0;
     let detectedFillers = 0;
     let detectedRoleViolations = 0;
+    let scannedScenes = 0;
 
-    // Scan real projects for real issues using ContentPurifierService
-    this.cachedProjects.forEach((proj) => {
+    // Scan real projects (demo excluded) for real issues using ContentPurifierService
+    this.realProjects().forEach((proj) => {
       const scenes = proj.clsgIr?.scenes || [];
+      const projModel = this.mostCommonModel(this.callsForLesson(proj.projectId));
       scenes.forEach((scene) => {
         const raw = scene.narration?.text || '';
         if (!raw) return;
+        scannedScenes++;
 
         const purification = contentPurifierService.purifyNarration(raw);
         if (purification.removedElements.length > 0 || !purification.passedValidation) {
@@ -801,8 +914,8 @@ export class AdminTelemetryService {
             severity: issueType === 'METADATA_LEAK' ? 'critical' : issueType === 'INVALID_CHARACTER' ? 'high' : 'medium',
             rawOutput: raw,
             cleanedOutput: purification.cleanedText,
-            model: 'gemini-flash-latest',
-            promptVersion: 'content_purifier:v2.1',
+            model: projModel,
+            promptVersion: '—',
             timestamp: proj.updatedAt || new Date().toISOString(),
             traceId: `tr_${proj.projectId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`,
             resolved: true
@@ -810,43 +923,6 @@ export class AdminTelemetryService {
         }
       });
     });
-
-    if (issues.length === 0) {
-      issues.push(
-        {
-          id: 'iss_pose_01',
-          lessonId: 'proj_pose_17_keypoints',
-          lessonTitle: 'Keypoint & Human Pose Estimation',
-          sectionId: 'S2_THINK',
-          issueType: 'INVALID_CHARACTER',
-          severity: 'high',
-          rawOutput: 'nose — mũi, ■ 1^-4 mắt trái, mắt phải, tai trái, tai phải, ■ 5^-10 vai...',
-          cleanedOutput: 'nose — mũi, 1–4: mắt trái, mắt phải, tai trái, tai phải, 5–10: vai...',
-          model: 'gemini-flash-latest',
-          promptVersion: 'content_purifier:v2.1',
-          timestamp: new Date().toISOString(),
-          traceId: 'tr_lf_pose_s2_0912',
-          resolved: true
-        },
-        {
-          id: 'iss_pose_02',
-          lessonId: 'proj_pose_17_keypoints',
-          lessonTitle: 'Keypoint & Human Pose Estimation',
-          sectionId: 'S4_MECHANISM',
-          issueType: 'METADATA_LEAK',
-          severity: 'critical',
-          rawOutput: 'Từ nền tảng của HÃY SUY NGHĨ, chúng ta đi sâu vào cơ chế chi tiết. Nội dung bài học. aicb · 1 / 52...',
-          cleanedOutput: 'Tiếp theo, chúng ta đi sâu vào cơ chế chi tiết. Mô hình dự đoán các điểm đặc trưng dựa trên cấu trúc không gian.',
-          model: 'gemini-flash-latest',
-          promptVersion: 'content_purifier:v2.1',
-          timestamp: new Date().toISOString(),
-          traceId: 'tr_lf_pose_s4_0841',
-          resolved: true
-        }
-      );
-      detectedChars++;
-      detectedLeaks++;
-    }
 
     const totalIssues = Math.max(1, issues.length);
     const distribution = [
@@ -882,7 +958,8 @@ export class AdminTelemetryService {
       }
     ].filter((d) => d.count > 0);
 
-    if (distribution.length === 0) {
+    // Only claim "clean" when scenes were actually scanned and none had issues.
+    if (distribution.length === 0 && scannedScenes > 0) {
       distribution.push({
         type: 'ZERO_LEAK_CLEAN',
         count: 0,
@@ -891,116 +968,94 @@ export class AdminTelemetryService {
       });
     }
 
+    // Rates = affected scenes / scanned scenes (%). 0 when nothing was scanned.
+    const rate = (n: number) => (scannedScenes > 0 ? this.round((n / scannedScenes) * 100, 1) : 0);
+    const totalCalls = this.cachedAICalls.length;
+    const failedCalls = this.cachedAICalls.filter((c) => c.status === 'error').length;
+
     return {
       qualityMetrics: {
-        duplicateRate: detectedDuplicates > 0 ? 0.4 : 0.0,
-        metadataLeakageRate: detectedLeaks > 0 ? 0.3 : 0.0,
-        invalidCharacterRate: detectedChars > 0 ? 0.2 : 0.0,
-        fillerRate: detectedFillers > 0 ? 0.5 : 0.0,
-        sectionRoleViolationRate: 0.0,
-        generationErrorRate: 0.0,
-        overallQualityScore: 98.4
+        duplicateRate: rate(detectedDuplicates),
+        metadataLeakageRate: rate(detectedLeaks),
+        invalidCharacterRate: rate(detectedChars),
+        fillerRate: rate(detectedFillers),
+        // No role-violation detector exists yet, so this stays 0 (nothing detected).
+        sectionRoleViolationRate: rate(detectedRoleViolations),
+        generationErrorRate: totalCalls > 0 ? this.round((failedCalls / totalCalls) * 100, 1) : 0,
+        // 0 = no evaluated lesson (UI renders "—")
+        overallQualityScore: this.getAverageQualityScore() ?? 0
       },
       errorDistribution: distribution,
-      issues
+      issues,
+      scannedScenes
     };
   }
 
   /**
-   * Returns AI / LLM metrics computed from real calls
+   * Returns AI / LLM metrics computed from real recorded calls only.
+   * All values are 0 / empty lists when no call has been recorded.
    */
   getAILlmData(): AILlmMetric {
     const calls = this.cachedAICalls;
-    const totalRequests = calls.length || (this.cachedProjects.length * 4);
+    const totalRequests = calls.length;
     const failedRequests = calls.filter((c) => c.status === 'error').length;
     const successfulRequests = totalRequests - failedRequests;
     const successRate = totalRequests > 0
       ? Math.round((successfulRequests / totalRequests) * 10000) / 100
-      : 100;
+      : 0;
 
-    const inputTokens = calls.reduce((sum, c) => sum + (c.promptTokens || 0), 0) || (totalRequests * 850);
-    const outputTokens = calls.reduce((sum, c) => sum + (c.completionTokens || 0), 0) || (totalRequests * 420);
+    const inputTokens = calls.reduce((sum, c) => sum + (c.promptTokens || 0), 0);
+    const outputTokens = calls.reduce((sum, c) => sum + (c.completionTokens || 0), 0);
     const totalTokens = inputTokens + outputTokens;
-    const totalCost = calls.reduce((sum, c) => sum + (c.costUsd || 0), 0) || (totalRequests * 0.0002);
-    const avgLatencyMs = calls.length > 0
-      ? Math.round(calls.reduce((sum, c) => sum + (c.latencyMs || 0), 0) / calls.length)
-      : 820;
+    const totalCost = calls.reduce((sum, c) => sum + (c.costUsd || 0), 0);
+    const avgLatencyMs = totalRequests > 0
+      ? Math.round(calls.reduce((sum, c) => sum + (c.latencyMs || 0), 0) / totalRequests)
+      : 0;
 
-    // Group by model
-    const modelMap = new Map<string, { requests: number; tokens: number; cost: number; latencySum: number }>();
-    calls.forEach((c) => {
-      const m = c.model || 'gemini-flash-latest';
-      const cur = modelMap.get(m) || { requests: 0, tokens: 0, cost: 0, latencySum: 0 };
-      cur.requests++;
-      cur.tokens += c.totalTokens || 0;
-      cur.cost += c.costUsd || 0;
-      cur.latencySum += c.latencyMs || 0;
-      modelMap.set(m, cur);
-    });
+    type Agg = { requests: number; errors: number; tokens: number; cost: number; latencySum: number };
+    const aggregate = (keyOf: (c: RealAICallRecord) => string) => {
+      const map = new Map<string, Agg>();
+      calls.forEach((c) => {
+        const k = keyOf(c);
+        const cur = map.get(k) || { requests: 0, errors: 0, tokens: 0, cost: 0, latencySum: 0 };
+        cur.requests++;
+        if (c.status === 'error') cur.errors++;
+        cur.tokens += c.totalTokens || ((c.promptTokens || 0) + (c.completionTokens || 0));
+        cur.cost += c.costUsd || 0;
+        cur.latencySum += c.latencyMs || 0;
+        map.set(k, cur);
+      });
+      return Array.from(map.entries()).sort((a, b) => b[1].requests - a[1].requests);
+    };
 
-    const byModel = modelMap.size > 0
-      ? Array.from(modelMap.entries()).map(([model, data]) => ({
-          model,
-          requests: data.requests,
-          tokens: data.tokens,
-          cost: Math.round(data.cost * 1000) / 1000,
-          avgLatencyMs: Math.round(data.latencySum / data.requests),
-          errorRate: 0.0
-        }))
-      : [
-          {
-            model: 'gemini-flash-latest',
-            requests: totalRequests,
-            tokens: totalTokens,
-            cost: Math.round(totalCost * 1000) / 1000,
-            avgLatencyMs,
-            errorRate: 0.0
-          }
-        ];
+    const byModel = aggregate((c) => c.model || 'unknown').map(([model, d]) => ({
+      model,
+      requests: d.requests,
+      tokens: d.tokens,
+      cost: this.round(d.cost, 4),
+      avgLatencyMs: Math.round(d.latencySum / d.requests),
+      errorRate: this.round((d.errors / d.requests) * 100, 1)
+    }));
 
-    // Group by feature
-    const featureMap = new Map<string, { requests: number; tokens: number; cost: number; latencySum: number }>();
-    calls.forEach((c) => {
-      const f = c.feature || 'Module 3A: Narration Generation';
-      const cur = featureMap.get(f) || { requests: 0, tokens: 0, cost: 0, latencySum: 0 };
-      cur.requests++;
-      cur.tokens += c.totalTokens || 0;
-      cur.cost += c.costUsd || 0;
-      cur.latencySum += c.latencyMs || 0;
-      featureMap.set(f, cur);
-    });
+    const featureAgg = aggregate((c) => c.feature || 'unknown');
+    const byFeature = featureAgg.map(([feature, d]) => ({
+      feature,
+      requests: d.requests,
+      tokens: d.tokens,
+      cost: this.round(d.cost, 4),
+      avgLatencyMs: Math.round(d.latencySum / d.requests)
+    }));
 
-    const byFeature = featureMap.size > 0
-      ? Array.from(featureMap.entries()).map(([feature, data]) => ({
-          feature,
-          requests: data.requests,
-          tokens: data.tokens,
-          cost: Math.round(data.cost * 1000) / 1000,
-          avgLatencyMs: Math.round(data.latencySum / data.requests)
-        }))
-      : [
-          {
-            feature: 'Module 2: Instructional Planning',
-            requests: Math.round(totalRequests * 0.25),
-            tokens: Math.round(totalTokens * 0.25),
-            cost: Math.round(totalCost * 0.25 * 1000) / 1000,
-            avgLatencyMs: 980
-          },
-          {
-            feature: 'Module 3A: Narration Generation',
-            requests: Math.round(totalRequests * 0.5),
-            tokens: Math.round(totalTokens * 0.5),
-            cost: Math.round(totalCost * 0.5 * 1000) / 1000,
-            avgLatencyMs: 820
-          },
-          {
-            feature: 'Module 4: Quality Guard & Repair',
-            requests: Math.round(totalRequests * 0.25),
-            tokens: Math.round(totalTokens * 0.25),
-            cost: Math.round(totalCost * 0.25 * 1000) / 1000,
-            avgLatencyMs: 420
-          }
-        ];
+    // No prompt registry/versioning exists: each feature name is treated as a
+    // "prompt" at version 'current'. qualityScore is 0 because no per-prompt
+    // evaluation is recorded (UI renders "—").
+    const byPromptVersion = featureAgg.map(([feature, d]) => ({
+      prompt: feature,
+      version: 'current',
+      requests: d.requests,
+      qualityScore: 0,
+      cost: this.round(d.cost, 4)
+    }));
 
     return {
       totalRequests,
@@ -1010,38 +1065,16 @@ export class AdminTelemetryService {
       inputTokens,
       outputTokens,
       totalTokens,
-      totalCost: Math.round(totalCost * 100) / 100,
+      totalCost: this.round(totalCost, 4),
       avgLatencyMs,
       byModel,
       byFeature,
-      byPromptVersion: [
-        {
-          prompt: 'section_generator',
-          version: 'v2.1 (Production)',
-          requests: Math.round(totalRequests * 0.5),
-          qualityScore: 98.6,
-          cost: Math.round(totalCost * 0.5 * 100) / 100
-        },
-        {
-          prompt: 'content_purifier',
-          version: 'v2.1 (Production)',
-          requests: Math.round(totalRequests * 0.3),
-          qualityScore: 99.4,
-          cost: Math.round(totalCost * 0.3 * 100) / 100
-        },
-        {
-          prompt: 'dar_p_planner',
-          version: 'v2.0 (Production)',
-          requests: Math.round(totalRequests * 0.2),
-          qualityScore: 97.9,
-          cost: Math.round(totalCost * 0.2 * 100) / 100
-        }
-      ]
+      byPromptVersion
     };
   }
 
   /**
-   * Returns real Langfuse summary and traces generated from real project runs
+   * Returns Langfuse summary and traces built from recorded AI calls and real projects.
    */
   getLangfuseData(): {
     summary: {
@@ -1060,7 +1093,7 @@ export class AdminTelemetryService {
     // 1. Traces from real live AI calls
     this.cachedAICalls.forEach((call) => {
       traces.push({
-        traceId: call.traceId,
+        traceId: call.traceId || call.id,
         name: `LLM Call: ${call.feature}`,
         sessionId: call.lessonId ? `sess_${call.lessonId.slice(-6)}` : 'sess_clsg_live',
         userId: 'hkthien@husc.edu.vn',
@@ -1068,45 +1101,53 @@ export class AdminTelemetryService {
         latencyMs: call.latencyMs,
         totalCost: call.costUsd,
         status: call.status === 'success' ? 'success' : 'error',
-        tags: ['production', 'gemini-call', 'zero-leak', call.model],
+        tags: ['production', 'llm-call', call.model],
         url: this.getLangfuseTraceUrl(call.traceId),
         timestamp: call.timestamp,
         model: call.model
       });
     });
 
-    // 2. Traces from real projects in system
-    this.cachedProjects.forEach((proj) => {
+    // 2. One pipeline entry per real (non-demo) project. Latency is the real sum of
+    //    its executionLogs stage durations; cost/model come only from AI calls
+    //    attributed to the lesson (0 / '—' when none).
+    this.realProjects().forEach((proj) => {
       const traceId = `tr_${proj.projectId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
-      // Avoid duplicate trace IDs
-      if (!traces.some((t) => t.traceId === traceId)) {
-        traces.push({
-          traceId,
-          name: `Pipeline Execution: ${proj.title}`,
-          sessionId: `sess_${proj.projectId.slice(-6)}`,
-          userId: proj.userId || 'hkthien@husc.edu.vn',
-          lessonId: proj.projectId,
-          latencyMs: 820,
-          totalCost: 0.0012,
-          status: proj.status === 'failed' || (proj.status as string) === 'error' ? 'error' : 'success',
-          tags: ['production', 'clsg-ir', 'zero-leak', 'v2.1'],
-          url: this.getLangfuseTraceUrl(traceId),
-          timestamp: proj.updatedAt || new Date().toISOString(),
-          model: 'gemini-flash-latest'
-        });
-      }
+      if (traces.some((t) => t.traceId === traceId)) return;
+      const lessonCalls = this.callsForLesson(proj.projectId);
+      const pipelineMs = Math.round(
+        (proj.executionLogs || []).reduce((s, l) => s + (l.duration_sec || 0), 0) * 1000
+      );
+      traces.push({
+        traceId,
+        name: `Pipeline Execution: ${proj.title}`,
+        sessionId: `sess_${proj.projectId.slice(-6)}`,
+        userId: proj.userId || 'hkthien@husc.edu.vn',
+        lessonId: proj.projectId,
+        latencyMs: pipelineMs,
+        totalCost: this.round(lessonCalls.reduce((s, c) => s + (c.costUsd || 0), 0), 4),
+        status: proj.status === 'failed' || (proj.status as string) === 'error' ? 'error' : 'success',
+        tags: ['production', 'clsg-ir', 'pipeline'],
+        url: this.getLangfuseTraceUrl(traceId),
+        timestamp: proj.updatedAt || proj.createdAt,
+        model: this.mostCommonModel(lessonCalls)
+      });
     });
 
     const totalCost = traces.reduce((sum, t) => sum + (t.totalCost || 0), 0);
-    const avgLatency = traces.length > 0 ? Math.round(traces.reduce((sum, t) => sum + t.latencyMs, 0) / traces.length) : 820;
+    const avgLatency = traces.length > 0
+      ? Math.round(traces.reduce((sum, t) => sum + (t.latencyMs || 0), 0) / traces.length)
+      : 0;
 
     return {
       summary: {
-        totalTraces: Math.max(1, traces.length),
-        totalGenerations: Math.max(1, traces.length * 2),
-        totalCost: Math.round(totalCost * 10000) / 10000,
+        totalTraces: traces.length,
+        // One generation is pushed per recorded AI call.
+        totalGenerations: this.cachedAICalls.length,
+        totalCost: this.round(totalCost, 4),
         avgLatencyMs: avgLatency,
-        qualityScore: 98.4,
+        // 0 = no evaluated lesson (UI renders "—")
+        qualityScore: this.getAverageQualityScore() ?? 0,
         projectId: this.LANGFUSE_PROJECT_ID,
         projectUrl: this.LANGFUSE_BASE_URL
       },
@@ -1115,7 +1156,18 @@ export class AdminTelemetryService {
   }
 
   /**
-   * Returns AI Evaluation data derived from real project quality checks
+   * Returns AI Evaluation data derived from real Module 4 (Quality Guard) reports.
+   *
+   * Mapping from QualityReport (0..1, converted to 0..100) to EvaluationMetric:
+   *   accuracy             <- scores.content   (factual consistency)
+   *   relevance            <- scores.pedagogy  (visual necessity + language/terminology)
+   *   clarity              <- scores.narrative (narrative coherence)
+   *   structure            <- scores.visual    (taxonomy validity + visual necessity)
+   *   conciseness          <- scores.technical (DAR-P duration fit + prosody)
+   *   instructionAdherence <- 100 - |duration_error_pct| (fit to the requested duration)
+   *   overallScore         <- overall_quality_score
+   * Each field is the mean over non-demo projects that have the value; 0 when none
+   * (evaluator is the rule-based Module 4 guard).
    */
   getEvaluationData(): {
     metrics: EvaluationMetric;
@@ -1139,90 +1191,104 @@ export class AdminTelemetryService {
       traceId: string;
     }[] = [];
 
-    this.cachedProjects.forEach((p) => {
+    const projects = this.realProjects();
+
+    projects.forEach((p) => {
       const scenes = p.clsgIr?.scenes || [];
+      // No per-section score exists; use the lesson's real overall score (0 if not evaluated).
+      const lessonScore = this.projectQuality(p) ?? 0;
+      const model = this.mostCommonModel(this.callsForLesson(p.projectId));
       scenes.forEach((s) => {
         const text = s.narration?.text || '';
+        if (!text) return;
         const purifier = contentPurifierService.purifyNarration(text);
         if (purifier.removedElements.length > 0) {
           worst.push({
             lesson: p.title,
             section: s.section_id,
             role: s.pedagogical_function || 'CONTENT',
-            score: 91.5,
+            score: lessonScore,
             primaryIssue: `Loại bỏ siêu dữ liệu: ${purifier.removedElements.slice(0, 2).join(', ')}`,
-            model: 'gemini-flash-latest',
+            model,
             traceId: `tr_${p.projectId.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`
           });
         }
       });
     });
+    worst.sort((a, b) => a.score - b.score);
+
+    const mean = (vals: (number | null | undefined)[]): number => {
+      const xs = vals.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+      return xs.length > 0 ? this.round(xs.reduce((a, b) => a + b, 0) / xs.length, 1) : 0;
+    };
+    const dim = (k: 'content' | 'pedagogy' | 'narrative' | 'visual' | 'technical') =>
+      mean(projects.map((p) => {
+        const v = p.qualityReport?.scores?.[k];
+        return typeof v === 'number' ? this.toPct(v) : null;
+      }));
+
+    const trend = projects
+      .filter((p) => this.projectQuality(p) !== null)
+      .sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
+      .slice(-10)
+      .map((p) => this.projectQuality(p) as number);
 
     return {
       metrics: {
-        relevance: 98.6,
-        accuracy: 99.4,
-        clarity: 98.2,
-        conciseness: 97.5,
-        structure: 99.1,
-        instructionAdherence: 99.6,
-        overallScore: 98.4,
+        relevance: dim('pedagogy'),
+        accuracy: dim('content'),
+        clarity: dim('narrative'),
+        conciseness: dim('technical'),
+        structure: dim('visual'),
+        instructionAdherence: mean(projects.map((p) => {
+          const err = p.qualityReport?.duration_error_pct;
+          return typeof err === 'number' ? Math.max(0, 100 - Math.abs(err)) : null;
+        })),
+        overallScore: mean(projects.map((p) => this.projectQuality(p))),
         evaluatorType: 'rule_based',
         failedSamplesCount: worst.length,
-        trend: [96.0, 96.8, 97.4, 98.0, 98.4]
+        trend
       },
       worstPerformingSections: worst.slice(0, 5)
     };
   }
 
   /**
-   * Returns active prompt definitions in the pipeline
+   * Returns "prompts" derived from recorded AI calls grouped by feature.
+   * There is no prompt registry, so version is 'current', qualityScore is 0
+   * (not evaluated) and templateSnippet is empty. Empty list when no calls.
    */
   getPromptsData(): PromptMetadata[] {
-    return [
-      {
-        id: 'prm_01',
-        name: 'section_generator',
-        version: 'v2.1',
-        status: 'production',
-        model: 'gemini-flash-latest',
-        qualityScore: 98.6,
-        cost: 0.0008,
-        avgLatencyMs: 820,
-        templateSnippet: 'Bạn là chuyên gia sư phạm đại học. Sinh lời giảng tự nhiên, tách bạch 100% nội dung học tập và siêu dữ liệu...',
-        createdAt: '2026-09-20',
-        updatedAt: '2026-09-22',
-        traceCount: 142
-      },
-      {
-        id: 'prm_02',
-        name: 'content_purifier',
-        version: 'v2.1',
-        status: 'production',
-        model: 'rule-based-purifier',
-        qualityScore: 99.4,
-        cost: 0.0000,
-        avgLatencyMs: 25,
-        templateSnippet: 'Lọc sạch các cụm câu lặp "Trước khi đi vào phần kỹ thuật", ký tự ■, khoảng số lỗi 1^-4, siêu dữ liệu aicb...',
-        createdAt: '2026-09-22',
-        updatedAt: '2026-09-22',
-        traceCount: 280
-      },
-      {
-        id: 'prm_03',
-        name: 'dar_p_planner',
-        version: 'v2.0',
-        status: 'production',
-        model: 'gemini-flash-latest',
-        qualityScore: 97.9,
-        cost: 0.0011,
-        avgLatencyMs: 940,
-        templateSnippet: 'Xây dựng kế hoạch phân bổ DAR-P, ngân sách từ và 13 Visual Taxonomy cho toàn bộ bài học...',
-        createdAt: '2026-09-18',
-        updatedAt: '2026-09-21',
-        traceCount: 95
-      }
-    ];
+    const groups = new Map<string, RealAICallRecord[]>();
+    this.cachedAICalls.forEach((c) => {
+      const f = c.feature || 'unknown';
+      const arr = groups.get(f) || [];
+      arr.push(c);
+      groups.set(f, arr);
+    });
+
+    return Array.from(groups.entries())
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([feature, calls]) => {
+        const times = calls
+          .map((c) => new Date(c.timestamp).getTime())
+          .filter((t) => Number.isFinite(t));
+        const fmt = (t: number) => new Date(t).toLocaleDateString('vi-VN');
+        return {
+          id: `prm_${feature.replace(/[^a-zA-Z0-9]/g, '_')}`,
+          name: feature,
+          version: 'current',
+          status: 'production' as const,
+          model: this.mostCommonModel(calls),
+          qualityScore: 0,
+          cost: this.round(calls.reduce((s, c) => s + (c.costUsd || 0), 0), 4),
+          avgLatencyMs: Math.round(calls.reduce((s, c) => s + (c.latencyMs || 0), 0) / calls.length),
+          templateSnippet: '',
+          createdAt: times.length > 0 ? fmt(Math.min(...times)) : '—',
+          updatedAt: times.length > 0 ? fmt(Math.max(...times)) : '—',
+          traceCount: calls.length
+        };
+      });
   }
 
   /**
@@ -1233,45 +1299,55 @@ export class AdminTelemetryService {
   }
 
   /**
-   * Returns TTS speech telemetry
+   * Returns TTS speech telemetry computed from recorded TTS calls (zeros / empty when none).
    */
   getTTSData(): TTSMetric {
     const tts = this.cachedTTS;
-    const totalRequests = tts.length || 4;
-    const totalDurationMin = Math.round((tts.reduce((sum, t) => sum + t.durationSec, 0) / 60) * 10) / 10 || 1.8;
-    const totalCost = Math.round(tts.reduce((sum, t) => sum + t.costUsd, 0) * 1000) / 1000 || 0.004;
+    const requests = tts.length;
+    const failed = tts.filter((t) => t.status === 'error').length;
+    const totalDurationMin = this.round(tts.reduce((sum, t) => sum + (t.durationSec || 0), 0) / 60, 1);
+    const totalCost = this.round(tts.reduce((sum, t) => sum + (t.costUsd || 0), 0), 4);
+    const avgLatencyMs = requests > 0
+      ? Math.round(tts.reduce((sum, t) => sum + (t.latencyMs || 0), 0) / requests)
+      : 0;
+
+    const voiceMap = new Map<string, { voice: string; provider: string; requests: number; durationSec: number; cost: number }>();
+    const providerMap = new Map<string, { requests: number; latencySum: number; cost: number }>();
+    tts.forEach((t) => {
+      const vk = `${t.voice}__${t.provider}`;
+      const v = voiceMap.get(vk) || { voice: t.voice, provider: t.provider, requests: 0, durationSec: 0, cost: 0 };
+      v.requests++;
+      v.durationSec += t.durationSec || 0;
+      v.cost += t.costUsd || 0;
+      voiceMap.set(vk, v);
+
+      const p = providerMap.get(t.provider) || { requests: 0, latencySum: 0, cost: 0 };
+      p.requests++;
+      p.latencySum += t.latencyMs || 0;
+      p.cost += t.costUsd || 0;
+      providerMap.set(t.provider, p);
+    });
 
     return {
-      requests: totalRequests,
+      requests,
       totalDurationMin,
-      successRate: 100.0,
-      avgLatencyMs: 380,
-      failureRate: 0.0,
+      successRate: requests > 0 ? this.round(((requests - failed) / requests) * 100, 1) : 0,
+      avgLatencyMs,
+      failureRate: requests > 0 ? this.round((failed / requests) * 100, 1) : 0,
       totalCost,
-      byVoice: [
-        {
-          voice: 'vi-VN-Neural2-A (Nữ Miền Bắc)',
-          provider: 'Google Cloud TTS',
-          requests: Math.round(totalRequests * 0.6),
-          durationMin: Math.round(totalDurationMin * 0.6 * 10) / 10,
-          cost: Math.round(totalCost * 0.6 * 1000) / 1000
-        },
-        {
-          voice: 'vi-VN-Neural2-D (Nam Miền Nam)',
-          provider: 'Google Cloud TTS',
-          requests: Math.round(totalRequests * 0.4),
-          durationMin: Math.round(totalDurationMin * 0.4 * 10) / 10,
-          cost: Math.round(totalCost * 0.4 * 1000) / 1000
-        }
-      ],
-      byProvider: [
-        {
-          provider: 'Web Speech Synthesis (Trình duyệt)',
-          requests: totalRequests,
-          avgLatencyMs: 25,
-          cost: 0.0
-        }
-      ]
+      byVoice: Array.from(voiceMap.values()).map((v) => ({
+        voice: v.voice,
+        provider: v.provider,
+        requests: v.requests,
+        durationMin: this.round(v.durationSec / 60, 1),
+        cost: this.round(v.cost, 4)
+      })),
+      byProvider: Array.from(providerMap.entries()).map(([provider, p]) => ({
+        provider,
+        requests: p.requests,
+        avgLatencyMs: Math.round(p.latencySum / p.requests),
+        cost: this.round(p.cost, 4)
+      }))
     };
   }
 }

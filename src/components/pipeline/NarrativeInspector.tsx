@@ -132,58 +132,58 @@ export const NarrativeInspector: React.FC<NarrativeInspectorProps> = ({
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900 rounded-2xl p-6 text-white shadow-md">
+      <div className=" bg-cover-deep   rounded-2xl p-6 text-white shadow-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-indigo-200 text-xs font-bold uppercase tracking-wider font-mono border border-white/10">
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cover-deep  text-navy text-xs font-bold uppercase tracking-wider font-mono border border-white/10">
+                <Sparkles className="w-3.5 h-3.5 text-pen" />
                 Narrative Intelligence Layer (NIL)
               </span>
-              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono border border-emerald-500/30">
+              <span className="px-2 py-0.5 rounded bg-print text-print-soft text-[11px] font-mono border border-print/30">
                 NotebookLM-Style Storytelling
               </span>
             </div>
             <h2 className="text-xl font-bold tracking-tight">
               Trí Tuệ Tự Sự Sư Phạm (Narrative IR & Cognitive Engagement)
             </h2>
-            <p className="text-xs text-indigo-200/80 mt-1 max-w-3xl leading-relaxed">
+            <p className="text-xs text-cover-foil/80 mt-1 max-w-3xl leading-relaxed">
               Chuyển hóa bài giảng kỹ thuật khô khan thành một câu chuyện học tập lôi cuốn. Quản lý trạng thái nhận thức người nghe qua <strong>Vòng lặp tò mò (Curiosity Loop)</strong>, <strong>Thuyết tải nhận thức (Sweller CLT)</strong>, và <strong>Khẩu ngữ tự nhiên</strong>.
             </p>
           </div>
 
           {/* Quick Metrics */}
           <div className="grid grid-cols-3 gap-2.5 shrink-0 text-center">
-            <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/10">
-              <div className="text-[10px] text-indigo-300 font-medium uppercase">Persona</div>
-              <div className="text-xs font-bold font-mono text-white mt-0.5">{activeNarrative.persona_archetype}</div>
+            <div className="bg-cover-deep  rounded-xl p-3 border border-white/10">
+              <div className="text-[11px] text-navy font-medium uppercase">Persona</div>
+              <div className="text-xs font-bold font-mono text-ink mt-0.5">{activeNarrative.persona_archetype}</div>
             </div>
-            <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/10">
-              <div className="text-[10px] text-indigo-300 font-medium uppercase">Curiosity Hooks</div>
-              <div className="text-base font-extrabold font-mono text-amber-300">{activeNarrative.total_curiosity_hooks}</div>
+            <div className="bg-cover-deep  rounded-xl p-3 border border-white/10">
+              <div className="text-[11px] text-navy font-medium uppercase">Curiosity Hooks</div>
+              <div className="text-base font-extrabold font-mono text-pen">{activeNarrative.total_curiosity_hooks}</div>
             </div>
-            <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/10">
-              <div className="text-[10px] text-indigo-300 font-medium uppercase">Avg Cog-Load</div>
-              <div className="text-base font-extrabold font-mono text-emerald-300">{Math.round(activeNarrative.average_cognitive_load * 100)}%</div>
+            <div className="bg-cover-deep  rounded-xl p-3 border border-white/10">
+              <div className="text-[11px] text-navy font-medium uppercase">Avg Cog-Load</div>
+              <div className="text-base font-extrabold font-mono text-print-soft">{Math.round(activeNarrative.average_cognitive_load * 100)}%</div>
             </div>
           </div>
         </div>
 
         {/* Narrative Beats Selector */}
         <div className="mt-5 pt-4 border-t border-white/10 flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="text-xs text-indigo-200/70 font-semibold shrink-0">Các Nhịp Tự Sự (Beats):</span>
+          <span className="text-xs text-cover-foil/70 font-semibold shrink-0">Các Nhịp Tự Sự (Beats):</span>
           {activeNarrative.narrative_beats.map((b, i) => (
             <button
               key={b.beat_id}
               onClick={() => setSelectedBeatId(b.beat_id)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold font-mono transition shrink-0 flex items-center gap-1.5 ${
                 b.beat_id === currentBeatId
-                  ? 'bg-white text-indigo-900 shadow-md'
-                  : 'bg-white/10 hover:bg-white/20 text-white'
+                  ? 'bg-paper-sheet text-cover shadow-md'
+                  : 'bg-cover-deep hover:bg-print text-white'
               }`}
             >
               <span>Beat #{i + 1} ({b.target_section_id})</span>
-              <span className={`w-2 h-2 rounded-full ${b.cognitive_goal.cognitive_load_score > 0.7 ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+              <span className={`w-2 h-2 rounded-full ${b.cognitive_goal.cognitive_load_score > 0.7 ? 'bg-pen-line' : 'bg-print'}`} />
             </button>
           ))}
         </div>
@@ -195,78 +195,78 @@ export const NarrativeInspector: React.FC<NarrativeInspectorProps> = ({
           {/* Left Column (8 cols): Cognitive Dynamics & Spoken Discourse */}
           <div className="lg:col-span-8 space-y-5">
             {/* 1. Curiosity Before Content */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
-              <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-slate-100">
+            <div className="bg-paper-sheet border border-rule rounded-2xl p-5 shadow-xs">
+              <div className="flex items-center justify-between mb-3 pb-2.5 border-b border-rule">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-amber-50 text-amber-600 border border-amber-200">
+                  <div className="p-1.5 rounded-lg bg-pen-soft text-pen border border-pen-line">
                     <HelpCircle className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    <h3 className="text-xs font-bold text-ink uppercase tracking-wider">
                       Vòng Lặp Tò Mò (Curiosity Before Content)
                     </h3>
-                    <p className="text-[11px] text-slate-400">Gợi mở câu đố nhận thức trước khi cung cấp kiến thức</p>
+                    <p className="text-xs text-ink-faint">Gợi mở câu đố nhận thức trước khi cung cấp kiến thức</p>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-pen-soft text-pen font-bold">
                   {selectedBeat.curiosity_gap?.hook_type.toUpperCase()}
                 </span>
               </div>
 
               {selectedBeat.curiosity_gap ? (
                 <div className="space-y-3 text-xs">
-                  <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-200">
-                    <div className="text-[10px] font-bold text-amber-800 uppercase font-mono mb-1">
+                  <div className="p-3.5 rounded-xl bg-pen-soft border border-pen-line">
+                    <div className="text-[11px] font-bold text-pen uppercase font-mono mb-1">
                       Câu hỏi kích hoạt tư duy (Provocative Question):
                     </div>
-                    <p className="text-slate-900 font-semibold text-sm leading-relaxed">
+                    <p className="text-ink font-semibold text-sm leading-relaxed">
                       "{selectedBeat.curiosity_gap.prompt_question}"
                     </p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase font-mono block mb-1">
+                    <div className="p-3 rounded-xl bg-paper-band border border-rule">
+                      <span className="text-[11px] font-bold text-ink-faint uppercase font-mono block mb-1">
                         1. Điểm neo đã biết (Known Anchor):
                       </span>
-                      <p className="text-slate-700">{selectedBeat.curiosity_gap.known_anchor}</p>
+                      <p className="text-ink-soft">{selectedBeat.curiosity_gap.known_anchor}</p>
                     </div>
-                    <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-200">
-                      <span className="text-[10px] font-bold text-indigo-700 uppercase font-mono block mb-1">
+                    <div className="p-3 rounded-xl bg-paper-band border border-rule-strong">
+                      <span className="text-[11px] font-bold text-print uppercase font-mono block mb-1">
                         2. Biên giới chưa biết (Unknown Frontier):
                       </span>
-                      <p className="text-slate-800">{selectedBeat.curiosity_gap.unknown_frontier}</p>
+                      <p className="text-ink">{selectedBeat.curiosity_gap.unknown_frontier}</p>
                     </div>
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-slate-400">Không có curiosity gap cho nhịp này.</p>
+                <p className="text-xs text-ink-faint">Không có curiosity gap cho nhịp này.</p>
               )}
             </div>
 
             {/* 2. Analogy & Conceptual Grounding */}
             {selectedBeat.analogy && (
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
-                <div className="flex items-center gap-2 mb-3 pb-2.5 border-b border-slate-100">
-                  <div className="p-1.5 rounded-lg bg-purple-50 text-purple-600 border border-purple-200">
+              <div className="bg-paper-sheet border border-rule rounded-2xl p-5 shadow-xs">
+                <div className="flex items-center gap-2 mb-3 pb-2.5 border-b border-rule">
+                  <div className="p-1.5 rounded-lg bg-paper-band text-print border border-rule-strong">
                     <Lightbulb className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    <h3 className="text-xs font-bold text-ink uppercase tracking-wider">
                       Điểm Tựa Ẩn Dụ Trực Quan (Analogy Grounding)
                     </h3>
-                    <p className="text-[11px] text-slate-400">Ánh xạ topo kỹ thuật trừu tượng sang trực giác đời thực</p>
+                    <p className="text-xs text-ink-faint">Ánh xạ topo kỹ thuật trừu tượng sang trực giác đời thực</p>
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-purple-50/50 border border-purple-200 space-y-2 text-xs">
+                <div className="p-3.5 rounded-xl bg-paper-band border border-rule-strong space-y-2 text-xs">
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500 font-medium">Ẩn dụ nguồn:</span>
-                    <span className="font-bold text-purple-900 font-mono">{selectedBeat.analogy.source_domain}</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-purple-400" />
-                    <span className="font-bold text-indigo-700 font-mono">{selectedBeat.analogy.target_concept}</span>
+                    <span className="text-ink-faint font-medium">Ẩn dụ nguồn:</span>
+                    <span className="font-bold text-cover font-mono">{selectedBeat.analogy.source_domain}</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-print-soft" />
+                    <span className="font-bold text-print font-mono">{selectedBeat.analogy.target_concept}</span>
                   </div>
-                  <p className="text-slate-700 leading-relaxed italic bg-white/70 p-2.5 rounded-lg border border-purple-100">
+                  <p className="text-ink-soft leading-relaxed italic bg-paper-sheet p-2.5 rounded-lg border border-rule-strong">
                     "{selectedBeat.analogy.mapping_explanation}"
                   </p>
                 </div>
@@ -274,50 +274,50 @@ export const NarrativeInspector: React.FC<NarrativeInspectorProps> = ({
             )}
 
             {/* 3. Spoken Discourse & Pacing Blueprint */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
-              <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+            <div className="bg-paper-sheet border border-rule rounded-2xl p-5 shadow-xs space-y-3">
+              <div className="flex items-center justify-between pb-2.5 border-b border-rule">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">
+                  <div className="p-1.5 rounded-lg bg-paper-band text-print border border-rule-strong">
                     <MessageSquare className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    <h3 className="text-xs font-bold text-ink uppercase tracking-wider">
                       Ngữ Dụng Học Khẩu Ngữ (Spoken Discourse & Pacing)
                     </h3>
-                    <p className="text-[11px] text-slate-400">Tạo nhịp điệu nói tự nhiên như người thật đang giảng giải</p>
+                    <p className="text-xs text-ink-faint">Tạo nhịp điệu nói tự nhiên như người thật đang giảng giải</p>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-paper-band text-print border border-rule-strong font-semibold">
                   Nghỉ tiêu hóa: {selectedBeat.spoken_discourse.digestive_pause_sec}s
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-mono">
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] text-slate-500 block mb-0.5">Dẫn nhập (Lead Marker):</span>
-                  <span className="text-indigo-700 font-bold">{selectedBeat.spoken_discourse.lead_marker}</span>
+                <div className="p-2.5 rounded-xl bg-paper-band border border-rule">
+                  <span className="text-[11px] text-ink-faint block mb-0.5">Dẫn nhập (Lead Marker):</span>
+                  <span className="text-print font-bold">{selectedBeat.spoken_discourse.lead_marker}</span>
                 </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] text-slate-500 block mb-0.5">Nghịch biện (Adversative):</span>
-                  <span className="text-slate-800 font-bold">{selectedBeat.spoken_discourse.adversative_marker || 'N/A'}</span>
+                <div className="p-2.5 rounded-xl bg-paper-band border border-rule">
+                  <span className="text-[11px] text-ink-faint block mb-0.5">Nghịch biện (Adversative):</span>
+                  <span className="text-ink font-bold">{selectedBeat.spoken_discourse.adversative_marker || 'N/A'}</span>
                 </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] text-slate-500 block mb-0.5">Hệ quả (Resultative):</span>
-                  <span className="text-emerald-700 font-bold">{selectedBeat.spoken_discourse.resultative_marker || 'N/A'}</span>
+                <div className="p-2.5 rounded-xl bg-paper-band border border-rule">
+                  <span className="text-[11px] text-ink-faint block mb-0.5">Hệ quả (Resultative):</span>
+                  <span className="text-print font-bold">{selectedBeat.spoken_discourse.resultative_marker || 'N/A'}</span>
                 </div>
               </div>
 
               {/* Deictic Visual Pointer */}
               {selectedBeat.spoken_discourse.deictic_visual_cues?.length > 0 && (
-                <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-200 text-xs">
-                  <div className="flex items-center gap-1.5 text-emerald-800 font-bold mb-1">
+                <div className="p-3 rounded-xl bg-paper-band border border-rule-strong text-xs">
+                  <div className="flex items-center gap-1.5 text-print font-bold mb-1">
                     <Eye className="w-3.5 h-3.5" />
                     <span>Chỉ dẫn thị giác khẩu ngữ (Deictic Visual Cue):</span>
                   </div>
-                  <p className="text-slate-800 font-medium">
+                  <p className="text-ink font-medium">
                     "{selectedBeat.spoken_discourse.deictic_visual_cues[0].phrase}"
                   </p>
-                  <span className="text-[10px] font-mono text-emerald-700 mt-1 block">
+                  <span className="text-[11px] font-mono text-print mt-1 block">
                     Target element: {selectedBeat.spoken_discourse.deictic_visual_cues[0].target_id}
                   </span>
                 </div>
@@ -326,12 +326,12 @@ export const NarrativeInspector: React.FC<NarrativeInspectorProps> = ({
 
             {/* 4. Cross-Slide Transitional Bridge */}
             {selectedBeat.transitional_bridge_out && (
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs">
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 font-mono flex items-center gap-1.5">
-                  <GitCommit className="w-3.5 h-3.5 text-indigo-600" />
+              <div className="bg-paper-band border border-rule rounded-2xl p-4 text-xs">
+                <div className="text-[11px] font-bold text-ink-faint uppercase tracking-wider mb-1 font-mono flex items-center gap-1.5">
+                  <GitCommit className="w-3.5 h-3.5 text-print" />
                   <span>Cầu Nối Chuyển Tiếp Sang Phân Cảnh Sau (Transitional Bridge):</span>
                 </div>
-                <p className="text-slate-800 leading-relaxed font-medium">
+                <p className="text-ink leading-relaxed font-medium">
                   "{selectedBeat.transitional_bridge_out}"
                 </p>
               </div>
@@ -341,10 +341,10 @@ export const NarrativeInspector: React.FC<NarrativeInspectorProps> = ({
           {/* Right Column (4 cols): Cognitive Load Gauge & Comparison */}
           <div className="lg:col-span-4 space-y-4">
             {/* Cognitive State Box */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3.5">
-              <div className="flex items-center gap-2 pb-2.5 border-b border-slate-100">
-                <Brain className="w-4 h-4 text-indigo-600" />
-                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+            <div className="bg-paper-sheet border border-rule rounded-2xl p-5 shadow-xs space-y-3.5">
+              <div className="flex items-center gap-2 pb-2.5 border-b border-rule">
+                <Brain className="w-4 h-4 text-print" />
+                <h3 className="text-xs font-bold text-ink uppercase tracking-wider">
                   Mô Hình Nhận Thức (Theory of Mind)
                 </h3>
               </div>
@@ -352,19 +352,19 @@ export const NarrativeInspector: React.FC<NarrativeInspectorProps> = ({
               {/* Sweller Cognitive Load Gauge */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600 font-medium">Tải nhận thức (Sweller CLT):</span>
-                  <span className="font-mono font-bold text-indigo-700">
+                  <span className="text-ink-soft font-medium">Tải nhận thức (Sweller CLT):</span>
+                  <span className="font-mono font-bold text-print">
                     {Math.round(selectedBeat.cognitive_goal.cognitive_load_score * 100)}%
                   </span>
                 </div>
-                <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                <div className="w-full bg-paper-band rounded-full h-2.5 overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${
                       selectedBeat.cognitive_goal.cognitive_load_score > 0.75
-                        ? 'bg-rose-500'
+                        ? 'bg-pen'
                         : selectedBeat.cognitive_goal.cognitive_load_score > 0.55
-                        ? 'bg-amber-500'
-                        : 'bg-emerald-500'
+                        ? 'bg-pen'
+                        : 'bg-print'
                     }`}
                     style={{ width: `${selectedBeat.cognitive_goal.cognitive_load_score * 100}%` }}
                   />
@@ -372,25 +372,25 @@ export const NarrativeInspector: React.FC<NarrativeInspectorProps> = ({
               </div>
 
               {/* Working Memory Chunks */}
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
-                <div className="text-[10px] text-slate-500 uppercase font-mono font-bold">
+              <div className="p-3 rounded-xl bg-paper-band border border-rule text-xs space-y-1">
+                <div className="text-[11px] text-ink-faint uppercase font-mono font-bold">
                   Bộ nhớ làm việc (Miller 7±2):
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-base text-slate-900 font-mono">
+                  <span className="font-extrabold text-base text-ink font-mono">
                     {selectedBeat.cognitive_goal.active_memory_items}
                   </span>
-                  <span className="text-slate-500 text-[11px]">khái niệm đồng thời</span>
+                  <span className="text-ink-faint text-xs">khái niệm đồng thời</span>
                 </div>
               </div>
 
               {/* Probable Misconception */}
               {selectedBeat.cognitive_goal.probable_misconception && (
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1">
-                  <span className="text-[10px] font-bold text-amber-800 uppercase font-mono block">
+                <div className="p-3 rounded-xl bg-pen-soft border border-pen-line text-xs space-y-1">
+                  <span className="text-[11px] font-bold text-pen uppercase font-mono block">
                     Ngộ nhận học viên tiềm năng:
                   </span>
-                  <p className="text-slate-700 text-[11px] leading-relaxed">
+                  <p className="text-ink-soft text-xs leading-relaxed">
                     {selectedBeat.cognitive_goal.probable_misconception}
                   </p>
                 </div>
@@ -398,28 +398,28 @@ export const NarrativeInspector: React.FC<NarrativeInspectorProps> = ({
             </div>
 
             {/* Side-by-Side Comparison Card */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-slate-100">
-                <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <div className="bg-paper-sheet border border-rule rounded-2xl p-5 shadow-xs space-y-3">
+              <h3 className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-rule">
+                <TrendingUp className="w-4 h-4 text-print" />
                 So Sánh Giọng Điệu Giảng Bài
               </h3>
 
               <div className="space-y-2 text-xs">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase font-mono block mb-1">
+                <div className="p-3 rounded-xl bg-paper-band border border-rule">
+                  <span className="text-[11px] font-bold text-ink-faint uppercase font-mono block mb-1">
                     ❌ Trước (Tóm tắt sách giáo khoa khô khan):
                   </span>
-                  <p className="text-slate-600 text-[11px] leading-relaxed italic">
+                  <p className="text-ink-soft text-xs leading-relaxed italic">
                     "Slide này trình bày định dạng 17 keypoints. Các điểm bao gồm mũi, mắt, tai, vai, khuỷu tay và chân."
                   </p>
                 </div>
 
-                <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200">
-                  <span className="text-[10px] font-bold text-emerald-800 uppercase font-mono block mb-1 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <div className="p-3 rounded-xl bg-paper-band border border-rule-strong">
+                  <span className="text-[11px] font-bold text-print uppercase font-mono block mb-1 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-print" />
                     ✓ Sau (Tự sự NotebookLM lôi cuốn):
                   </span>
-                  <p className="text-slate-900 text-[11px] leading-relaxed font-medium">
+                  <p className="text-ink text-xs leading-relaxed font-medium">
                     "{selectedBeat.spoken_discourse.lead_marker} {selectedBeat.curiosity_gap?.prompt_question} Thay vì vẽ hàng triệu pixel, ta chỉ cần 17 điểm then chốt như người que..."
                   </p>
                 </div>

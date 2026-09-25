@@ -120,7 +120,7 @@ npm run build
    - **Narration (3A)**: Spoken audio script with Web Speech audio player.
    - **Prosody (3B)**: 4 pause types and W3C SSML.
    - **Visual Intent (3C)**: 13 canonical taxonomies with necessity justifications.
-   - **Quality Guard (M4)**: DAR-P certified with 8.2% error ($\le 15\%$).
+   - **Quality Guard (M4)**: measures DAR-P (target $\le 15\%$) and the other metrics on every run; results and token usage are in the run log.
    - **CLSG-IR (OUT)**: Intermediate Representation JSON with copy and download.
    - **Video Preview (SYN)**: Video simulation timeline synchronized to audio timestamps.
 5. Expand the **Instructional Decision Trace** at the bottom for cognitive audit explainability.

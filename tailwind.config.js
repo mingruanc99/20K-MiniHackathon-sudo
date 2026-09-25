@@ -21,11 +21,21 @@ export default {
         },
         slate: {
           850: '#172033',
-        }
+        },
+        // Sổ đầu bài world (lecturer / learner surfaces)
+        cover: { DEFAULT: '#173f35', deep: '#10302a', foil: '#e6d9a8' },
+        paper: { DEFAULT: '#f5f7f2', band: '#e9eee4', edge: '#dfe6da', sheet: '#fbfcf9', wash: '#fdf6f4' },
+        rule: { DEFAULT: '#c9d6ca', strong: '#93aa98' },
+        print: { DEFAULT: '#2c5a47', soft: '#557a69' },
+        ink: { DEFAULT: '#1b2559', soft: '#4b5577', faint: '#5c6482' },
+        pen: { DEFAULT: '#BE1E2D', soft: '#f9e3e5', line: '#eab4b9' },
+        navy: { DEFAULT: '#134B88', soft: '#e4ecf6', line: '#b7cbe3' }
       },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        ledger: ['"Be Vietnam Pro"', 'Inter', 'system-ui', 'sans-serif'],
+        hand: ['"Patrick Hand"', '"Be Vietnam Pro"', 'cursive'],
       },
     },
   },

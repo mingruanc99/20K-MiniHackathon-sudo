@@ -18,8 +18,8 @@ interface CompactChartProps {
 
 export const CompactChart: React.FC<CompactChartProps> = ({
   data,
-  color = '#2563eb',
-  fillColor = 'rgba(37, 99, 235, 0.08)',
+  color = '#2c5a47',
+  fillColor = 'rgba(44, 90, 71, 0.10)',
   height = 160,
   type = 'area',
   valuePrefix = '',
@@ -28,7 +28,7 @@ export const CompactChart: React.FC<CompactChartProps> = ({
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   if (!data || data.length === 0) {
-    return <div className="h-32 flex items-center justify-center text-xs text-slate-400">Không có dữ liệu</div>;
+    return <div className="h-32 flex items-center justify-center text-xs text-ink-faint">Không có dữ liệu</div>;
   }
 
   const values = data.map((d) => d.value);
@@ -58,14 +58,14 @@ export const CompactChart: React.FC<CompactChartProps> = ({
     <div className="relative w-full select-none" style={{ height }}>
       {hoveredIdx !== null && (
         <div
-          className="absolute z-20 pointer-events-none px-2.5 py-1 bg-slate-900 text-white rounded text-xs font-mono shadow-md transform -translate-x-1/2 -translate-y-full"
+          className="absolute z-20 pointer-events-none px-2.5 py-1 bg-cover text-white rounded text-xs font-mono shadow-md transform -translate-x-1/2 -translate-y-full"
           style={{
             left: `${(getX(hoveredIdx) / width) * 100}%`,
             top: `${getY(data[hoveredIdx].value) - 8}px`
           }}
         >
-          <div className="text-[10px] text-slate-300 font-sans">{data[hoveredIdx].label}</div>
-          <div className="font-semibold text-blue-300">
+          <div className="text-[11px] text-paper/80 font-sans">{data[hoveredIdx].label}</div>
+          <div className="font-semibold text-cover-foil">
             {valuePrefix}{data[hoveredIdx].value.toLocaleString()}{valueSuffix}
           </div>
         </div>
@@ -159,7 +159,7 @@ export const CompactChart: React.FC<CompactChartProps> = ({
       </svg>
 
       {/* X-axis labels */}
-      <div className="flex justify-between text-[10px] text-slate-400 pt-1 font-mono px-2">
+      <div className="flex justify-between text-[11px] text-ink-faint pt-1 font-mono px-2">
         <span>{data[0]?.label}</span>
         {data.length > 4 && <span>{data[Math.floor(data.length / 2)]?.label}</span>}
         <span>{data[data.length - 1]?.label}</span>

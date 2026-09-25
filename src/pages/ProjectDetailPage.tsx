@@ -1,6 +1,6 @@
 // src/pages/ProjectDetailPage.tsx
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { projectService } from '../services/projectService';
 import { pipelineOrchestrator } from '../pipeline/orchestrator';
@@ -25,6 +25,8 @@ import { KnowledgeGraphCurriculumViewer } from '../components/pipeline/Knowledge
 import TransitionIntelligenceViewer from '../components/pipeline/TransitionIntelligenceViewer';
 import { technicalTerminologyService } from '../pipeline/services/technicalTerminologyService';
 import { ApiKeyModal } from '../components/common/ApiKeyModal';
+import { benchmarkService, summarizeRun } from '../services/benchmark/benchmarkService';
+import { BenchmarkRunLog } from '../services/benchmark/benchmarkTypes';
 import {
   Sparkles,
   Play,
@@ -42,6 +44,7 @@ export const ProjectDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,6 +54,7 @@ export const ProjectDetailPage: React.FC = () => {
   const [progressMsg, setProgressMsg] = useState('');
   const [traceLogs, setTraceLogs] = useState<ExecutionTraceLog[]>([]);
   const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
+  const [lastRun, setLastRun] = useState<BenchmarkRunLog | null>(null);
 
   useEffect(() => {
     if (user && id) {
@@ -131,10 +135,16 @@ export const ProjectDetailPage: React.FC = () => {
     }
     p = sanitizeLegacyProject(p);
     setProject(p);
+    setTraceLogs(p.executionLogs || []);
+    benchmarkService.listRuns(p.projectId, 5).then((runs) => setLastRun(runs.find((r) => r.kind === 'pipeline') || null));
     setLoading(false);
 
     // If already verified, set stage to quality or ir
-    if (p.status === 'verified' && p.clsgIr) {
+    const rerun = searchParams.get('rerun') === '1';
+    if (rerun) {
+      setSearchParams({}, { replace: true });
+      runPipeline(p);
+    } else if (p.status === 'verified' && p.clsgIr) {
       setCurrentStage('quality');
     } else if (p.status === 'uploaded') {
       // Auto-trigger full pipeline for immediate satisfaction
@@ -155,7 +165,8 @@ export const ProjectDetailPage: React.FC = () => {
         proj.canonicalDocument || proj.source.fileName,
         proj.source.fileName,
         proj.configuration,
-        (msg) => setProgressMsg(msg)
+        (msg) => setProgressMsg(msg),
+        { knowledgeTree: proj.knowledgeTree, projectId: proj.projectId, projectTitle: proj.title }
       );
 
       const updatedProject: Project = {
@@ -165,12 +176,15 @@ export const ProjectDetailPage: React.FC = () => {
         lessonBlueprint: result.blueprint,
         clsgIr: result.verifiedIr,
         qualityReport: result.qualityReport,
+        executionLogs: result.traceLogs,
+        lastBenchmark: summarizeRun(result.benchmark),
         updatedAt: new Date().toISOString()
       };
 
       setProject(updatedProject);
       setTraceLogs(result.traceLogs);
-      await projectService.updateProject(updatedProject);
+      setLastRun(result.benchmark);
+      await Promise.all([projectService.updateProject(updatedProject), benchmarkService.saveRun(result.benchmark)]);
       setCurrentStage('quality');
     } catch (err: any) {
       console.error('Pipeline failed:', err);
@@ -197,17 +211,17 @@ export const ProjectDetailPage: React.FC = () => {
   };
 
   if (loading) {
-    return <div className="p-12 text-center text-xs text-slate-500">Đang tải phòng thiết kế bài giảng...</div>;
+    return <div className="p-12 text-center text-xs text-ink-faint">Đang tải phòng thiết kế bài giảng...</div>;
   }
 
   if (!project) {
     return (
       <div className="p-12 text-center space-y-3">
-        <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
-        <div className="text-sm font-semibold text-slate-700">Không tìm thấy bài giảng</div>
+        <AlertCircle className="w-8 h-8 text-pen mx-auto" />
+        <div className="text-sm font-semibold text-ink-soft">Không tìm thấy bài giảng</div>
         <button
           onClick={() => navigate('/dashboard')}
-          className="text-xs text-indigo-600 font-semibold"
+          className="text-xs text-navy font-semibold"
         >
           Quay lại Bảng điều khiển
         </button>
@@ -220,23 +234,23 @@ export const ProjectDetailPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {pipelineError && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div className="p-4 rounded-xl bg-pen-soft border border-pen-line text-xs text-pen flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-pen shrink-0" />
             <span className="leading-relaxed">{pipelineError}</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setIsKeyModalOpen(true)}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              className="px-3 py-1.5 bg-pen hover:bg-pen text-white rounded-lg font-bold text-xs transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
             >
               <KeyRound className="w-3.5 h-3.5" />
               <span>Đổi Key / Chuyển sang Claude hoặc OpenAI</span>
             </button>
             <button
               onClick={() => runPipeline()}
-              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-semibold text-[11px] transition"
+              className="px-3 py-1.5 bg-pen hover:bg-pen text-white rounded-lg font-semibold text-xs transition"
             >
               Thử lại
             </button>
@@ -245,34 +259,41 @@ export const ProjectDetailPage: React.FC = () => {
       )}
 
       {/* Studio Header */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-paper-sheet border border-rule rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+            <span className="text-[11px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-paper-band text-ink-soft">
               {project.source.fileType.toUpperCase()}
             </span>
             <StatusBadge status={project.status} />
-            <span className="text-xs text-slate-400">• Cập nhật lúc {new Date(project.updatedAt).toLocaleTimeString()}</span>
+            <span className="text-xs text-ink-faint">• Cập nhật lúc {new Date(project.updatedAt).toLocaleTimeString()}</span>
           </div>
-          <h1 className="text-xl font-bold text-slate-900">{project.title}</h1>
-          <p className="text-xs text-slate-500 mt-0.5">{project.description}</p>
+          <h1 className="text-xl font-bold text-ink">{project.title}</h1>
+          <p className="text-xs text-ink-faint mt-0.5">{project.description}</p>
         </div>
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
+          <Link
+            to={`/projects/${project.projectId}/knowledge`}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rule-strong hover:bg-paper-band text-ink-soft text-xs font-semibold shadow-2xs transition"
+          >
+            <Layers className="w-3.5 h-3.5 text-print" />
+            <span>Knowledge Inspector</span>
+          </Link>
           <button
             type="button"
             onClick={() => setIsKeyModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-rule-strong hover:bg-paper-band text-ink-soft text-xs font-semibold shadow-2xs transition cursor-pointer"
           >
-            <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+            <KeyRound className="w-3.5 h-3.5 text-pen" />
             <span>Cấu hình AI / Đổi Key</span>
           </button>
 
           <button
             onClick={() => runPipeline()}
             disabled={pipelineRunning}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cover hover:bg-cover text-white text-xs font-semibold shadow-xs transition disabled:opacity-50"
           >
             {pipelineRunning ? (
               <RotateCw className="w-3.5 h-3.5 animate-spin" />
@@ -290,20 +311,20 @@ export const ProjectDetailPage: React.FC = () => {
       {/* Active Stage View */}
       <div className="min-h-[460px]">
         {currentStage === 'source' && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Tài Liệu Bài Giảng Gốc</h2>
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+          <div className="bg-paper-sheet border border-rule rounded-2xl p-6 shadow-xs space-y-4">
+            <h2 className="text-sm font-bold text-ink uppercase tracking-wider">Tài Liệu Bài Giảng Gốc</h2>
+            <div className="p-4 rounded-xl bg-paper-band border border-rule space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Tên file:</span>
-                <span className="font-mono font-bold text-slate-800">{project.source.fileName}</span>
+                <span className="text-ink-faint font-medium">Tên file:</span>
+                <span className="font-mono font-bold text-ink">{project.source.fileName}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Định dạng:</span>
-                <span className="uppercase font-mono text-slate-800">{project.source.fileType}</span>
+                <span className="text-ink-faint font-medium">Định dạng:</span>
+                <span className="uppercase font-mono text-ink">{project.source.fileType}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 font-medium">Cloudinary Public ID:</span>
-                <span className="font-mono text-indigo-700">{project.source.cloudinaryPublicId || 'demo/cnn_intro'}</span>
+                <span className="text-ink-faint font-medium">Cloudinary Public ID:</span>
+                <span className="font-mono text-print">{project.source.cloudinaryPublicId || 'demo/cnn_intro'}</span>
               </div>
             </div>
           </div>
@@ -354,27 +375,46 @@ export const ProjectDetailPage: React.FC = () => {
 
       {/* Live Pipeline Execution Trace */}
       {traceLogs.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-          <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-indigo-600" />
+        <div className="bg-paper-sheet border border-rule rounded-xl p-5 shadow-xs">
+          <div className="flex items-center justify-between mb-3 border-b border-rule pb-2">
+            <h3 className="text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-print" />
               <span>Nhật Ký Thực Thi Pipeline</span>
             </h3>
-            <span className="text-[11px] font-mono text-indigo-600 font-semibold">
-              Tổng thời gian chạy: {traceLogs.reduce((sum, l) => sum + l.duration_sec, 0).toFixed(2)}s
-            </span>
+            <div className="flex items-center gap-3">
+              {lastRun && (
+                <span className="text-xs font-mono text-ink-soft">
+                  {lastRun.tokens.totalTokens.toLocaleString()} tokens • {lastRun.tokens.calls - lastRun.tokens.cacheHits} lần gọi API
+                  {lastRun.tokens.estimatedCalls > 0 ? ` (${lastRun.tokens.estimatedCalls} ước tính)` : ''}
+                  {lastRun.tokens.costUsd > 0 ? ` • $${lastRun.tokens.costUsd.toFixed(5)}` : ''}
+                </span>
+              )}
+              <span className="text-xs font-mono text-print font-semibold">
+                Tổng: {((lastRun?.total_ms ?? 0) / 1000 || traceLogs.reduce((sum, l) => sum + l.duration_sec, 0)).toFixed(2)}s
+              </span>
+              {lastRun && (
+                <button
+                  type="button"
+                  onClick={() => benchmarkService.download(lastRun)}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-rule-strong text-xs font-semibold text-ink-soft hover:bg-paper-band"
+                >
+                  <Download className="w-3 h-3" />
+                  Log benchmark (JSON)
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">
             {traceLogs.map((log, i) => (
-              <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+              <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-paper-band border border-rule text-xs">
                 <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  <span className="font-semibold text-slate-800">{log.stage}</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-print"></span>
+                  <span className="font-semibold text-ink">{log.stage}</span>
                 </div>
-                <div className="flex items-center gap-3 font-mono text-slate-500">
-                  <span className="text-[11px] text-slate-400">{JSON.stringify(log.details)}</span>
-                  <span className="font-bold text-slate-700">{log.duration_sec}s</span>
+                <div className="flex items-center gap-3 font-mono text-ink-faint">
+                  <span className="text-xs text-ink-faint">{JSON.stringify(log.details)}</span>
+                  <span className="font-bold text-ink-soft">{log.duration_sec}s</span>
                 </div>
               </div>
             ))}

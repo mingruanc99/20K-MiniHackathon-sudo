@@ -11,9 +11,21 @@ import {
 } from '../../types';
 import { narrativePlannerService } from '../services/narrativePlannerService';
 import { llmRouter } from '../../services/llm/LLMRouter';
+import { extractLocalKeywords, pageTextsFromSections } from '../services/keywordExtractor';
+import type { TreePipelineOverrides } from '../services/knowledgeTreeOps';
 
 export class InstructionalPlanner {
-  async plan(docTree: CanonicalDocumentTree, config: UserConfiguration): Promise<LessonBlueprint> {
+  /**
+   * @param overrides weights from the Knowledge Inspector tree: excluded pages are dropped,
+   *   page durations become time budgets and weighted keywords become key concepts.
+   */
+  async plan(sourceTree: CanonicalDocumentTree, config: UserConfiguration, overrides?: TreePipelineOverrides): Promise<LessonBlueprint> {
+    const docTree: CanonicalDocumentTree = overrides
+      ? (() => {
+          const sections = sourceTree.sections.filter((s) => !overrides.excludedSections.has(s.section_id));
+          return { ...sourceTree, sections: sections.length ? sections : sourceTree.sections, total_sections: sections.length || sourceTree.sections.length };
+        })()
+      : sourceTree;
     const numSections = docTree.sections.length;
     if (numSections === 0) {
       throw new Error('Cannot create lesson plan from an empty document tree.');
@@ -29,9 +41,9 @@ export class InstructionalPlanner {
     const teachingUnits: TeachingUnit[] = await llmRouter.generateTeachingPlan(docTree, lessonModel, prioritization, config);
 
     // Step 4: Mathematical Duration & Word Budget Allocation (M2.10 - Deterministic 0-LLM)
-    const minReasonableSec = numSections * 20;
     const configuredSec = config.targetDurationSeconds || 180;
-    const totalSec = Math.max(configuredSec, minReasonableSec);
+    // Without a user-weighted tree, keep a floor of 20 s per page; with a tree, honour the user's target exactly.
+    const totalSec = overrides ? configuredSec : Math.max(configuredSec, numSections * 20);
     const wpm = config.targetWpm || 140;
 
     // Pause overhead accounts for 18% in normal pacing, 22% in slow, 12% in fast
@@ -43,8 +55,18 @@ export class InstructionalPlanner {
     const totalWordBudget = Math.round(netSpeakingSec * (wpm / 60));
 
     // Heuristic duration distribution weights
-    const weights = this.calculateWeights(numSections);
-    const durations = this.distributeDurations(totalSec, weights);
+    let durations: number[];
+    const treeDurations = overrides ? docTree.sections.map((s) => overrides.sectionDurations[s.section_id] || 0) : [];
+    const treeSum = treeDurations.reduce((a, b) => a + b, 0);
+    if (overrides && treeSum > 0) {
+      // Scale the tree's split to the configured length (the tree may have been edited to another total).
+      durations = this.distributeDurations(totalSec, treeDurations.map((d) => d / treeSum));
+    } else {
+      durations = this.distributeDurations(totalSec, this.calculateWeights(numSections));
+    }
+
+    // Weighted keywords: from the tree when available, otherwise computed locally for the whole deck.
+    const localKeywords = overrides ? null : extractLocalKeywords(pageTextsFromSections(docTree.sections), { maxPerPage: 5, minWeight: 0.3 });
 
     const sectionPlans: SectionPlan[] = [];
     const cumulativeConcepts: string[] = [];
@@ -56,7 +78,8 @@ export class InstructionalPlanner {
       const bloom = this.determineBloomLevel(role, config.learnerLevel);
 
       const secWordBudget = Math.max(15, Math.round(duration * (1.0 - pauseFactor) * (wpm / 60)));
-      const extractedConcepts = this.extractConcepts(sec.title, sec.raw_text || '');
+      const treeKeywords = overrides?.sectionKeywords[sec.section_id];
+      const extractedConcepts = (treeKeywords && treeKeywords.length ? treeKeywords : (localKeywords?.get(sec.section_id) || []).map((k) => k.term)).slice(0, 6);
       const prereqs = cumulativeConcepts.slice(0, 3);
       cumulativeConcepts.push(...extractedConcepts);
 
@@ -204,22 +227,6 @@ export class InstructionalPlanner {
     if (role === 'comparison') return 'Analyze';
     if (role === 'summary') return 'Evaluate';
     return 'Understand';
-  }
-
-  private extractConcepts(title: string, rawText: string): string[] {
-    const candidates = `${title} ${rawText}`.split(/\s+/);
-    const concepts: string[] = [];
-    const stopWords = new Set(['this', 'that', 'with', 'from', 'into', 'about', 'slide', 'section', 'what', 'when']);
-
-    for (const w of candidates) {
-      const clean = w.replace(/[^a-zA-Z0-9]/g, '');
-      if (clean.length > 4 && !stopWords.has(clean.toLowerCase())) {
-        if (!concepts.includes(clean) && concepts.length < 4) {
-          concepts.push(clean);
-        }
-      }
-    }
-    return concepts.length > 0 ? concepts : ['Core Concept', 'Technical Architecture'];
   }
 
   private formulateLearningGoal(

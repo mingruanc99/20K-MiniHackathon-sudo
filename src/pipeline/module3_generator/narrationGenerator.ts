@@ -1,16 +1,17 @@
 // src/pipeline/module3_generator/narrationGenerator.ts
 /**
- * Module 3A: Context-Aware Narration Generator
- * 
- * Transforms SectionPlan, NarrativePlan, SlideAnalysis, and extracted content into
- * natural, coherent educational lecture narration.
- * 
- * Key Principles:
- * 1. Vietnamese-first narration + standard English technical terminology preservation
- * 2. Role-based generation (CORE_CONCEPT, KEY_EXPLANATION, PROCESS, EXAMPLE, APPLICATION, SUMMARY, DECORATIVE...)
- * 3. Never use numbered narration ("Thứ nhất, Thứ hai...") by default unless list_strategy is explicitly non-NONE
- * 4. Continuity between slides (bridges from previous, references to earlier concepts without full re-definition)
- * 5. Strictly calibrated to W_target (word budget) while respecting decorative slides (low/zero expansion)
+ * Module 3A: Context-Aware Narration Generator (template engine, zero-LLM)
+ *
+ * Turns a SectionPlan + extracted page content into spoken narration.
+ * Principles:
+ * 1. Vietnamese-first narration, English technical terms preserved
+ * 2. Role-based generation (CORE_CONCEPT, PROCESS, EXAMPLE, SUMMARY, DECORATIVE...)
+ * 3. Grounded only in page content: bullets, speaker notes, and OCR readings of tables/diagrams.
+ *    No canned topic text and no generic filler sentences.
+ * 4. Headings: the lesson title is spoken once (first scene), a chapter title once (its first page),
+ *    a section title is not announced by the template at all
+ * 5. Connectives are added only when the content licenses them (see discoursePolicy.ts)
+ * 6. Calibrated to the word budget by adding more source content, never filler
  */
 
 import {
@@ -34,548 +35,243 @@ export interface NarrationContext {
   globalContext?: GlobalNarrativeContext;
   usedOpenings?: Set<string>;
   usedPhrases?: Set<string>;
+  /** Chapter membership from the knowledge tree. */
+  chapter?: { title: string; isFirstPage: boolean; isOnlyChapter?: boolean };
+  /** Readings of tables/diagrams/charts on this page (OCR or native). */
+  visualReadings?: { kind: string; text: string; summary?: string }[];
+  /** Speaker notes on this page. */
+  notes?: string[];
+  lessonTitle?: string;
 }
 
+const resolve = (s: string) => technicalTerminologyService.resolveAndPreserveSentence(s).resolvedText;
+const lowerFirst = (s: string) => (s && !/^[A-Z]{2,}/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+const endSentence = (s: string) => (/[.!?…:]$/.test(s.trim()) ? s.trim() : `${s.trim()}.`);
+
 export class NarrationGenerator {
-  generateNarration(
-    plan: SectionPlan,
-    config: UserConfiguration,
-    rawText?: string,
-    context?: NarrationContext
-  ): string {
+  generateNarration(plan: SectionPlan, config: UserConfiguration, rawText?: string, context?: NarrationContext): string {
     const role: SlideRole = plan.slide_analysis?.slide_role || this.inferFallbackRole(plan);
     const targetWords = Math.max(15, plan.target_word_budget || 70);
-
-    // Narration language policy
-    const narrationLang =
-      config.narration_language || config.language_policy?.narration_language || config.language || 'vi';
+    const narrationLang = config.narration_language || config.language_policy?.narration_language || config.language || 'vi';
     const isVietnamese = narrationLang !== 'en';
 
-    // 1. Decorative slide rule (Section 15): minimal/no narration
+    const chapterIntro = this.chapterIntro(context, isVietnamese);
+
+    // Decorative pages (title-only, agenda, thank-you) get no narration of their own.
     if (role === 'DECORATIVE' || (role !== 'INTRODUCTION' && role !== 'HOOK' && role !== 'THINK' && plan.slide_analysis?.requires_explanation === false)) {
-      if (isVietnamese) {
-        return `Tiếp theo là phần ${plan.title}.`;
-      } else {
-        return `Next, we move to ${plan.title}.`;
-      }
+      return chapterIntro;
     }
 
-    // 2. Check for exact demo match in rawText or key concepts
-    if (rawText && rawText.includes('CNN dùng kernel để quét qua từng vùng nhỏ của ảnh')) {
-      return 'CNN dùng kernel để quét qua từng vùng nhỏ của ảnh và tạo ra feature map.';
-    }
+    // The page title is a heading, not content: never read it back as a body sentence.
+    const titleKey = (plan.title || '').trim().toLowerCase().replace(/[.…:]+$/, '');
+    const cleanRawText = this.cleanRaw(rawText || '', plan.slide_analysis?.excluded_content || [])
+      .split('\n')
+      .filter((line) => line.trim().toLowerCase().replace(/[.…:]+$/, '') !== titleKey)
+      .join('\n');
+    const bullets = this.extractBulletPoints(cleanRawText).map((b) => (isVietnamese ? resolve(b.replace(/\.+$/, '')) : b.replace(/\.+$/, '')));
 
-    // 3. Clean rawText by removing excluded_content & metadata tokens
-    const excludedTokens = plan.slide_analysis?.excluded_content || [];
-    let cleanRawText = rawText || '';
-    excludedTokens.forEach((tok) => {
-      if (tok && tok.trim()) {
-        const esc = tok.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        cleanRawText = cleanRawText.replace(new RegExp(esc, 'gi'), '');
-      }
+    let script = isVietnamese
+      ? this.generateVietnamese(plan, role, bullets, cleanRawText, context)
+      : this.generateEnglish(plan, role, bullets, context);
+
+    if (chapterIntro && !(plan.order === 1 && role === 'INTRODUCTION')) script = `${chapterIntro} ${script}`;
+
+    if (isVietnamese) script = technicalTerminologyService.repairNarrationTargeted(script).repairedText;
+    script = contentPurifierService.purifyNarration(script, { title: plan.title, role }).cleanedText;
+    script = this.calibrateToWordBudget(script, targetWords, plan, role, context, isVietnamese);
+    return script.trim();
+  }
+
+  private chapterIntro(context: NarrationContext | undefined, isVi: boolean): string {
+    const ch = context?.chapter;
+    if (!ch || !ch.isFirstPage || ch.isOnlyChapter || !ch.title) return '';
+    const title = resolve(ch.title);
+    if (context?.lessonTitle && title.toLowerCase() === context.lessonTitle.toLowerCase()) return '';
+    return isVi ? `Chúng ta bắt đầu với ${title}.` : `Let's start with ${title}.`;
+  }
+
+  private cleanRaw(rawText: string, excluded: string[]): string {
+    let text = rawText;
+    excluded.forEach((tok) => {
+      if (tok && tok.trim()) text = text.replace(new RegExp(tok.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '');
     });
-    cleanRawText = cleanRawText
+    return text
       .split('\n')
       .filter((line) => {
-        const l = line.toLowerCase();
-        return (
-          !l.includes('aicb-') &&
-          !l.includes('data track') &&
-          !l.includes('vinuniversity') &&
-          !l.includes('all rights reserved') &&
-          !l.includes('copyright') &&
-          !/^ngày\s*\d+/i.test(l.trim()) &&
-          !/^chương\s*\d+/i.test(l.trim())
-        );
+        const l = line.toLowerCase().trim();
+        return l && !l.includes('all rights reserved') && !l.includes('copyright') && !/^ngày\s*\d+/i.test(l) && !/^\[note:/i.test(l);
       })
       .join('\n');
-
-    const titleLower = (plan.title || '').toLowerCase();
-
-    // 4. Dedicated handling for INTRODUCTION, HOOK, THINK, EXAMPLE, MECHANISM
-    if (role === 'INTRODUCTION') {
-      const resolvedTitle = technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText;
-      if (resolvedTitle.toLowerCase().includes('keypoint & pose')) {
-        return 'Chào mừng các bạn đến với bài học về Keypoint & Pose. Trong phần này, chúng ta sẽ tìm hiểu cách mô hình biểu diễn các điểm đặc trưng và tư thế của con người.';
-      }
-      if (isVietnamese) {
-        return `Chào mừng các bạn đến với bài học về ${resolvedTitle}. Trong phần này, chúng ta sẽ cùng tìm hiểu những khái niệm và nguyên lý cốt lõi của chủ đề này.`;
-      } else {
-        return `Welcome to the lecture on ${resolvedTitle}. In this section, we will explore the foundational principles of this topic.`;
-      }
-    }
-
-    if (role === 'HOOK') {
-      const rawLower = (rawText || '').toLowerCase();
-      if (rawLower.includes('tài xế') || rawLower.includes('tay trái') || rawLower.includes('vô-lăng')) {
-        return isVietnamese
-          ? 'Bạn thử nhìn một người từ góc này. Liệu mô hình có thể xác định chính xác đâu là tay trái và tay phải?'
-          : 'Looking at a person from this angle, can the model accurately determine which hand is left and which is right?';
-      }
-      if (isVietnamese) {
-        const questionMatch = cleanRawText.match(/[^.!?\n]+(?:\?)/);
-        if (questionMatch && questionMatch[0].trim().length > 10) {
-          let q = questionMatch[0].trim().replace(/^[•\-\*\d\.\)]\s*/, '');
-          q = technicalTerminologyService.resolveAndPreserveSentence(q).resolvedText;
-          return `Hãy thử quan sát tình huống thực tế này: ${q}`;
-        }
-        const resolvedTitle = technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText;
-        return `Khi tiếp cận ${resolvedTitle}, câu hỏi thực tế đặt ra là làm thế nào mô hình nhận diện chính xác các đặc trưng trong điều kiện góc nhìn bị hạn chế?`;
-      } else {
-        return "Consider this real-world scenario: how can the model reliably detect key features when the viewpoint is restricted?";
-      }
-    }
-
-    if (role === 'THINK' || role === 'QUESTION') {
-      const rawLower = (rawText || '').toLowerCase();
-      if (rawLower.includes('tài xế') || rawLower.includes('tay trái') || rawLower.includes('vô-lăng') || rawLower.includes('hãy suy nghĩ')) {
-        return isVietnamese
-          ? 'Nếu chỉ nhìn một người từ góc này, bạn có xác định được đâu là tay trái và tay phải không? Thách thức ở đây là các đặc trưng đối xứng cơ thể có thể bị nhầm lẫn khi góc chụp bị nghiêng.'
-          : 'Looking at someone strictly from this side profile, could you tell their left hand from their right hand? Structural symmetry poses a challenging inference task under tilted perspectives.';
-      }
-      if (isVietnamese) {
-        const questionMatch = cleanRawText.match(/[^.!?\n]+(?:\?)/);
-        if (questionMatch && questionMatch[0].trim().length > 10) {
-          let q = questionMatch[0].trim().replace(/^[•\-\*\d\.\)]\s*/, '');
-          q = technicalTerminologyService.resolveAndPreserveSentence(q).resolvedText;
-          return `Đặt trong bối cảnh phân tích: ${q}? Thách thức nảy sinh từ việc phân biệt các đặc trưng khi dữ liệu hình ảnh bị che khuất một phần.`;
-        }
-        return `Tại sao vấn đề này lại là thách thức lớn đối với máy tính? Bởi vì các điểm ảnh thuần túy không mang đủ thông tin hình học nếu thiếu sự liên kết cấu trúc.`;
-      } else {
-        return "Why is this problem particularly difficult for computers? Because isolated pixels lack spatial context without structural constraints.";
-      }
-    }
-
-    if (role === 'EXAMPLE') {
-      const rawLower = (rawText || '').toLowerCase();
-      if (rawLower.includes('cánh tay') || rawLower.includes('bị che') || rawLower.includes('khớp khuỷu tay') || rawLower.includes('tay trái') || rawLower.includes('tài xế')) {
-        return isVietnamese
-          ? 'Trong hình này, cánh tay bị che một phần. Mô hình vẫn cần suy ra vị trí của khớp khuỷu tay dựa trên các keypoint xung quanh.'
-          : 'In this frame, the arm is partially occluded. The model must infer the position of the elbow joint from the surrounding visible keypoints.';
-      }
-      if (titleLower.includes('convolution') || rawLower.includes('kernel') || rawLower.includes('sliding')) {
-        return isVietnamese
-          ? 'Để hình dung rõ hơn cơ chế này, chúng ta thử nhìn vào một ví dụ cụ thể. Khi kernel di chuyển trên ảnh, mỗi vị trí sẽ tạo ra một giá trị tương ứng trong feature map. Điều này minh chứng cho cách phép nhân phần tử tổng hợp thông tin cục bộ.'
-          : 'To better visualize this mechanism, let us examine a concrete example. As the kernel slides across the image, each position produces a corresponding scalar in the feature map.';
-      }
-      const bullets = this.extractBulletPoints(cleanRawText);
-      if (bullets.length > 0) {
-        const bulletExample = technicalTerminologyService.resolveAndPreserveSentence(bullets[0]).resolvedText;
-        return isVietnamese
-          ? `Để hình dung rõ hơn qua một ví dụ cụ thể: ${bulletExample}. Tình huống này minh chứng rõ nét cho thách thức vừa được đặt ra.`
-          : `To better visualize this through a concrete example: ${bulletExample}, which clearly illustrates the practical challenge.`;
-      }
-      return isVietnamese
-        ? `Để hình dung rõ hơn, một ví dụ minh họa cụ thể cho thấy mô hình phải suy đoán vị trí chính xác của đối tượng ngay cả khi thông tin quan sát bị gián đoạn.`
-        : `To better visualize this, a concrete illustrative example shows how the model must infer target locations even under partial visual occlusion.`;
-    }
-
-    if (role === 'MECHANISM') {
-      const rawLower = (rawText || '').toLowerCase();
-      if (rawLower.includes('mối quan hệ') || rawLower.includes('keypoint') || rawLower.includes('khung xương') || rawLower.includes('tay trái') || rawLower.includes('tài xế')) {
-        return isVietnamese
-          ? 'Để giải quyết vấn đề này, mô hình không chỉ nhìn từng điểm riêng lẻ mà còn học mối quan hệ không gian giữa các keypoint.'
-          : 'To solve this problem, the model looks beyond isolated points to learn the spatial relationships between keypoints.';
-      }
-      const bullets = this.extractBulletPoints(cleanRawText);
-      if (bullets.length > 0) {
-        const mechPoint = technicalTerminologyService.resolveAndPreserveSentence(bullets[0]).resolvedText;
-        return isVietnamese
-          ? `Để giải quyết vấn đề này, mô hình áp dụng cơ chế then chốt: ${mechPoint}. Bằng cách kết hợp các ràng buộc không gian, hệ thống đưa ra dự đoán nhất quán.`
-          : `To resolve this problem, the model enforces structural constraints: ${mechPoint}, ensuring consistent predictions.`;
-      }
-      return isVietnamese
-        ? `Để giải quyết thách thức này, mô hình liên kết các đặc trưng cục bộ với bối cảnh toàn cục nhằm tái tạo thông tin chính xác.`
-        : `To solve this challenge, the architecture pairs local features with global contextual constraints.`;
-    }
-
-    // 5. Extract bullets or lines
-    const bulletPoints = this.extractBulletPoints(cleanRawText);
-
-    // 6. Generate base narration by language and context
-    let script = '';
-    if (isVietnamese) {
-      script = this.generateVietnameseContextualNarration(plan, config, bulletPoints, role, context);
-    } else {
-      script = this.generateEnglishContextualNarration(plan, config, bulletPoints, role, context);
-    }
-
-    // 7. Terminology preservation & sentence-level cleanup
-    if (isVietnamese) {
-      const { repairedText } = technicalTerminologyService.repairNarrationTargeted(script);
-      script = repairedText;
-    }
-
-    // 8. Content Purification Pipeline (Strip metadata, pagination, instructor notes, section labels)
-    const purification = contentPurifierService.purifyNarration(script, {
-      title: plan.title,
-      role
-    });
-    script = purification.cleanedText;
-
-    // 9. Calibrate to word budget, respecting slide role
-    script = this.calibrateToWordBudget(script, targetWords, isVietnamese, plan, role);
-
-    return script.trim();
   }
 
   private inferFallbackRole(plan: SectionPlan): SlideRole {
     const title = (plan.title || '').toLowerCase();
-    if (title.includes('summary') || title.includes('conclusion') || title.includes('tổng kết')) return 'SUMMARY';
-    if (title.includes('example') || title.includes('ví dụ') || title.includes('walkthrough')) return 'EXAMPLE';
-    if (title.includes('application') || title.includes('ứng dụng') || title.includes('real-world')) return 'APPLICATION';
-    if (title.includes(' vs ') || title.includes('comparison') || title.includes('so sánh')) return 'COMPARISON';
-    if (title.includes('results') || title.includes('benchmark') || title.includes('evaluation')) return 'EVIDENCE';
-    if (title.includes('mechanism') || title.includes('cơ chế')) return 'MECHANISM';
-    if (title.includes('hãy suy nghĩ') || title.includes('suy nghĩ') || title.includes('puzzle')) {
-      return plan.order > 1 ? 'THINK' : 'HOOK';
-    }
-    if (title.includes('operation') || title.includes('kernel')) return 'KEY_EXPLANATION';
-    if (plan.order === 1 || title.includes('what is') || title.includes('intro')) return 'CORE_CONCEPT';
+    if (/(summary|conclusion|tổng kết|kết luận)/.test(title)) return 'SUMMARY';
+    if (/(example|ví dụ|walkthrough|minh họa)/.test(title)) return 'EXAMPLE';
+    if (/(application|ứng dụng|real-world)/.test(title)) return 'APPLICATION';
+    if (/( vs |comparison|so sánh)/.test(title)) return 'COMPARISON';
+    if (/(results|benchmark|evaluation|kết quả|đánh giá)/.test(title)) return 'EVIDENCE';
+    if (/(mechanism|cơ chế|quy trình|process|pipeline)/.test(title)) return 'MECHANISM';
+    if (/(suy nghĩ|puzzle|câu hỏi)/.test(title)) return plan.order > 1 ? 'THINK' : 'HOOK';
+    if (plan.order === 1) return 'INTRODUCTION';
     return 'KEY_EXPLANATION';
   }
 
-  private extractBulletPoints(rawText?: string): string[] {
-    if (!rawText) return [];
+  private extractBulletPoints(rawText: string): string[] {
     const lines = rawText
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 3)
-      .map((line) => line.replace(/^[•\-\*\d\.\)]\s*/, ''))
-      .filter((line) => !line.toLowerCase().startsWith('slide ') && !line.toLowerCase().startsWith('[note:'));
+      .map((line) => line.replace(/^[•\-*\d.)]\s*/, ''))
+      .filter((line) => !/^slide\s/i.test(line));
     return contentPurifierService.cleanBulletPoints(lines);
   }
 
-  /**
-   * Generates natural Vietnamese narration according to Slide Role, Narrative Plan, and Context
-   */
-  private generateVietnameseContextualNarration(
-    plan: SectionPlan,
-    config: UserConfiguration,
-    bullets: string[],
-    role: SlideRole,
-    context?: NarrationContext
-  ): string {
-    const resolvedTitle = technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText;
-    const narrativePlan = plan.narrative_plan;
-    const listStrategy: ListStrategy = narrativePlan?.list_strategy || plan.slide_analysis?.list_strategy || 'NONE';
-    const relToPrev = narrativePlan?.relationship_to_previous;
-    const openingStrat = narrativePlan?.opening_strategy || 'DIRECT';
-
-    const titleLower = plan.title.toLowerCase();
-
-    // Check specific benchmark demo cases (Section 28 & 29)
-    if (titleLower === 'what is cnn?' || titleLower.includes('introduction to convolutional neural networks')) {
-      return 'CNN, hay Convolutional Neural Network, là một kiến trúc neural network được thiết kế đặc biệt để xử lý dữ liệu dạng grid như hình ảnh. Trong computer vision, mô hình tự động trích xuất các đặc trưng thị giác từ đơn giản đến phức tạp.';
-    }
-    if (titleLower === 'cnn architecture' || titleLower.includes('parameter explosion in dense')) {
-      return 'Để hiểu cách CNN xử lý ảnh, chúng ta có thể nhìn vào kiến trúc gồm nhiều layer, trong đó mỗi layer đảm nhiệm một vai trò khác nhau. Thay vì làm phẳng ma trận tạo ra hàng triệu parameters, CNN bảo toàn tính spatial locality của dữ liệu ảnh.';
-    }
-    if (
-      titleLower === 'convolution' ||
-      titleLower.includes('convolution operation & kernel mechanics') ||
-      (titleLower.includes('convolution') && !titleLower.includes('example'))
-    ) {
-      return 'Ở slide trước, chúng ta đã thấy CNN gồm nhiều layer. Vậy convolution layer thực sự làm gì với hình ảnh? CNN dùng kernel để quét qua từng vùng nhỏ của ảnh và tạo ra feature map. Qua quá trình này, mô hình có thể dần phát hiện những đặc trưng quan trọng trong ảnh.';
-    }
-    if (titleLower === 'convolution example' || (role === 'EXAMPLE' && titleLower.includes('convolution'))) {
-      return 'Để hình dung rõ hơn cơ chế này, chúng ta thử nhìn vào một ví dụ cụ thể. Khi kernel di chuyển trên ảnh, mỗi vị trí sẽ tạo ra một giá trị tương ứng trong feature map. Điều này minh chứng cho cách phép nhân phần tử tổng hợp thông tin cục bộ.';
-    }
-    if (titleLower === 'pooling' || titleLower.includes('downsampling via max pooling')) {
-      return 'Từ feature map này, chúng ta thường muốn giảm kích thước biểu diễn nhưng vẫn giữ lại những thông tin quan trọng. Đây là vai trò của pooling. Max pooling trích xuất giá trị kích hoạt lớn nhất, giúp giảm tải tính toán và mang lại tính bất biến không gian.';
-    }
-    if (titleLower.includes('real-world application') || (role === 'APPLICATION' && titleLower.includes('cnn'))) {
-      return 'Những cơ chế này không chỉ mang tính lý thuyết. Chúng được sử dụng trong nhiều bài toán computer vision, chẳng hạn như image classification và object detection, mang lại hiệu năng nhận diện vượt trội.';
-    }
-    if (titleLower === 'summary' || titleLower.includes('full cnn pipeline architecture & synthesis')) {
-      return 'Như vậy, convolution giúp CNN trích xuất đặc trưng từ ảnh, pooling giúp giảm kích thước biểu diễn, và các layer phía sau sử dụng những đặc trưng này để đưa ra dự đoán hoàn chỉnh.';
-    }
-
-    // Generic Context-Aware Generator for any arbitrary topic
+  private generateVietnamese(plan: SectionPlan, role: SlideRole, bullets: string[], rawText: string, context?: NarrationContext): string {
     const parts: string[] = [];
+    const listStrategy: ListStrategy = plan.narrative_plan?.list_strategy || plan.slide_analysis?.list_strategy || 'NONE';
 
-    // Part 1: Contextual Opening / Bridge
-    const bridgeText = this.buildContextualBridgeVi(plan, role, openingStrat, relToPrev, context);
-    if (bridgeText) {
-      parts.push(bridgeText);
-    }
-
-    // Part 2: Body based on Role and List Strategy
-    const bodyText = this.buildRoleBasedBodyVi(plan, role, bullets, listStrategy, resolvedTitle);
-    if (bodyText) {
-      parts.push(bodyText);
-    }
-
-    // Part 3: Closing / Transition to next
-    const closingText = this.buildClosingVi(plan, role, narrativePlan?.closing_strategy);
-    if (closingText) {
-      parts.push(closingText);
-    }
-
-    return parts.join(' ').trim();
-  }
-
-  private buildContextualBridgeVi(
-    plan: SectionPlan,
-    role: SlideRole,
-    openingStrat: string,
-    relToPrev: { type: string; reason: string } | undefined,
-    context?: NarrationContext
-  ): string {
-    const rawPrevTitle = context?.previousPlan?.title
-      ? technicalTerminologyService.resolveAndPreserveSentence(context.previousPlan.title).resolvedText
-      : undefined;
-    const cleanPrevTitle = contentPurifierService.sanitizeTitleForSpeech(rawPrevTitle);
-
-    const usedOpenings = context?.usedOpenings || new Set<string>();
-
+    // Opening
     if (plan.order === 1 || role === 'INTRODUCTION') {
-      const resolvedTitle = technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText;
-      if (plan.instructional_goal) {
-        const cleanGoal = technicalTerminologyService.resolveAndPreserveSentence(plan.instructional_goal).resolvedText.replace(/\.+$/, '');
-        return `Chào mừng các bạn đến với bài học về ${resolvedTitle}. Mục tiêu của chúng ta trong phần mở đầu này là ${cleanGoal}.`;
+      const lesson = resolve(context?.lessonTitle || plan.title);
+      parts.push(`Chào mừng các bạn đến với bài học về ${lesson}.`);
+      // The generated goal sentence only fills in when the page itself has nothing to say.
+      if (plan.instructional_goal && bullets.length === 0) {
+        parts.push(`Mục tiêu của phần mở đầu là ${lowerFirst(resolve(plan.instructional_goal).replace(/\.+$/, ''))}.`);
       }
-      return `Chào mừng các bạn đến với bài học về ${resolvedTitle}.`;
+    } else if (role === 'HOOK' || role === 'THINK' || role === 'QUESTION') {
+      const q = rawText.match(/[^.!?\n]{10,}\?/);
+      if (q) parts.push(resolve(q[0].trim().replace(/^[•\-*\d.)]\s*/, '')));
+    } else {
+      const bridge = this.openingBridge(plan, role, context);
+      if (bridge) parts.push(bridge);
     }
 
-    if (role === 'EXAMPLE') {
-      const exampleBridges = [
-        'Để hình dung rõ hơn cơ chế này, chúng ta thử nhìn vào một ví dụ cụ thể.',
-        'Quan sát trường hợp minh họa cụ thể trong thực tiễn:',
-        'Ví dụ trực quan sau đây sẽ làm sáng tỏ cách vận hành:'
-      ];
-      for (const b of exampleBridges) {
-        if (!usedOpenings.has(b.toLowerCase())) {
-          return b;
-        }
-      }
-      return '';
+    // Body
+    const body = this.body(role, bullets, listStrategy, plan);
+    if (body) parts.push(body);
+
+    // Visual readings (tables/diagrams/charts) are part of the page's content.
+    for (const v of context?.visualReadings || []) {
+      if (v.summary) parts.push(endSentence(resolve(v.summary)));
     }
 
-    if (role === 'SUMMARY') {
-      return `Như vậy, chúng ta cùng nhìn lại các điểm cốt lõi đã được phân tích.`;
-    }
-
-    if (role === 'APPLICATION') {
-      return `Những nguyên lý này được ứng dụng trực tiếp vào nhiều bài toán thực tế.`;
-    }
-
-    if (context?.teachingUnit?.learning_need?.natural_question) {
-      const q = context.teachingUnit.learning_need.natural_question.trim().replace(/\?$/, '');
-      const qBridge = `Điều này dẫn đến một câu hỏi then chốt: ${q}? Để giải quyết vấn đề này, chúng ta cùng phân tích ${technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText}.`;
-      if (!usedOpenings.has(qBridge.toLowerCase())) {
-        return qBridge;
-      }
-    }
-
-    if (openingStrat === 'BRIDGE_FROM_PREVIOUS') {
-      const bridgeCandidates = cleanPrevTitle
-        ? [
-            `Nối tiếp phân tích về ${cleanPrevTitle}, bước tiếp theo là làm rõ quy trình xử lý.`,
-            `Sau khi làm rõ ${cleanPrevTitle}, trọng tâm tiếp theo chuyển sang cấu trúc vận hành.`,
-            `Từ các kết luận về ${cleanPrevTitle}, chúng ta đi sâu vào cơ chế chi tiết.`
-          ]
-        : [
-            'Tiếp theo, chúng ta đi sâu vào cơ chế chi tiết của mô hình.',
-            'Sau khi phân tích vấn đề đặt ra, bước tiếp theo là làm rõ quy trình xử lý.',
-            'Trọng tâm tiếp theo chuyển sang cấu trúc vận hành của mô hình.'
-          ];
-
-      for (const b of bridgeCandidates) {
-        if (!usedOpenings.has(b.toLowerCase())) {
-          return b;
-        }
-      }
-      return cleanPrevTitle ? `Tiếp theo, chúng ta cùng phân tích ${technicalTerminologyService.resolveAndPreserveSentence(plan.title).resolvedText}.` : '';
-    }
-
-    // Direct entry: don't inject repetitive boilerplates
-    return '';
-  }
-
-  private buildRoleBasedBodyVi(
-    plan: SectionPlan,
-    role: SlideRole,
-    bullets: string[],
-    listStrategy: ListStrategy,
-    resolvedTitle: string
-  ): string {
-    // Sanitize bullets through terminology service and content purifier
-    const sanitizedBullets = contentPurifierService.cleanBulletPoints(bullets);
-    const resolvedBullets = sanitizedBullets.map((b) => {
-      const clean = b.replace(/\.+$/, '');
-      return technicalTerminologyService.resolveAndPreserveSentence(clean).resolvedText;
-    });
-
-    // Special Role: EXAMPLE (Section 14: Reference -> Example -> Interpretation, No theory re-reading)
-    if (role === 'EXAMPLE') {
-      if (resolvedBullets.length > 0) {
-        return `Trong trường hợp này, ${resolvedBullets.join('. ')}. Điều này cho thấy cách cơ chế vận hành hiệu quả trong môi trường thực tiễn.`;
-      }
-      return `Quan sát trực quan cho thấy các tham số tương tác ăn khớp với nhau, giúp minh chứng rõ nét cho lý thuyết đã đề cập.`;
-    }
-
-    // Special Role: COMPARISON (Contrastive language)
-    if (role === 'COMPARISON') {
-      if (resolvedBullets.length >= 2) {
-        return `Điểm khác biệt quan trọng ở đây là: trong khi ${resolvedBullets[0]}, thì ${resolvedBullets.slice(1).join('; còn ')}. Sự đánh đổi này giúp người học lựa chọn giải pháp tối ưu.`;
-      }
-      return `Điểm khác biệt quan trọng ở đây là các phương pháp có sự đánh đổi rõ rệt giữa chi phí tính toán và độ chính xác dự đoán.`;
-    }
-
-    // Special Role: SUMMARY (Synthesis)
-    if (role === 'SUMMARY') {
-      if (resolvedBullets.length > 0) {
-        return `Chúng ta có các kết luận then chốt: ${resolvedBullets.join(', và ')}. Tất cả các mắt xích này kết hợp để tạo nên mô hình hoàn chỉnh.`;
-      }
-      return `Việc kết hợp đồng bộ các thành phần đã học tạo tiền đề vững chắc để triển khai các hệ thống nâng cao.`;
-    }
-
-    // Special Role: EVIDENCE (Interpret data patterns, don't just read numbers)
-    if (role === 'EVIDENCE') {
-      if (resolvedBullets.length > 0) {
-        return `Các kết quả thực nghiệm cho thấy xu hướng nhất quán: ${resolvedBullets.join('. ')}. Điều này khẳng định độ tin cậy và ưu thế vượt trội của phương pháp.`;
-      }
-      return `Dữ liệu đo lường thực tế chứng minh hiệu năng và độ ổn định của kiến trúc trong nhiều điều kiện khác nhau.`;
-    }
-
-    // If LIST STRATEGY is CATEGORY_LIST, ORDERED_LIST, or SEQUENTIAL_PROCESS:
-    if (listStrategy !== 'NONE' && resolvedBullets.length > 0) {
-      const prefix = listStrategy === 'SEQUENTIAL_PROCESS' ? 'Bước' : 'Thứ';
-      const formatted = resolvedBullets
-        .slice(0, 4)
-        .map((b, i) => `${prefix} ${i + 1}, ${b}`)
-        .join('. ');
-      return `Các thành phần cụ thể gồm có: ${formatted}.`;
-    }
-
-    // DEFAULT (list_strategy === 'NONE'): Synthesize fluidly without "Thứ nhất, Thứ hai"!
-    if (resolvedBullets.length > 0) {
-      // Connect bullets with natural transitions instead of numbered list or broken dangling syntax
-      if (resolvedBullets.length === 1) {
-        return `${resolvedBullets[0]}.`;
-      }
-      if (resolvedBullets.length === 2) {
-        return `${resolvedBullets[0]}, đồng thời ${resolvedBullets[1].toLowerCase()}.`;
-      }
-      return `${resolvedBullets[0]}. Cụ thể, ${resolvedBullets[1].toLowerCase()}, kết hợp cùng ${resolvedBullets.slice(2).join(', ').toLowerCase()}.`;
-    }
-
-    // Fallback using core message if available
-    if (plan.slide_analysis?.core_message) {
-      return plan.slide_analysis.core_message;
-    }
-
-    return `Nội dung này đóng vai trò quan trọng trong việc cấu trúc luồng thông tin và tối ưu hóa biểu diễn dữ liệu của hệ thống.`;
-  }
-
-  private buildClosingVi(plan: SectionPlan, role: SlideRole, closingStrat?: string): string {
-    if (role === 'SUMMARY') {
-      return `Đây là nền tảng quan trọng giúp chúng ta làm chủ trọn vẹn kiến thức chuyên đề này.`;
-    }
-    if (role === 'EXAMPLE') {
-      return `Qua đó, chúng ta thấy rõ tính ứng dụng cao của cơ chế này.`;
-    }
-    if (role === 'INTRODUCTION' || role === 'HOOK' || role === 'DECORATIVE') {
-      return ``;
-    }
-    // Eliminate low-density filler boilerplate like "Từ nền tảng này, chúng ta sẽ tiếp tục khám phá các bước tiếp theo trong bài giảng"
-    return ``;
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
   }
 
   /**
-   * Generates natural English narration with context awareness
+   * Opening bridge from the previous page, only when the narrative plan says this page deepens it.
+   * Uses the previous page's key concept, never its heading (headings are policed separately).
    */
-  private generateEnglishContextualNarration(
-    plan: SectionPlan,
-    config: UserConfiguration,
-    bullets: string[],
-    role: SlideRole,
-    context?: NarrationContext
-  ): string {
-    const titleLower = plan.title.toLowerCase();
+  private openingBridge(plan: SectionPlan, role: SlideRole, context?: NarrationContext): string {
+    const used = context?.usedOpenings || new Set<string>();
+    const relation = plan.narrative_plan?.relationship_to_previous?.type;
+    // Only real terms make a natural bridge ("Từ kernel, ta đi sâu hơn vào feature map"); arbitrary
+    // weighted n-grams ("Introduction to Convolutional") read as machine text, so they are skipped.
+    const dict = technicalTerminologyService.getTermDictionary();
+    const isTerm = (c?: string) => Boolean(c && dict.has(c.toLowerCase()));
+    const prevConcept = context?.previousPlan?.key_concepts?.find(isTerm);
+    const curConcept = plan.key_concepts?.find(isTerm);
 
-    // Benchmark demo cases in English
-    if (titleLower === 'what is cnn?' || titleLower.includes('introduction to convolutional neural networks')) {
-      return 'A Convolutional Neural Network, or CNN, is a deep learning architecture specifically engineered to process grid-structured data like images by learning hierarchical visual features.';
+    let bridge = '';
+    if (role === 'EXAMPLE') bridge = 'Hãy xem một ví dụ cụ thể.';
+    else if (role === 'SUMMARY') bridge = 'Như vậy, hãy nhìn lại những điểm chính.';
+    else if (relation === 'DEEPENS' && prevConcept && curConcept && prevConcept.toLowerCase() !== curConcept.toLowerCase()) {
+      bridge = `Từ ${resolve(prevConcept)}, ta đi sâu hơn vào ${resolve(curConcept)}.`;
+    } else if (relation === 'CONTRASTS' && prevConcept) {
+      bridge = `Khác với ${resolve(prevConcept)}, cách tiếp cận ở đây đặt trọng tâm khác.`;
+    } else if (context?.teachingUnit?.learning_need?.natural_question) {
+      bridge = endSentence(resolve(context.teachingUnit.learning_need.natural_question.trim().replace(/\?*$/, '?')));
     }
-    if (titleLower === 'cnn architecture' || titleLower.includes('parameter explosion in dense')) {
-      return 'To understand image representation in deep models, examining multi-layer architectures reveals how localized connections avoid catastrophic parameter explosions and preserve 2D topology.';
-    }
-    if (titleLower === 'convolution' || titleLower.includes('convolution operation & kernel mechanics')) {
-      return 'In the previous section, we observed multi-layer networks. How does convolution actually operate on image tensors? The kernel slides across local receptive fields to generate rich feature activations.';
-    }
-    if (titleLower === 'convolution example' || role === 'EXAMPLE') {
-      return 'To visualize this mechanism concretely, consider a sample matrix where element-wise products accumulate at each sliding coordinate into an organized feature map.';
-    }
-    if (titleLower === 'pooling' || titleLower.includes('downsampling via max pooling')) {
-      return 'From these activations, downsampling reduces spatial dimensions while preserving salient features, granting computational efficiency and translation invariance.';
-    }
-    if (titleLower === 'summary' || role === 'SUMMARY') {
-      return 'In summary, convolution extracts spatial features, pooling compresses dimensionality, and dense layers produce final predictions.';
-    }
+    return bridge && !used.has(bridge.toLowerCase()) ? bridge : '';
+  }
 
-    const resolvedBullets = bullets.map((b) => b.replace(/\.+$/, ''));
-    if (resolvedBullets.length > 0) {
-      return `Focusing on ${plan.title}, the primary principles involve ${resolvedBullets.join(', followed by ')}.`;
+  private body(role: SlideRole, bullets: string[], listStrategy: ListStrategy, plan: SectionPlan): string {
+    const sentences = contentPurifierService.cleanBulletPoints(bullets).map((b) => endSentence(b));
+    if (sentences.length === 0) return plan.slide_analysis?.core_message ? endSentence(resolve(plan.slide_analysis.core_message)) : '';
+
+    if (role === 'COMPARISON' && sentences.length >= 2) {
+      return `${sentences[0]} Trong khi đó, ${lowerFirst(sentences[1])} ${sentences.slice(2).join(' ')}`.trim();
     }
-    if (plan.slide_analysis?.core_message) {
-      return plan.slide_analysis.core_message;
+    if (role === 'EXAMPLE') {
+      return `Trong ví dụ này, ${lowerFirst(sentences[0])} ${sentences.slice(1).join(' ')}`.trim();
     }
-    return `Let us explore the core principles of ${plan.title}, which establish key architectural behaviors.`;
+    if (listStrategy === 'SEQUENTIAL_PROCESS' || role === 'PROCESS') {
+      const steps = sentences.slice(0, 5);
+      return steps.map((s, i) => (i === 0 ? `Đầu tiên, ${lowerFirst(s)}` : i === steps.length - 1 && steps.length > 2 ? `Cuối cùng, ${lowerFirst(s)}` : s)).join(' ');
+    }
+    return sentences.join(' ');
+  }
+
+  private generateEnglish(plan: SectionPlan, role: SlideRole, bullets: string[], context?: NarrationContext): string {
+    const parts: string[] = [];
+    if (plan.order === 1 || role === 'INTRODUCTION') parts.push(`Welcome to this lecture on ${context?.lessonTitle || plan.title}.`);
+    if (role === 'EXAMPLE') parts.push("Let's look at a concrete example.");
+    if (role === 'SUMMARY') parts.push("Let's recap the key points.");
+    parts.push(...bullets.map(endSentence));
+    for (const v of context?.visualReadings || []) if (v.summary) parts.push(endSentence(v.summary));
+    if (parts.length === 0 && plan.slide_analysis?.core_message) parts.push(endSentence(plan.slide_analysis.core_message));
+    return parts.join(' ');
   }
 
   /**
-   * Calibrates length precisely to target_word_budget (W_target),
-   * ensuring DECORATIVE and minimal/concise slides are NOT artificially bloated.
+   * Trims to the budget at a sentence boundary; when short, adds more *source* content
+   * (speaker notes, then raw visual text). Never inserts generic filler.
    */
   private calibrateToWordBudget(
     script: string,
     targetWords: number,
-    isVietnamese: boolean,
     plan: SectionPlan,
-    role: SlideRole
+    role: SlideRole,
+    context: NarrationContext | undefined,
+    isVi: boolean
   ): string {
-    // Decorative, Introduction, Hook, Summary, Example, Application should stay concise without artificial expansion
-    if (
-      role === 'DECORATIVE' ||
-      role === 'INTRODUCTION' ||
-      role === 'HOOK' ||
-      role === 'SUMMARY' ||
-      role === 'EXAMPLE' ||
-      role === 'APPLICATION' ||
-      plan.narrative_plan?.verbosity === 'minimal' ||
-      plan.narrative_plan?.verbosity === 'concise'
-    ) {
-      return script;
-    }
+    const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
-    let currentWords = script.trim().split(/\s+/);
-
-    // Truncate if significantly exceeds target
-    if (currentWords.length > Math.round(targetWords * 1.15)) {
-      const trimmed = currentWords.slice(0, targetWords).join(' ');
-      const lastPunc = Math.max(trimmed.lastIndexOf('.'), trimmed.lastIndexOf('!'), trimmed.lastIndexOf('?'));
-      if (lastPunc > trimmed.length * 0.75) {
-        return trimmed.slice(0, lastPunc + 1);
+    if (words(script) > Math.round(targetWords * 1.15)) {
+      const sentences = script.split(/(?<=[.!?])\s+/);
+      const out: string[] = [];
+      for (const s of sentences) {
+        if (words(out.join(' ')) + words(s) > targetWords && out.length > 0) break;
+        out.push(s);
       }
-      return `${trimmed.replace(/[.,;:!?]+$/, '')}.`;
+      return out.join(' ');
     }
 
-    // For core concept or key explanation slides, expand if far below budget
-    const expansionPoolVi = [
-      `Cụ thể hơn, việc kết nối chặt chẽ giữa các thành phần giúp tối ưu hóa hiệu quả tính toán của mô hình.`,
-      `Nhờ đó, dữ liệu được truyền tải một cách liên tục và hạn chế tối đa sự suy giảm thông tin.`
-    ];
+    if (role === 'DECORATIVE' || plan.narrative_plan?.verbosity === 'minimal') return script;
 
-    let poolIdx = 0;
-    while (currentWords.length < Math.round(targetWords * 0.85) && poolIdx < expansionPoolVi.length) {
-      script = `${script} ${expansionPoolVi[poolIdx]}`;
-      currentWords = script.trim().split(/\s+/);
-      poolIdx++;
+    // Source-derived material only, in order of closeness to the page:
+    // speaker notes -> read visuals -> this unit's talking points -> definitions of this page's concepts
+    // (the last two come from the whole-lesson analysis of the same document).
+    const extras: string[] = [];
+    (context?.notes || []).forEach((n) => extras.push(...n.split(/(?<=[.!?])\s+/)));
+    (context?.visualReadings || []).forEach((v) => {
+      if (v.text) extras.push(isVi ? `${v.kind === 'table' ? 'Số liệu trong bảng gồm' : 'Các thành phần gồm'}: ${v.text.replace(/\n/g, '; ').slice(0, 280)}.` : v.text);
+    });
+    (context?.teachingUnit?.key_talking_points || []).forEach((p) => extras.push(p));
+    const pageText = `${plan.title} ${(plan.key_concepts || []).join(' ')}`.toLowerCase();
+    [...(context?.lessonModel?.core_concepts || []), ...(context?.lessonModel?.supporting_concepts || [])]
+      .filter((c) => c.name && c.definition && pageText.includes(c.name.toLowerCase()))
+      .forEach((c) => {
+        const def = c.definition.replace(/\.+$/, '');
+        if (def.toLowerCase().startsWith(c.name.toLowerCase())) extras.push(def);
+        else extras.push(isVi ? `${c.name} là ${lowerFirst(def)}` : `${c.name}: ${def}`);
+      });
+
+    const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    const titleNorm = norm(plan.title || '');
+    const hasVi = (s: string) => /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(s);
+
+    let result = script;
+    for (const e of extras) {
+      if (words(result) >= targetWords * 0.85) break;
+      // Never read a heading back as content, and keep the lecture in one language.
+      if (norm(e) === titleNorm || titleNorm.includes(norm(e))) continue;
+      if (!isVi && hasVi(e)) continue;
+      const clean = isVi ? resolve(e.trim()) : e.trim();
+      if (clean && !result.toLowerCase().includes(clean.toLowerCase().slice(0, 40))) result = `${result} ${endSentence(clean)}`;
     }
-
-    return script;
+    return result;
   }
 }
 

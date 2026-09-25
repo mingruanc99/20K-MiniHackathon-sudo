@@ -17,6 +17,9 @@ import {
   WordPause,
   PauseType
 } from '../../types';
+import { technicalTerminologyService } from '../services/technicalTerminologyService';
+
+const escapeXml = (w: string) => w.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 export class ProsodyPlanner {
   private technicalKeywords = new Set([
@@ -46,6 +49,14 @@ export class ProsodyPlanner {
     config: UserConfiguration
   ): ProsodyPlan {
     const rawSentences = this.splitSentences(narrationText);
+    // Emphasis targets: single-word dictionary terms + this page's weighted key concepts.
+    const emphasisTerms = new Set<string>(this.technicalKeywords);
+    technicalTerminologyService.getTermDictionary().forEach((_, key) => {
+      if (!key.includes(' ') && key.length > 2) emphasisTerms.add(key);
+    });
+    (plan.key_concepts || []).forEach((k) => {
+      if (!k.includes(' ')) emphasisTerms.add(k.toLowerCase());
+    });
     const wpm = config.targetWpm || 140;
 
     const sentences: NarrationSentence[] = [];
@@ -70,7 +81,8 @@ export class ProsodyPlanner {
       const { pauses, ssmlBody, postPauseMs, postPauseType, emphasisList } = this.planPausesForSentence(
         sText,
         words,
-        isLast
+        isLast,
+        emphasisTerms
       );
 
       const sPauseMs = pauses.reduce((sum, p) => sum + p.duration_ms, 0) + postPauseMs;
@@ -124,17 +136,20 @@ export class ProsodyPlanner {
   private planPausesForSentence(
     text: string,
     words: string[],
-    isLastSentence: boolean
+    isLastSentence: boolean,
+    emphasisTerms: Set<string> = this.technicalKeywords
   ) {
+    let lastEmphasisIdx = -10;
     const pauses: WordPause[] = [];
     const ssmlTokens: string[] = [];
     const emphasisList: string[] = [];
 
     words.forEach((w, idx) => {
-      const clean = w.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const clean = w.toLowerCase().replace(/[^\p{L}\p{N}-]/gu, '');
 
-      // Check emphasis pause before core technical keyword
-      if (this.technicalKeywords.has(clean) && idx > 0) {
+      // Emphasis pause before a technical term (at most one every 6 words so speech doesn't stutter)
+      if (emphasisTerms.has(clean) && idx > 0 && idx - lastEmphasisIdx >= 6) {
+        lastEmphasisIdx = idx;
         emphasisList.push(w);
         pauses.push({
           pause_id: `p_emp_${idx}`,
@@ -147,7 +162,7 @@ export class ProsodyPlanner {
         ssmlTokens.push('<break time="380ms"/>');
       }
 
-      ssmlTokens.push(w);
+      ssmlTokens.push(escapeXml(w));
 
       // Check syntactic micro-pause after clause boundary (comma, semicolon)
       if (w.endsWith(',') || w.endsWith(';') || w.endsWith(':')) {

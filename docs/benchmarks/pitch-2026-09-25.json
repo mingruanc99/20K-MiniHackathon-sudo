@@ -1,0 +1,215 @@
+{
+  "generated_at": "2026-09-24T20:14:25.717Z",
+  "method": {
+    "engine": "template narration, MockLLMProvider (0 API tokens), Node 24 + tsx",
+    "before": "commit 9749702 (HEAD before this work)",
+    "after": "working tree 2026-09-25",
+    "metrics": "connective density & heading repeats via discoursePolicy counters; grounding = content tokens (>4 chars) found in source; honest DAR-P = words/(WPM/60) + planned pauses vs target; timings are wall-clock on the dev machine"
+  },
+  "before_after": {
+    "before": {
+      "cnn_deck_5_slides": {
+        "scenes": 5,
+        "words": 459,
+        "connective_density": 0.182,
+        "connective_count": 4,
+        "sentences": 22,
+        "heading_repeats": 0,
+        "reported_darp_pct": 2.4,
+        "honest_darp_pct": 21.7,
+        "grounding": 0.253,
+        "reported_overall": 0.96,
+        "ms": 107,
+        "sample": "Hãy thử hình dung một câu hỏi thú vị trước nhé. Vì sao nguyên lý trong The Parameter Explosion in Dense MLPs lại là mắt xích quyết định hiệu năng của toàn bộ hệ thống? Để hiểu cách CNN xử lý ảnh, chúng ta có thể nhìn vào kiến trúc gồm nhiều layer, trong đó mỗi"
+      },
+      "golden_cnn": {
+        "scenes": 1,
+        "words": 34,
+        "connective_density": 0,
+        "connective_count": 0,
+        "sentences": 2,
+        "heading_repeats": 0,
+        "reported_darp_pct": 0.7,
+        "honest_darp_pct": 66.4,
+        "grounding": 0.5,
+        "reported_overall": 0.96,
+        "ms": 5,
+        "sample": "Chào mừng các bạn đến với bài học về Convolutional Neural Networks Foundations. Trong phần này, chúng ta sẽ cùng tìm hiểu những khái niệm và nguyên lý cốt lõi của chủ đề này."
+      },
+      "golden_quicksort": {
+        "scenes": 1,
+        "words": 33,
+        "connective_density": 0,
+        "connective_count": 0,
+        "sentences": 2,
+        "heading_repeats": 0,
+        "reported_darp_pct": 1.2,
+        "honest_darp_pct": 66.9,
+        "grounding": 0.429,
+        "reported_overall": 0.96,
+        "ms": 5,
+        "sample": "Chào mừng các bạn đến với bài học về Divide-and-Conquer Quicksort Mechanics. Trong phần này, chúng ta sẽ cùng tìm hiểu những khái niệm và nguyên lý cốt lõi của chủ đề này."
+      },
+      "golden_acid": {
+        "scenes": 1,
+        "words": 34,
+        "connective_density": 0,
+        "connective_count": 0,
+        "sentences": 2,
+        "heading_repeats": 0,
+        "reported_darp_pct": 0.8,
+        "honest_darp_pct": 66.4,
+        "grounding": 0.429,
+        "reported_overall": 0.96,
+        "ms": 5,
+        "sample": "Chào mừng các bạn đến với bài học về Database Transaction ACID Guarantees. Trong phần này, chúng ta sẽ cùng tìm hiểu những khái niệm và nguyên lý cốt lõi của chủ đề này."
+      }
+    },
+    "after": {
+      "cnn_deck_5_slides": {
+        "scenes": 5,
+        "words": 241,
+        "connective_density": 0.105,
+        "connective_count": 2,
+        "sentences": 19,
+        "heading_repeats": 0,
+        "reported_darp_pct": 23.2,
+        "honest_darp_pct": 28.5,
+        "grounding": 0.909,
+        "reported_overall": 0.86,
+        "ms": 321,
+        "sample": "Sau khi trích xuất được feature map, làm thế nào để giảm tải tính toán mà không làm mất đặc trưng quan trọng? Image Flattening: A modest 200x200 RGB image creates 120,000 raw input features. Weight Explosion: Connecting to 1,000 hidden units requires 120 Milli",
+        "discourse": {
+          "connectives_before": 3,
+          "connectives_kept": 2,
+          "connectives_removed": 1,
+          "heading_mentions_before": 1,
+          "heading_repeats_removed": 0,
+          "transition_sentences_dropped": 0
+        }
+      },
+      "golden_cnn": {
+        "scenes": 1,
+        "words": 27,
+        "connective_density": 0,
+        "connective_count": 0,
+        "sentences": 2,
+        "heading_repeats": 0,
+        "reported_darp_pct": 76.8,
+        "honest_darp_pct": 76.9,
+        "grounding": 1,
+        "reported_overall": 0.84,
+        "ms": 44,
+        "sample": "Chào mừng các bạn đến với bài học về Convolutional Neural Networks Foundations. Convolutional layers preserve 2D spatial locality by sliding small learnable kernels across feature maps.",
+        "discourse": {
+          "connectives_before": 0,
+          "connectives_kept": 0,
+          "connectives_removed": 0,
+          "heading_mentions_before": 1,
+          "heading_repeats_removed": 0,
+          "transition_sentences_dropped": 0
+        }
+      },
+      "golden_quicksort": {
+        "scenes": 1,
+        "words": 33,
+        "connective_density": 0,
+        "connective_count": 0,
+        "sentences": 3,
+        "heading_repeats": 0,
+        "reported_darp_pct": 71.8,
+        "honest_darp_pct": 71.8,
+        "grounding": 1,
+        "reported_overall": 0.85,
+        "ms": 32,
+        "sample": "Chào mừng các bạn đến với bài học về Divide-and-Conquer Quicksort Mechanics. Quicksort selects a pivot element and partitions the array. Elements smaller than pivot precede it, achieving average O(N log N) runtime.",
+        "discourse": {
+          "connectives_before": 0,
+          "connectives_kept": 0,
+          "connectives_removed": 0,
+          "heading_mentions_before": 1,
+          "heading_repeats_removed": 0,
+          "transition_sentences_dropped": 0
+        }
+      },
+      "golden_acid": {
+        "scenes": 1,
+        "words": 31,
+        "connective_density": 0,
+        "connective_count": 0,
+        "sentences": 5,
+        "heading_repeats": 0,
+        "reported_darp_pct": 70.5,
+        "honest_darp_pct": 70.5,
+        "grounding": 1,
+        "reported_overall": 0.85,
+        "ms": 49,
+        "sample": "Chào mừng các bạn đến với bài học về Database Transaction ACID Guarantees. Atomicity ensures all-or-nothing execution. Consistency preserves schema invariants. Isolation prevents dirty reads. Durability guarantees committed writes survive crashes.",
+        "discourse": {
+          "connectives_before": 0,
+          "connectives_kept": 0,
+          "connectives_removed": 0,
+          "heading_mentions_before": 1,
+          "heading_repeats_removed": 0,
+          "transition_sentences_dropped": 0
+        }
+      }
+    }
+  },
+  "extra": {
+    "keyword_200_pages_ms": 205,
+    "pipeline_62_slides_ms": 240,
+    "pipeline_62_heading_repeats": 0,
+    "pipeline_62_connective_density": 0.125,
+    "regression": {
+      "pass": 0,
+      "total": 4,
+      "cases": [
+        {
+          "id": "golden_01_cnn",
+          "recall": 1,
+          "overall": 0.92,
+          "darp": 74.3,
+          "passed": false
+        },
+        {
+          "id": "golden_02_quicksort",
+          "recall": 0.5,
+          "overall": 0.92,
+          "darp": 74.3,
+          "passed": false
+        },
+        {
+          "id": "golden_03_acid",
+          "recall": 1,
+          "overall": 0.92,
+          "darp": 73.3,
+          "passed": false
+        },
+        {
+          "id": "golden_00_cnn_deck",
+          "recall": 0.75,
+          "overall": 0.95,
+          "darp": 42.7,
+          "passed": false
+        }
+      ]
+    },
+    "quiz": {
+      "quizzes": 2,
+      "gaps": 12,
+      "weak_areas": 4,
+      "missed": 8,
+      "avg": 60
+    },
+    "connective_demo": {
+      "before": "11/11",
+      "after": "2/10",
+      "removed": 9,
+      "after_text": [
+        "CNN dùng kernel để quét ảnh. Feature map được tạo ra. Đồng thời, pooling giảm kích thước. ReLU giúp mô hình học phi tuyến. CNN rất mạnh.",
+        "Chúng ta xem backpropagation. Gradient được tính từ lớp cuối. Bên cạnh đó, learning rate quyết định bước cập nhật. Momentum giúp vượt cực tiểu cục bộ. Learning rate quá lớn làm mô hình không hội tụ."
+      ]
+    }
+  }
+}

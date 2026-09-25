@@ -19,6 +19,7 @@ import { MockLLMProvider } from './MockLLMProvider';
 import { llmCache } from './llmCache';
 
 import { apiKeyService } from './apiKeyService';
+import { usageMeter } from './usageMeter';
 
 export class LLMRouter implements ILLMProvider {
   private primaryProvider: ILLMProvider;
@@ -46,6 +47,23 @@ export class LLMRouter implements ILLMProvider {
     this.primaryProvider = provider;
   }
 
+  /** The online provider when one is active (null in mock/offline mode). */
+  getOnlineProvider(): GeminiProvider | null {
+    return this.primaryProvider instanceof GeminiProvider ? this.primaryProvider : null;
+  }
+
+  /** Cache hits cost 0 tokens but are still logged so benchmark runs show why no API call happened. */
+  private recordCacheHit(feature: string) {
+    const online = this.getOnlineProvider();
+    usageMeter.record({
+      provider: 'cache',
+      model: online ? online.getActiveModel() : 'mock',
+      feature,
+      latencyMs: 0,
+      status: 'cache_hit'
+    });
+  }
+
   async generateLessonUnderstanding(
     docTree: CanonicalDocumentTree,
     config: UserConfiguration
@@ -57,6 +75,7 @@ export class LLMRouter implements ILLMProvider {
     );
     const cached = llmCache.get<LessonModel>(cacheKey);
     if (cached) {
+      this.recordCacheHit('Module 2: Whole-Lesson Model');
       return cached;
     }
 
@@ -76,6 +95,7 @@ export class LLMRouter implements ILLMProvider {
     );
     const cached = llmCache.get<ContentPrioritization>(cacheKey);
     if (cached) {
+      this.recordCacheHit('Module 2: Content Prioritization');
       return cached;
     }
 
@@ -97,6 +117,7 @@ export class LLMRouter implements ILLMProvider {
     );
     const cached = llmCache.get<TeachingUnit[]>(cacheKey);
     if (cached) {
+      this.recordCacheHit('Module 2: Teaching Plan');
       return cached;
     }
 
@@ -123,6 +144,7 @@ export class LLMRouter implements ILLMProvider {
     );
     const cached = llmCache.get<string>(cacheKey);
     if (cached) {
+      this.recordCacheHit('Module 3A: Narration Generation');
       return cached;
     }
 

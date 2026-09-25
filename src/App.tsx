@@ -5,7 +5,10 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
-import { DashboardPage } from './pages/DashboardPage';
+import { LectureBoardPage } from './pages/LectureBoardPage';
+import { NewLecturePage } from './pages/NewLecturePage';
+import { LecturePage } from './pages/LecturePage';
+import { AdvancedPage } from './pages/AdvancedPage';
 import { NewProjectPage } from './pages/NewProjectPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 
@@ -30,8 +33,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-xs text-slate-500">
-        Authenticating session...
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-sm text-slate-500">
+        Đang kiểm tra phiên đăng nhập...
       </div>
     );
   }
@@ -51,18 +54,61 @@ export const App: React.FC = () => {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           
-          {/* Dedicated Knowledge / Database Inspector (Public Access for Evaluators & Debugging) */}
-          <Route path="/knowledge" element={<KnowledgeInspectorPage />} />
-          <Route path="/inspector" element={<KnowledgeInspectorPage />} />
-          
+          {/* Knowledge Inspector: weighted tree + visual regions of the user's own projects */}
           <Route
-            path="/dashboard"
+            path="/knowledge"
             element={
               <ProtectedRoute>
-                <DashboardPage />
+                <KnowledgeInspectorPage />
               </ProtectedRoute>
             }
           />
+          <Route path="/inspector" element={<Navigate to="/knowledge" replace />} />
+          <Route
+            path="/projects/:id/knowledge"
+            element={
+              <ProtectedRoute>
+                <KnowledgeInspectorPage />
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Lecturer flow: board -> new lecture -> lecture (review, generate, read) */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <LectureBoardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lectures/new"
+            element={
+              <ProtectedRoute>
+                <NewLecturePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lectures/:id"
+            element={
+              <ProtectedRoute>
+                <LecturePage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Advanced: the full studio and detailed tools */}
+          <Route
+            path="/advanced"
+            element={
+              <ProtectedRoute>
+                <AdvancedPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/dashboard" element={<Navigate to="/" replace />} />
           <Route
             path="/projects/new"
             element={
@@ -113,8 +159,7 @@ export const App: React.FC = () => {
             <Route path="settings" element={<AdminSettingsPage />} />
           </Route>
 
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

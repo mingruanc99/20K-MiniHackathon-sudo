@@ -147,16 +147,18 @@ function QualityBar({ label, value, color }: { label: string; value: number; col
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-        <span style={{ fontSize: 11, color: '#9ca3af' }}>{label}</span>
+        <span style={{ fontSize: 11, color: '#dfe6da' }}>{label}</span>
         <span style={{ fontSize: 11, fontWeight: 600, color }}>{(value * 100).toFixed(0)}%</span>
       </div>
-      <div style={{ height: 4, background: '#1f2937', borderRadius: 2, overflow: 'hidden' }}>
+      <div style={{ height: 4, background: '#2c5a47', borderRadius: 2, overflow: 'hidden' }}>
         <div style={{
           height: '100%',
-          width: `${value * 100}%`,
+          width: '100%',
+          transform: `scaleX(${value})`,
+          transformOrigin: 'left',
           background: color,
           borderRadius: 2,
-          transition: 'width 0.6s ease',
+          transition: 'transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
         }} />
       </div>
     </div>
@@ -165,8 +167,8 @@ function QualityBar({ label, value, color }: { label: string; value: number; col
 
 function QualityMetricsPanel({ quality }: { quality: TransitionQualityMetrics }) {
   return (
-    <div style={{ padding: '12px 16px', background: '#111827', borderRadius: 8, marginTop: 12 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+    <div style={{ padding: '12px 16px', background: '#173f35', borderRadius: 8, marginTop: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#c9d6ca', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
         Quality Metrics
       </div>
       <QualityBar label="Transition Quality" value={quality.transition_quality_score} color={getQualityColor(quality.transition_quality_score)} />
@@ -176,18 +178,18 @@ function QualityMetricsPanel({ quality }: { quality: TransitionQualityMetrics })
       <QualityBar
         label="Slide Dependency (↓ lower = better)"
         value={quality.slide_dependency_score}
-        color={quality.slide_dependency_score < 0.2 ? '#10b981' : '#ef4444'}
+        color={quality.slide_dependency_score < 0.2 ? '#8fd3a8' : '#f0a39b'}
       />
       {quality.overall !== undefined && (
         <div style={{
           marginTop: 12,
           paddingTop: 10,
-          borderTop: '1px solid #1f2937',
+          borderTop: '1px solid #2c5a47',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
         }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#d1d5db' }}>Overall Score</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#e9eee4' }}>Overall Score</span>
           <span style={{
             fontSize: 18,
             fontWeight: 800,
@@ -208,7 +210,7 @@ function TransitionCard({
   isSelected: boolean;
   onClick: () => void;
 }) {
-  const relColor = RELATIONSHIP_COLORS[transition.relationship] ?? '#6b7280';
+  const relColor = RELATIONSHIP_COLORS[transition.relationship] ?? '#c9d6ca';
   const qualColor = getQualityColor(transition.quality?.overall ?? 0);
   const overall = transition.quality?.overall ?? 0;
 
@@ -219,7 +221,7 @@ function TransitionCard({
         cursor: 'pointer',
         padding: '14px 16px',
         borderRadius: 10,
-        border: `1px solid ${isSelected ? relColor : '#1f2937'}`,
+        border: `1px solid ${isSelected ? relColor : '#2c5a47'}`,
         background: isSelected ? 'rgba(17,24,39,0.9)' : 'rgba(17,24,39,0.5)',
         marginBottom: 10,
         transition: 'all 0.2s ease',
@@ -243,8 +245,8 @@ function TransitionCard({
             </span>
             <span style={{
               fontSize: 10,
-              color: '#6b7280',
-              background: '#1f2937',
+              color: '#c9d6ca',
+              background: '#2c5a47',
               padding: '2px 6px',
               borderRadius: 4,
             }}>
@@ -252,11 +254,11 @@ function TransitionCard({
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#e5e7eb' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#f5f7f2' }}>
               {transition.from_concept_label}
             </span>
             <span style={{ color: relColor, fontSize: 14 }}>→</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#e5e7eb' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#f5f7f2' }}>
               {transition.to_concept_label}
             </span>
           </div>
@@ -276,7 +278,7 @@ function TransitionCard({
       <div style={{
         fontSize: 11,
         fontStyle: 'italic',
-        color: '#9ca3af',
+        color: '#dfe6da',
         borderLeft: `2px solid ${relColor}`,
         paddingLeft: 8,
         marginBottom: isSelected ? 12 : 0,
@@ -289,30 +291,30 @@ function TransitionCard({
         <div style={{ marginTop: 12 }}>
           {/* Bridge Reason */}
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#c9d6ca', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
               Why this transition exists
             </div>
-            <p style={{ fontSize: 12, color: '#9ca3af', margin: 0, lineHeight: 1.6 }}>
+            <p style={{ fontSize: 12, color: '#dfe6da', margin: 0, lineHeight: 1.6 }}>
               {transition.bridge_reason}
             </p>
           </div>
 
           {/* Before / After */}
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#c9d6ca', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
               Bridge Text (spoken)
             </div>
-            <div style={{ background: '#0d1117', borderRadius: 8, padding: '10px 14px', border: '1px solid #1f2937' }}>
+            <div style={{ background: '#10302a', borderRadius: 8, padding: '10px 14px', border: '1px solid #2c5a47' }}>
               <div style={{ marginBottom: 8 }}>
-                <span style={{ fontSize: 10, color: '#f59e0b', fontWeight: 700 }}>CLOSES section "{transition.from_concept_label}":</span>
-                <p style={{ fontSize: 12, color: '#d1d5db', margin: '4px 0 0 0', lineHeight: 1.6, fontStyle: 'italic' }}>
+                <span style={{ fontSize: 10, color: '#e6d9a8', fontWeight: 700 }}>CLOSES section "{transition.from_concept_label}":</span>
+                <p style={{ fontSize: 12, color: '#e9eee4', margin: '4px 0 0 0', lineHeight: 1.6, fontStyle: 'italic' }}>
                   "{transition.closing_sentence_a}"
                 </p>
               </div>
-              <div style={{ height: 1, background: '#1f2937', margin: '8px 0' }} />
+              <div style={{ height: 1, background: '#2c5a47', margin: '8px 0' }} />
               <div>
-                <span style={{ fontSize: 10, color: '#10b981', fontWeight: 700 }}>OPENS section "{transition.to_concept_label}":</span>
-                <p style={{ fontSize: 12, color: '#d1d5db', margin: '4px 0 0 0', lineHeight: 1.6, fontStyle: 'italic' }}>
+                <span style={{ fontSize: 10, color: '#8fd3a8', fontWeight: 700 }}>OPENS section "{transition.to_concept_label}":</span>
+                <p style={{ fontSize: 12, color: '#e9eee4', margin: '4px 0 0 0', lineHeight: 1.6, fontStyle: 'italic' }}>
                   "{transition.opening_sentence_b}"
                 </p>
               </div>
@@ -323,17 +325,17 @@ function TransitionCard({
           {transition.slide_centric_phrases_detected.length === 0 ? (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 6,
-              fontSize: 11, color: '#10b981',
-              background: '#10b98111', padding: '6px 10px', borderRadius: 6,
-              border: '1px solid #10b98133', marginBottom: 12,
+              fontSize: 11, color: '#8fd3a8',
+              background: '#8fd3a811', padding: '6px 10px', borderRadius: 6,
+              border: '1px solid #8fd3a833', marginBottom: 12,
             }}>
               <span>✓</span> No slide-centric phrases detected
             </div>
           ) : (
             <div style={{
-              fontSize: 11, color: '#ef4444',
-              background: '#ef444411', padding: '6px 10px', borderRadius: 6,
-              border: '1px solid #ef444433', marginBottom: 12,
+              fontSize: 11, color: '#f0a39b',
+              background: '#f0a39b11', padding: '6px 10px', borderRadius: 6,
+              border: '1px solid #f0a39b33', marginBottom: 12,
             }}>
               ⚠ Slide-centric phrases detected: {transition.slide_centric_phrases_detected.join(', ')}
             </div>
@@ -401,17 +403,17 @@ function FlowDiagram({
                   cursor: trToThis ? 'pointer' : 'default',
                   minWidth: 110,
                   padding: '10px 14px',
-                  background: isSelected ? 'rgba(59,130,246,0.15)' : '#111827',
-                  border: `2px solid ${isSelected ? '#3b82f6' : '#1f2937'}`,
+                  background: isSelected ? 'rgba(59,130,246,0.15)' : '#173f35',
+                  border: `2px solid ${isSelected ? '#e6d9a8' : '#2c5a47'}`,
                   borderRadius: 10,
                   textAlign: 'center',
                   transition: 'all 0.2s ease',
                 }}
               >
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#e5e7eb', lineHeight: 1.3 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#f5f7f2', lineHeight: 1.3 }}>
                   {node.label}
                 </div>
-                <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>
+                <div style={{ fontSize: 10, color: '#c9d6ca', marginTop: 3 }}>
                   Section {idx + 1}
                 </div>
               </div>
@@ -420,7 +422,7 @@ function FlowDiagram({
               {idx < nodes.length - 1 && (() => {
                 const tr = map.transitions[idx];
                 if (!tr) return null;
-                const relColor = RELATIONSHIP_COLORS[tr.relationship] ?? '#6b7280';
+                const relColor = RELATIONSHIP_COLORS[tr.relationship] ?? '#c9d6ca';
                 const isEdgeSelected = tr.transition_id === selectedId;
                 return (
                   <div
@@ -438,7 +440,7 @@ function FlowDiagram({
                     <div style={{
                       fontSize: 9,
                       fontWeight: 700,
-                      color: isEdgeSelected ? relColor : '#4b5563',
+                      color: isEdgeSelected ? relColor : '#93aa98',
                       background: isEdgeSelected ? `${relColor}22` : 'transparent',
                       padding: '2px 6px',
                       borderRadius: 4,
@@ -451,8 +453,8 @@ function FlowDiagram({
                     </div>
                     {/* Arrow line */}
                     <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                      <div style={{ flex: 1, height: 2, background: isEdgeSelected ? relColor : '#1f2937', transition: 'background 0.2s ease' }} />
-                      <span style={{ color: isEdgeSelected ? relColor : '#374151', fontSize: 14, transition: 'color 0.2s ease' }}>▶</span>
+                      <div style={{ flex: 1, height: 2, background: isEdgeSelected ? relColor : '#2c5a47', transition: 'background 0.2s ease' }} />
+                      <span style={{ color: isEdgeSelected ? relColor : '#557a69', fontSize: 14, transition: 'color 0.2s ease' }}>▶</span>
                     </div>
                     {/* Quality score */}
                     <div style={{
@@ -490,19 +492,19 @@ function AggregateStats({ map }: { map: LectureTransitionMap }) {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
       {stats.map(s => {
         const color = s.invert
-          ? (s.value < 0.1 ? '#10b981' : s.value < 0.3 ? '#f59e0b' : '#ef4444')
+          ? (s.value < 0.1 ? '#8fd3a8' : s.value < 0.3 ? '#e6d9a8' : '#f0a39b')
           : getQualityColor(s.value);
         return (
           <div key={s.label} style={{
-            background: '#111827',
-            border: '1px solid #1f2937',
+            background: '#173f35',
+            border: '1px solid #2c5a47',
             borderRadius: 10,
             padding: '12px 14px',
             textAlign: 'center',
           }}>
             <div style={{ fontSize: 20, color, marginBottom: 4 }}>{s.icon}</div>
             <div style={{ fontSize: 18, fontWeight: 800, color }}>{(s.value * 100).toFixed(0)}%</div>
-            <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2, lineHeight: 1.3 }}>{s.label}</div>
+            <div style={{ fontSize: 10, color: '#c9d6ca', marginTop: 2, lineHeight: 1.3 }}>{s.label}</div>
           </div>
         );
       })}
@@ -529,17 +531,17 @@ The skeleton graph connects them. It defines which points are adjacent, which jo
 
   return (
     <div style={{
-      background: '#0d1117',
-      border: '1px solid #1f2937',
+      background: '#10302a',
+      border: '1px solid #2c5a47',
       borderRadius: 12,
       padding: '16px 20px',
       marginBottom: 20,
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#e5e7eb' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#f5f7f2' }}>
           🎬 Before / After Demo
         </div>
-        <div style={{ display: 'flex', gap: 0, background: '#111827', borderRadius: 8, padding: 3, border: '1px solid #1f2937' }}>
+        <div style={{ display: 'flex', gap: 0, background: '#173f35', borderRadius: 8, padding: 3, border: '1px solid #2c5a47' }}>
           <button
             onClick={() => setShowAfter(false)}
             style={{
@@ -549,8 +551,8 @@ The skeleton graph connects them. It defines which points are adjacent, which jo
               borderRadius: 6,
               border: 'none',
               cursor: 'pointer',
-              background: !showAfter ? '#ef4444' : 'transparent',
-              color: !showAfter ? '#fff' : '#6b7280',
+              background: !showAfter ? '#f0a39b' : 'transparent',
+              color: !showAfter ? '#fff' : '#c9d6ca',
               transition: 'all 0.2s ease',
             }}
           >
@@ -565,8 +567,8 @@ The skeleton graph connects them. It defines which points are adjacent, which jo
               borderRadius: 6,
               border: 'none',
               cursor: 'pointer',
-              background: showAfter ? '#10b981' : 'transparent',
-              color: showAfter ? '#fff' : '#6b7280',
+              background: showAfter ? '#8fd3a8' : 'transparent',
+              color: showAfter ? '#fff' : '#c9d6ca',
               transition: 'all 0.2s ease',
             }}
           >
@@ -579,12 +581,12 @@ The skeleton graph connects them. It defines which points are adjacent, which jo
         fontFamily: "'Georgia', serif",
         fontSize: 13,
         lineHeight: 1.8,
-        color: showAfter ? '#d1d5db' : '#9ca3af',
+        color: showAfter ? '#e9eee4' : '#dfe6da',
         whiteSpace: 'pre-line',
         padding: '12px 16px',
         background: showAfter ? 'rgba(16,185,129,0.05)' : 'rgba(239,68,68,0.05)',
         borderRadius: 8,
-        border: `1px solid ${showAfter ? '#10b98133' : '#ef444433'}`,
+        border: `1px solid ${showAfter ? '#8fd3a833' : '#f0a39b33'}`,
         transition: 'all 0.3s ease',
         minHeight: 100,
       }}>
@@ -592,12 +594,12 @@ The skeleton graph connects them. It defines which points are adjacent, which jo
       </div>
 
       {showAfter && (
-        <div style={{ marginTop: 10, fontSize: 11, color: '#10b981' }}>
+        <div style={{ marginTop: 10, fontSize: 11, color: '#8fd3a8' }}>
           ✓ Idea-to-idea flow • No slide titles injected • Curiosity gap plants naturally • Bridge answers from previous concept
         </div>
       )}
       {!showAfter && (
-        <div style={{ marginTop: 10, fontSize: 11, color: '#ef4444' }}>
+        <div style={{ marginTop: 10, fontSize: 11, color: '#f0a39b' }}>
           ✗ "Let's move on to" detected • Slide title injected directly • No semantic bridge • Hard cut between sections
         </div>
       )}
@@ -627,7 +629,7 @@ export default function TransitionIntelligenceViewer({
   return (
     <div style={{
       fontFamily: "'Inter', 'Segoe UI', sans-serif",
-      color: '#e5e7eb',
+      color: '#f5f7f2',
       padding: '20px',
       maxWidth: 1100,
       margin: '0 auto',
@@ -637,16 +639,16 @@ export default function TransitionIntelligenceViewer({
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
           <div style={{
             width: 36, height: 36,
-            background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+            background: 'linear-gradient(135deg, #e6d9a8, #557a69)',
             borderRadius: 10,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 18,
           }}>⬡</div>
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#f3f4f6' }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#fbfcf9' }}>
               Transition Intelligence Layer
             </h2>
-            <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>
+            <p style={{ margin: 0, fontSize: 12, color: '#c9d6ca' }}>
               {map.total_transitions} transitions • Moves between ideas, not slides
             </p>
           </div>
@@ -661,13 +663,13 @@ export default function TransitionIntelligenceViewer({
 
       {/* Flow Diagram */}
       <div style={{
-        background: '#0d1117',
-        border: '1px solid #1f2937',
+        background: '#10302a',
+        border: '1px solid #2c5a47',
         borderRadius: 12,
         padding: '16px 20px',
         marginBottom: 20,
       }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#c9d6ca', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
           Concept Flow Diagram — Click an arrow to inspect
         </div>
         <FlowDiagram map={map} selectedId={selectedId} onSelect={setSelectedId} />
@@ -677,7 +679,7 @@ export default function TransitionIntelligenceViewer({
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* Left: transition list */}
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#c9d6ca', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
             All Transitions ({map.total_transitions})
           </div>
           {map.transitions.map(tr => (
@@ -696,28 +698,28 @@ export default function TransitionIntelligenceViewer({
             <div style={{
               position: 'sticky',
               top: 20,
-              background: '#0d1117',
-              border: `1px solid ${RELATIONSHIP_COLORS[selectedTransition.relationship] ?? '#1f2937'}`,
+              background: '#10302a',
+              border: `1px solid ${RELATIONSHIP_COLORS[selectedTransition.relationship] ?? '#2c5a47'}`,
               borderRadius: 12,
               padding: '16px 20px',
             }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#c9d6ca', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
                 Transition Detail
               </div>
 
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#e5e7eb', marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#f5f7f2', marginBottom: 12 }}>
                 {selectedTransition.from_concept_label}
-                <span style={{ color: RELATIONSHIP_COLORS[selectedTransition.relationship] ?? '#6b7280', margin: '0 6px' }}>→</span>
+                <span style={{ color: RELATIONSHIP_COLORS[selectedTransition.relationship] ?? '#c9d6ca', margin: '0 6px' }}>→</span>
                 {selectedTransition.to_concept_label}
               </div>
 
               <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Implicit Learner Question</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#c9d6ca', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Implicit Learner Question</div>
                 <div style={{
                   fontSize: 13,
                   fontStyle: 'italic',
-                  color: '#d1d5db',
-                  borderLeft: `3px solid ${RELATIONSHIP_COLORS[selectedTransition.relationship] ?? '#3b82f6'}`,
+                  color: '#e9eee4',
+                  borderLeft: '1px solid #557a69',
                   paddingLeft: 10,
                   lineHeight: 1.6,
                 }}>
@@ -726,11 +728,11 @@ export default function TransitionIntelligenceViewer({
               </div>
 
               <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Closing (ends Section A)</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#e6d9a8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Closing (ends Section A)</div>
                 <div style={{
                   fontSize: 12,
-                  color: '#d1d5db',
-                  background: '#111827',
+                  color: '#e9eee4',
+                  background: '#173f35',
                   padding: '10px 14px',
                   borderRadius: 8,
                   lineHeight: 1.7,
@@ -741,11 +743,11 @@ export default function TransitionIntelligenceViewer({
               </div>
 
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Opening (begins Section B)</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#8fd3a8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Opening (begins Section B)</div>
                 <div style={{
                   fontSize: 12,
-                  color: '#d1d5db',
-                  background: '#111827',
+                  color: '#e9eee4',
+                  background: '#173f35',
                   padding: '10px 14px',
                   borderRadius: 8,
                   lineHeight: 1.7,
@@ -765,9 +767,9 @@ export default function TransitionIntelligenceViewer({
               alignItems: 'center',
               justifyContent: 'center',
               height: 200,
-              color: '#4b5563',
+              color: '#93aa98',
               fontSize: 13,
-              border: '1px dashed #1f2937',
+              border: '1px dashed #2c5a47',
               borderRadius: 12,
             }}>
               Select a transition to inspect

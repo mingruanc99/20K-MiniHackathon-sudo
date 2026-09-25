@@ -69,38 +69,38 @@ export const AdminErrorCenterPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center space-x-2">
-            <AlertOctagon className="w-5 h-5 text-rose-600" />
+          <h1 className="text-xl font-bold text-ink tracking-tight flex items-center space-x-2">
+            <AlertOctagon className="w-5 h-5 text-pen" />
             <span>Centralized Error Center</span>
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-ink-faint mt-1">
             Trung tâm quản lý và khắc phục sự cố hệ thống: rò rỉ metadata, lỗi ký tự ô vuông đen (■), timeout và ngoại lệ API.
           </p>
         </div>
 
         <div className="flex items-center space-x-2">
           {criticalCount > 0 && (
-            <span className="px-2.5 py-1 rounded-xl bg-rose-100 text-rose-800 text-xs font-bold border border-rose-200">
+            <span className="px-2.5 py-1 rounded-xl bg-pen-soft text-pen text-xs font-bold border border-pen-line">
               {criticalCount} Critical Alert
             </span>
           )}
-          <span className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 text-xs font-semibold border border-amber-200">
+          <span className="px-2.5 py-1 rounded-xl bg-pen-soft text-pen text-xs font-semibold border border-pen-line">
             {unresolvedCount} Chưa giải quyết
           </span>
         </div>
       </div>
 
       {/* Filter and Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
+      <div className="bg-paper-sheet rounded-2xl border border-rule shadow-xs p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="relative w-full sm:w-72">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-ink-faint absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Tìm theo lỗi, bài giảng, trace id..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 focus:outline-none focus:border-blue-500"
+              className="w-full pl-9 pr-3 py-1.5 bg-paper-band border border-rule rounded-xl text-xs text-ink-soft focus:outline-none focus:border-print"
             />
           </div>
 
@@ -108,7 +108,7 @@ export const AdminErrorCenterPage: React.FC = () => {
             <select
               value={severityFilter}
               onChange={(e) => setSeverityFilter(e.target.value)}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-slate-700 focus:outline-none"
+              className="text-xs bg-paper-band border border-rule rounded-xl px-2.5 py-1 text-ink-soft focus:outline-none"
             >
               <option value="all">Tất cả mức độ</option>
               <option value="critical">Critical</option>
@@ -120,7 +120,7 @@ export const AdminErrorCenterPage: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-slate-700 focus:outline-none"
+              className="text-xs bg-paper-band border border-rule rounded-xl px-2.5 py-1 text-ink-soft focus:outline-none"
             >
               <option value="all">Tất cả trạng thái</option>
               <option value="unresolved">Chưa xử lý (Unresolved)</option>
@@ -131,10 +131,10 @@ export const AdminErrorCenterPage: React.FC = () => {
         </div>
 
         {/* Errors Table */}
-        <div className="overflow-x-auto border border-slate-100 rounded-xl">
+        <div className="overflow-x-auto border border-rule rounded-xl">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
+              <tr className="bg-paper-band border-b border-rule text-ink-faint font-semibold uppercase text-[11px] tracking-wider">
                 <th className="py-3 px-3">Thời Gian</th>
                 <th className="py-3 px-3">Loại Lỗi</th>
                 <th className="py-3 px-3">Bài Giảng & Section</th>
@@ -144,34 +144,34 @@ export const AdminErrorCenterPage: React.FC = () => {
                 <th className="py-3 px-3 text-right">Hành Động</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-rule">
               {filteredErrors.map((err) => (
                 <tr
                   key={err.id}
                   onClick={() => setSelectedError(err)}
-                  className="hover:bg-slate-50/60 cursor-pointer transition"
+                  className="hover:bg-paper-band cursor-pointer transition"
                 >
-                  <td className="py-3 px-3 font-mono text-slate-500 whitespace-nowrap text-[11px]">
+                  <td className="py-3 px-3 font-mono text-ink-faint whitespace-nowrap text-xs">
                     {err.timestamp}
                   </td>
                   <td className="py-3 px-3 whitespace-nowrap">
-                    <span className="font-mono font-bold text-slate-800">{err.type}</span>
+                    <span className="font-mono font-bold text-ink">{err.type}</span>
                   </td>
                   <td className="py-3 px-3">
-                    <div className="font-semibold text-slate-800">{err.lessonTitle}</div>
-                    <div className="text-[10px] font-mono text-slate-400">{err.sectionId}</div>
+                    <div className="font-semibold text-ink">{err.lessonTitle}</div>
+                    <div className="text-[11px] font-mono text-ink-faint">{err.sectionId}</div>
                   </td>
-                  <td className="py-3 px-3 whitespace-nowrap font-mono text-[11px] text-slate-700">
+                  <td className="py-3 px-3 whitespace-nowrap font-mono text-xs text-ink-soft">
                     {err.model}
                   </td>
                   <td className="py-3 px-3 whitespace-nowrap">
                     <span
-                      className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                      className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold uppercase ${
                         err.severity === 'critical'
-                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                          ? 'bg-pen-soft text-pen border border-pen-line'
                           : err.severity === 'high'
-                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                          : 'bg-blue-100 text-blue-800'
+                          ? 'bg-pen-soft text-pen border border-pen-line'
+                          : 'bg-paper-band text-print'
                       }`}
                     >
                       {err.severity}
@@ -181,10 +181,10 @@ export const AdminErrorCenterPage: React.FC = () => {
                     <span
                       className={`inline-flex items-center space-x-1 text-xs font-semibold ${
                         err.status === 'resolved'
-                          ? 'text-emerald-600'
+                          ? 'text-print'
                           : err.status === 'investigating'
-                          ? 'text-amber-600'
-                          : 'text-rose-600'
+                          ? 'text-pen'
+                          : 'text-pen'
                       }`}
                     >
                       {err.status === 'resolved' ? (
@@ -207,7 +207,7 @@ export const AdminErrorCenterPage: React.FC = () => {
                           e.stopPropagation();
                           handleResolve(err.id);
                         }}
-                        className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold transition"
+                        className="px-2.5 py-1 bg-paper-band hover:bg-paper-band text-navy rounded-lg text-xs font-semibold transition"
                       >
                         Đánh dấu đã sửa
                       </button>
@@ -218,9 +218,9 @@ export const AdminErrorCenterPage: React.FC = () => {
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition"
+                        className="inline-flex items-center space-x-1 px-2.5 py-1 bg-paper-band hover:bg-rule text-ink-soft rounded-lg text-xs font-medium transition"
                       >
-                        <Flame className="w-3 h-3 text-orange-500" />
+                        <Flame className="w-3 h-3 text-pen" />
                         <span>Trace</span>
                       </a>
                     )}
@@ -234,17 +234,17 @@ export const AdminErrorCenterPage: React.FC = () => {
 
       {/* Error Detail Modal */}
       {selectedError && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white max-w-xl w-full rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-cover  flex items-center justify-center p-4">
+          <div className="bg-paper-sheet max-w-xl w-full rounded-2xl border border-rule shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div className="px-6 py-4 border-b border-rule flex items-center justify-between bg-paper-band">
               <div className="flex items-center space-x-2">
-                <AlertOctagon className="w-5 h-5 text-rose-600" />
-                <h3 className="text-sm font-bold text-slate-900">Chi Tiết Sự Cố Lỗi</h3>
+                <AlertOctagon className="w-5 h-5 text-pen" />
+                <h3 className="text-sm font-bold text-ink">Chi Tiết Sự Cố Lỗi</h3>
               </div>
               <button
                 onClick={() => setSelectedError(null)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                className="p-1 text-ink-faint hover:text-ink-soft rounded-lg hover:bg-paper-band"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -252,43 +252,43 @@ export const AdminErrorCenterPage: React.FC = () => {
 
             {/* Modal Body */}
             <div className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              <div className="grid grid-cols-2 gap-3 bg-paper-band p-3.5 rounded-xl border border-rule">
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Loại lỗi</span>
-                  <div className="font-mono font-bold text-slate-900">{selectedError.type}</div>
+                  <span className="text-[11px] text-ink-faint uppercase font-semibold">Loại lỗi</span>
+                  <div className="font-mono font-bold text-ink">{selectedError.type}</div>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Mức độ</span>
-                  <div className="font-bold text-rose-600 uppercase">{selectedError.severity}</div>
+                  <span className="text-[11px] text-ink-faint uppercase font-semibold">Mức độ</span>
+                  <div className="font-bold text-pen uppercase">{selectedError.severity}</div>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Bài giảng</span>
-                  <div className="font-semibold text-slate-800">{selectedError.lessonTitle}</div>
+                  <span className="text-[11px] text-ink-faint uppercase font-semibold">Bài giảng</span>
+                  <div className="font-semibold text-ink">{selectedError.lessonTitle}</div>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Section ID</span>
-                  <div className="font-mono text-slate-800">{selectedError.sectionId}</div>
+                  <span className="text-[11px] text-ink-faint uppercase font-semibold">Section ID</span>
+                  <div className="font-mono text-ink">{selectedError.sectionId}</div>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <span className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">Thông Điệp / Chẩn Đoán Lỗi</span>
-                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 leading-relaxed font-mono text-xs">
+                <span className="font-bold text-ink uppercase tracking-wider text-xs">Thông Điệp / Chẩn Đoán Lỗi</span>
+                <div className="p-3.5 bg-pen-soft border border-pen-line rounded-xl text-pen leading-relaxed font-mono text-xs">
                   {selectedError.message}
                 </div>
               </div>
 
               {selectedError.traceId && (
-                <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                <div className="flex items-center justify-between p-3 bg-paper-band border border-rule rounded-xl">
                   <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Trace ID</span>
-                    <div className="font-mono text-slate-800">{selectedError.traceId}</div>
+                    <span className="text-[11px] text-ink-faint uppercase font-semibold">Trace ID</span>
+                    <div className="font-mono text-ink">{selectedError.traceId}</div>
                   </div>
                   <a
                     href={adminTelemetryService.getLangfuseTraceUrl(selectedError.traceId)}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition"
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-cover hover:bg-cover text-white rounded-lg text-xs font-semibold transition"
                   >
                     <Flame className="w-3.5 h-3.5" />
                     <span>Mở Trace</span>
@@ -299,12 +299,12 @@ export const AdminErrorCenterPage: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+            <div className="px-6 py-3 border-t border-rule bg-paper-band flex justify-between items-center">
               <div>
                 {selectedError.status !== 'resolved' && (
                   <button
                     onClick={() => handleResolve(selectedError.id)}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition"
+                    className="px-3 py-1.5 bg-print hover:bg-cover text-white text-xs font-semibold rounded-xl transition"
                   >
                     Đánh dấu đã giải quyết (Resolve)
                   </button>
@@ -313,7 +313,7 @@ export const AdminErrorCenterPage: React.FC = () => {
 
               <button
                 onClick={() => setSelectedError(null)}
-                className="px-4 py-2 bg-white border border-slate-200 text-slate-700 font-medium text-xs rounded-xl hover:bg-slate-100 transition shadow-xs"
+                className="px-4 py-2 bg-paper-sheet border border-rule text-ink-soft font-medium text-xs rounded-xl hover:bg-paper-band transition shadow-xs"
               >
                 Đóng
               </button>

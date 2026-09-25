@@ -52,6 +52,10 @@ export interface UserConfiguration {
   language_policy?: LanguagePolicy;
   projectTerminology?: Record<string, { canonical: string; language: string; reason?: string }>;
   interactionLevel?: 'low' | 'moderate' | 'high';
+  /** 'template' = rule-based narration (default, 0 tokens); 'llm' = narration written by the active LLM. */
+  narrationEngine?: 'template' | 'llm';
+  /** How many times a section heading may be spoken (default 1). */
+  maxSectionTitleMentions?: number;
   accessibility?: {
     captions: boolean;
     highContrast: boolean;
@@ -103,7 +107,50 @@ export interface ContentElement {
   diagram_ref?: string;
   description?: string;
   caption?: string;
+  /** Normalized [x1, y1, x2, y2] in 0..1 page/slide coordinates (top-left origin). */
+  bbox?: number[];
+  /** Link to the VisualRegion this element came from (tables, charts, OCR'd images). */
+  region_id?: string;
   metadata?: Record<string, any>;
+}
+
+export type VisualRegionKind = 'picture' | 'table' | 'chart' | 'diagram' | 'smartart' | 'scanned_page' | 'manual';
+
+export interface RegionOcrResult {
+  engine: 'gemini' | 'tesseract' | 'native';
+  status: 'pending' | 'done' | 'skipped' | 'failed';
+  content_type?: 'table' | 'diagram' | 'chart' | 'text' | 'photo' | 'formula';
+  /** Plain reading of the region (used by narration and keyword extraction). */
+  text?: string;
+  table?: string[][];
+  nodes?: string[];
+  edges?: { from: string; to: string; label?: string }[];
+  summary?: string;
+  is_decorative?: boolean;
+  confidence?: number;
+  error?: string;
+  latency_ms?: number;
+}
+
+/**
+ * A located visual area on a page/slide. Detected before OCR so only these crops
+ * (not whole pages) are sent to the OCR engines.
+ */
+export interface VisualRegion {
+  region_id: string;
+  section_id: string;
+  page_number: number;
+  kind: VisualRegionKind;
+  /** Normalized [x1, y1, x2, y2] (top-left origin). */
+  bbox: number[];
+  source: 'pptx_xml' | 'pdf_image_op' | 'pdf_vector_cluster' | 'pdf_textless_page' | 'user';
+  /** PPTX media path inside the zip, when the region is an embedded picture. */
+  asset_ref?: string;
+  /** Text already available without OCR (native tables, chart series, SmartArt nodes). */
+  native_text?: string;
+  ocr?: RegionOcrResult;
+  /** User turned this region off in the Knowledge Inspector. */
+  excluded?: boolean;
 }
 
 export interface DocumentSection {
@@ -126,6 +173,10 @@ export interface CanonicalDocumentTree {
   canonical_markdown?: string;
   semantic_chunks?: any[];
   visual_elements?: any[];
+  /** Located image/table/chart/diagram regions (see VisualRegion). */
+  visual_regions?: VisualRegion[];
+  /** Width / height of a page or slide, for drawing region overlays. */
+  page_aspect?: number;
 }
 
 export type BloomLevel = 'Remember' | 'Understand' | 'Apply' | 'Analyze' | 'Evaluate' | 'Create';
@@ -454,6 +505,8 @@ export interface QualityReport {
   target_duration_sec: number;
   actual_duration_sec: number;
   duration_error_pct: number;
+  /** DAR-P error before the pause-only repair. */
+  dar_p_pre_repair_pct?: number;
   factual_consistency_score: number;
   visual_necessity_score: number;
   taxonomy_validity_score: number;
@@ -469,6 +522,8 @@ export interface QualityReport {
 
 export * from './narrative';
 export * from './knowledgeSpace';
+export * from './knowledgeTree';
+import { KnowledgeTree } from './knowledgeTree';
 import { NarrativeIR } from './narrative';
 import { KnowledgeIR, CurriculumIR } from './knowledgeSpace';
 
@@ -524,6 +579,10 @@ export interface Project {
   narrativeIr?: NarrativeIR;
   qualityReport?: QualityReport;
   executionLogs?: ExecutionTraceLog[];
+  /** Weighted chapter/page/keyword tree edited in the Knowledge Inspector. */
+  knowledgeTree?: KnowledgeTree;
+  /** Summary of the latest benchmark run (full logs live in projects/{id}/runs). */
+  lastBenchmark?: import('../services/benchmark/benchmarkTypes').BenchmarkRunSummary;
   createdAt: string;
   updatedAt: string;
 }
