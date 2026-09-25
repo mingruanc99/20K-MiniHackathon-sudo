@@ -73,8 +73,9 @@ export class PDFExtractor {
     const prompt = `Trích xuất toàn bộ văn bản và mô tả chi tiết các biểu đồ/hình ảnh từ các slide PDF được đính kèm (theo thứ tự từ trang 1 đến trang ${numPages}).
 Yêu cầu:
 1. Đọc và trích xuất TOÀN BỘ chữ trên từng slide.
-2. Nếu slide có hình ảnh, biểu đồ, lưu đồ: HÃY mô tả lại ý nghĩa sư phạm của chúng bằng văn bản (text).
+2. Nếu slide có hình ảnh, biểu đồ, lưu đồ: HÃY mô tả lại ý nghĩa sư phạm của chúng bằng văn bản.
 3. KHÔNG bỏ sót bất kỳ slide nào.
+4. QUAN TRỌNG: Toàn bộ quá trình bóc tách và mô tả phải được viết 100% bằng TIẾNG VIỆT. Không dịch sang tiếng Anh.
 
 Trả về dữ liệu BẮT BUỘC dưới định dạng JSON có cấu trúc sau:
 {
@@ -85,7 +86,7 @@ Trả về dữ liệu BẮT BUỘC dưới định dạng JSON có cấu trúc 
       "elements": [
         {
           "type": "paragraph",
-          "text": "Nội dung văn bản, mô tả chi tiết biểu đồ..."
+          "text": "Nội dung văn bản, mô tả chi tiết biểu đồ (Bằng Tiếng Việt)..."
         }
       ]
     }
@@ -93,7 +94,7 @@ Trả về dữ liệu BẮT BUỘC dưới định dạng JSON có cấu trúc 
 }
 Lưu ý: Mảng 'sections' phải có đúng ${numPages} phần tử, tương ứng với ${numPages} hình ảnh slide được đính kèm. Nếu slide chỉ có hình, hãy để tiêu đề là 'Slide [số]' và phần text là mô tả hình đó.`;
 
-    const systemInstruction = "You are an expert AI instructional designer and OCR extraction specialist. You analyze slide decks and extract precise pedagogical text and diagram descriptions into structured JSON.";
+    const systemInstruction = "Bạn là một chuyên gia thiết kế sư phạm và trích xuất dữ liệu OCR xuất sắc. Bạn có nhiệm vụ phân tích các slide bài giảng và trích xuất nội dung văn bản cũng như mô tả các biểu đồ một cách chính xác sang tiếng Việt và đóng gói vào cấu trúc JSON.";
 
     const resultJson = await online!.generateJson<any>(
       prompt,
