@@ -181,7 +181,7 @@ export const LectureBoardPage: React.FC = () => {
           )}
           <Link
             to="/lectures/new"
-            className="inline-flex items-center gap-2 rounded-xl bg-cover px-4 py-2.5 text-sm font-semibold text-paper shadow-[0_1px_2px_rgba(16,48,42,0.35)] transition-colors hover:bg-cover-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-print focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+            className="inline-flex items-center gap-2 rounded-xl bg-cover px-4 py-2.5 text-sm font-semibold text-paper shadow-[0_1px_2px_rgba(19,75,136,0.35)] transition-colors hover:bg-cover-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-print focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
           >
             <PenLine className="h-4 w-4" /> Ghi bài mới
           </Link>
@@ -266,7 +266,7 @@ export const LectureBoardPage: React.FC = () => {
         ))}
       </div>
 
-      <section className="relative overflow-hidden rounded-lg rounded-tl-none border border-rule-strong bg-paper shadow-[0_1px_0_#dfe6da,0_12px_28px_-20px_rgba(16,48,42,0.45)]">
+      <section className="relative overflow-hidden rounded-lg rounded-tl-none border border-rule-strong bg-paper shadow-[0_1px_0_#dfe6da,0_12px_28px_-20px_rgba(19,75,136,0.45)]">
         {projects === null ? (
           <div className="ledger-ruled flex h-64 items-center gap-2 px-6 text-sm text-ink-soft">
             <Loader2 className="h-4 w-4 animate-spin" /> Đang mở sổ…

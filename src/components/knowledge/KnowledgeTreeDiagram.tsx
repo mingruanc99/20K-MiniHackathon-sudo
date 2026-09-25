@@ -155,7 +155,7 @@ export const KnowledgeTreeDiagram: React.FC<Props> = ({ root, expanded, selected
                   <span className="font-mono tabular-nums">{fmtSec(n.duration_sec)}</span>
                   {p.share !== undefined && (
                     <>
-                      <span className="h-1 w-12 rounded-full bg-cover overflow-hidden">
+                      <span className="h-1 w-12 rounded-full bg-rule overflow-hidden">
                         <span className="block h-full bg-navy" style={{ width: `${Math.min(100, Math.round(p.share * 100))}%` }} />
                       </span>
                       <span className="tabular-nums">{Math.round(p.share * 100)}%</span>

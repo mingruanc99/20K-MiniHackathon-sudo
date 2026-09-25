@@ -1485,3 +1485,125 @@ test('OCR diagram labels split boxes on wide gaps and drop arrow noise', async (
     'Kết nối đầy đủ'
   ]);
 });
+
+test('Template composer: line shapes', async () => {
+  const { analyzeLine } = await import('../../src/pipeline/module3_generator/templateComposer.ts');
+  const shape = (text, type, lang = 'vi') => analyzeLine({ text, level: 2, type }, lang)?.shape;
+  assert.equal(shape('Kernel: ma trận trọng số nhỏ trượt trên ảnh'), 'definition');
+  assert.equal(shape('Độ chính xác: 92,5%'), 'metric');
+  assert.equal(shape('Stride = 2'), 'metric');
+  assert.equal(shape('Số tham số – 1,2 triệu'), 'metric');
+  assert.equal(shape('y = max(0, x)', 'equation'), 'formula');
+  assert.equal(shape('loss = -sum(y * log(p))'), 'formula');
+  assert.equal(shape('layer = nn.Conv2d(3, 16, 3)', 'code'), 'code');
+  assert.equal(shape('Ưu điểm:'), 'heading');
+  assert.equal(shape('Vì sao cần pooling?'), 'question');
+  assert.equal(shape('Ví dụ: ảnh 32x32 qua kernel 3x3'), 'example');
+  assert.equal(shape('Max pooling'), 'fragment');
+  assert.equal(shape('ReLU giúp mô hình học phi tuyến'), 'sentence');
+  assert.equal(shape('The kernel slides over the image', undefined, 'en'), 'sentence');
+});
+
+test('Template composer: grouped rendering stays grounded and never reads fragments one by one', async () => {
+  const { composePage } = await import('../../src/pipeline/module3_generator/templateComposer.ts');
+  const lines = (arr) => arr.map(([text, level]) => ({ text, level: level ?? 2 }));
+  const vi = (arr, extra = {}) => composePage(lines(arr), [], { lang: 'vi', sceneKey: 'S', used: new Set(), ...extra }).body.join(' ');
+
+  assert.equal(vi([['Các bước:'], ['Chuẩn hoá dữ liệu'], ['Huấn luyện'], ['Đánh giá']]), 'Các bước lần lượt là chuẩn hoá dữ liệu, huấn luyện và đánh giá.');
+  assert.match(vi([['Quy trình huấn luyện:'], ['Chuẩn hoá'], ['Huấn luyện']]), /^Quy trình huấn luyện (gồm|diễn ra qua) hai bước: chuẩn hoá và huấn luyện.$/);
+  assert.match(vi([['Ưu điểm:', 2], ['Nhanh', 3], ['Ít tham số', 3]]), /ưu điểm.*nhanh và ít tham số\./i);
+  assert.match(vi([['Max pooling'], ['Average pooling']], { title: 'Các loại pooling' }), /^(Các loại pooling (gồm|bao gồm)|Với các loại pooling, ta có) max pooling và average pooling.$/);
+  // Title is only used as a list subject once per scene, and never when it is a question.
+  assert.doesNotMatch(vi([['Max pooling'], ['Average pooling']], { title: 'Vì sao cần pooling?' }), /Vì sao/);
+  // Definitions whose body starts with a verb drop the copula.
+  assert.equal(vi([['ReLU: giúp mô hình học phi tuyến']]), 'ReLU giúp mô hình học phi tuyến.');
+  // Long step items are numbered with digits (ordinal words are stripped by the guard).
+  assert.match(vi([['Quy trình:'], ['Dữ liệu được chuẩn hoá về khoảng từ 0 đến 1 trước khi đưa vào mạng'], ['Huấn luyện']]), /Ở bước 1, dữ liệu.*Bước 2 là huấn luyện\./);
+  // More than 6 items: first 5 plus a count.
+  assert.match(vi([['A1'], ['A2'], ['A3'], ['A4'], ['A5'], ['A6'], ['A7']]), /cùng 2 mục khác trên màn hình/);
+  // Code is pointed to once, not read.
+  const code = composePage([{ text: 'x = f(y);', level: 2, type: 'code' }, { text: 'return x;', level: 2, type: 'code' }], [], { lang: 'vi', sceneKey: 'C', used: new Set() }).body;
+  assert.equal(code.length, 1);
+  assert.doesNotMatch(code[0], /return/);
+
+  const en = composePage(lines([['Advantages:'], ['Fast'], ['Few parameters']]), [], { lang: 'en', sceneKey: 'E', used: new Set() }).body.join(' ');
+  assert.match(en, /fast and few parameters\./);
+});
+
+test('Template composer: tables state what is compared and the extremes of numeric columns', async () => {
+  const { composePage, parseNumber } = await import('../../src/pipeline/module3_generator/templateComposer.ts');
+  assert.equal(parseNumber('98,9%'), 98.9);
+  assert.equal(parseNumber('60 triệu'), 60e6);
+  assert.equal(parseNumber('1,234.5'), 1234.5);
+  assert.equal(parseNumber('25k'), 25000);
+  const table = 'Mô hình | Tham số | Độ chính xác\nLeNet-5 | 60 nghìn | 98,9%\nAlexNet | 60 triệu | 84,7%\nResNet-50 | 25 triệu | 92,1%';
+  const res = composePage([], [{ kind: 'table', text: table }], { lang: 'vi', sceneKey: 'T', used: new Set() });
+  const text = res.visuals.join(' ');
+  assert.match(text, /3 mô hình .*tham số và độ chính xác/);
+  assert.match(text, /AlexNet.*tham số lớn nhất.*60 triệu.*LeNet-5.*60 nghìn/);
+  assert.match(text, /độ chính xác cao nhất.*LeNet-5.*98,9%.*AlexNet.*84,7%/i);
+  assert.equal(res.extras.length, 3, 'row readouts kept for the word budget');
+  const diagram = composePage([], [{ kind: 'diagram', text: 'Ảnh đầu vào → Tích chập → Pooling' }], { lang: 'vi', sceneKey: 'D', used: new Set() });
+  assert.match(diagram.visuals[0], /ảnh đầu vào, tích chập và pooling/);
+});
+
+test('Template engine on a mixed deck: no canned filler, sentences capitalized', async () => {
+  const { templateDeck } = await import('./fixtures/templateDeck.js');
+  const res = await new PipelineOrchestrator().runFullPipeline(templateDeck, templateDeck.source_filename, {
+    language: 'vi', learnerLevel: 'undergraduate', priorKnowledge: '', targetDurationSeconds: 300, targetWpm: 140,
+    narrationStyle: 'academic', visualDensity: 'balanced', narrationEngine: 'template'
+  });
+  const all = res.verifiedIr.scenes.map((s) => s.narration.text).join('\n');
+  assert.doesNotMatch(all, /nội dung cốt lõi|sau khi nắm vững|Một ý quan trọng là (chuẩn hoá|khởi tạo)/);
+  assert.doesNotMatch(all, /(^|[.!?]\s+)\p{Ll}/mu, 'every sentence starts with a capital');
+  assert.match(all, /Quy trình huấn luyện gồm năm bước/);
+  assert.match(all, /Bảng .*3 mô hình/);
+});
+
+test('Content duration: 100% coverage is measured from the page content', async () => {
+  const { estimatePageContent } = await import('../../src/pipeline/services/contentDuration.ts');
+  const sec = (texts, notes = []) =>
+    estimatePageContent(
+      {
+        section_id: 'P',
+        title: 'Trang',
+        order: 1,
+        elements: [
+          { element_id: 't', type: 'title', text: 'Trang' },
+          ...texts.map((t, i) => ({ element_id: `b${i}`, type: 'bullet_point', text: t, level: 2 })),
+          ...notes.map((t, i) => ({ element_id: `n${i}`, type: 'note', text: t }))
+        ]
+      },
+      [],
+      { wpm: 140, lang: 'vi' }
+    );
+  const empty = sec([]);
+  assert.equal(empty.decorative, true);
+  assert.equal(empty.full_sec, 5, 'title-only page is a 5 s transition');
+  const short = sec(['Kernel: ma trận trọng số nhỏ trượt trên ảnh']);
+  const long = sec(['Kernel: ma trận trọng số nhỏ trượt trên ảnh', 'Stride = 2', 'Padding: thêm viền số 0 quanh ảnh'], ['Giảng viên nhấn mạnh rằng kernel nhỏ giúp giảm số tham số và giữ thông tin cục bộ của ảnh đầu vào.']);
+  assert.ok(short.full_sec >= 10, 'content page floor');
+  assert.ok(long.full_sec > short.full_sec, `more content, more time (${long.full_sec} > ${short.full_sec})`);
+  assert.ok(long.min_sec < long.full_sec, 'template minimum below the full length');
+});
+
+test('Content duration: coverage sizes the lecture and follows pages switched off', async () => {
+  const { setCoverage, fullDurationOf, currentCoverage, toggleExcludeKeepingCoverage } = await import('../../src/pipeline/services/contentDuration.ts');
+  const page = (id, full) => ({ id, kind: 'page', title: id, section_id: id, full_sec: full, min_sec: 5, duration_sec: full, children: [] });
+  let tree = {
+    tree_id: 't', document_id: 'd', created_at: '', updated_at: '', model: 'x',
+    settings: { min_keyword_weight: 0.3, max_keywords_per_page: 8, max_pages: 100, target_duration_sec: 200 },
+    stats: { pages_total: 3, pages_llm: 0, keywords_total: 0, regions_total: 0, regions_ocr_done: 0, scan_ms: 0, llm_calls: 0, total_tokens: 0, truncated: false, notes: [] },
+    root: { id: 'doc', kind: 'document', title: 'D', children: [{ id: 'ch', kind: 'chapter', title: 'C', children: [page('a', 100), page('b', 60), page('c', 40)] }] }
+  };
+  assert.equal(fullDurationOf(tree), 200);
+  tree = setCoverage(tree, 0.5);
+  assert.equal(tree.root.duration_sec, 100);
+  assert.equal(tree.settings.coverage, 0.5);
+  const d = (id) => tree.root.children[0].children.find((p) => p.id === id).duration_sec;
+  assert.deepEqual([d('a'), d('b'), d('c')], [50, 30, 20], 'pages keep their content proportions');
+  tree = toggleExcludeKeepingCoverage(tree, 'a');
+  assert.equal(fullDurationOf(tree), 100, 'full length counts active pages only');
+  assert.equal(tree.root.duration_sec, 50, '50% of the remaining content');
+  assert.ok(Math.abs(currentCoverage(tree) - 0.5) < 0.01);
+});

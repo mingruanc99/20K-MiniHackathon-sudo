@@ -217,7 +217,8 @@ export class MockLLMProvider implements ILLMProvider {
     const concepts = docTree.sections.map((sec, idx) => ({
       concept_id: `C${String(idx + 1).padStart(2, '0')}`,
       name: sec.title.replace(/^[•\-\*\d\.\)]\s*/, ''),
-      definition: `Nguyên lý và nội dung cốt lõi của phần ${sec.title}.`,
+      // No invented definitions: narration only speaks definitions that come from the document or an LLM.
+      definition: '',
       importance: idx === 0 ? ('core' as const) : idx === docTree.total_sections - 1 ? ('supporting' as const) : ('core' as const),
       prerequisites: idx > 0 ? [`C${String(idx).padStart(2, '0')}`] : [],
       related_concepts: []
@@ -239,12 +240,8 @@ export class MockLLMProvider implements ILLMProvider {
         explanation: `Phát triển tiếp nối mạch kiến thức từ ${concepts[i].name} sang ${c.name}.`
       })),
       learning_dependencies: [`Nắm vững khái niệm nền tảng trước khi đi vào chi tiết chuyên sâu`],
-      learning_needs: concepts.slice(0, Math.max(1, concepts.length - 1)).map((c, i) => ({
-        after_concept_id: c.concept_id,
-        natural_question: `Bước tiếp theo sau khi nắm vững ${c.name} là gì?`,
-        resolved_by_concept_id: concepts[i + 1]?.concept_id || c.concept_id,
-        pedagogical_hook: `Tiến trình logic bài giảng`
-      })),
+      // No invented learner questions (a canned "what comes next?" repeated on every page reads as filler).
+      learning_needs: [],
       teaching_arc: ['ENTRY', 'CONCEPT', 'MECHANISM', 'EXAMPLE', 'SUMMARY'],
       teaching_units: [],
       slide_mapping: []

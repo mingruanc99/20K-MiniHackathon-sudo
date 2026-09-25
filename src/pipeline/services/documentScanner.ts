@@ -17,6 +17,7 @@ import { PPTXExtractor } from '../module1_extractor/pptxExtractor';
 import { PDFExtractor } from '../module1_extractor/pdfExtractor';
 import { MarkdownExtractor } from '../module1_extractor/markdownExtractor';
 import { ocrVisualRegions, mergeRegionsIntoTree, warmUpTesseract } from '../module1_extractor/visualRegionOcr';
+import { estimateDocumentContent } from './contentDuration';
 import { regionAssetStore } from '../module1_extractor/regionAssets';
 import {
   extractLocalKeywords,
@@ -297,7 +298,8 @@ export async function scanDocument(
     progress('build', 'Đang dựng cây trọng số...', 90);
     const chapters = llmChapters || localChapters(docTree.sections);
     const sectionById = new Map(docTree.sections.map((s) => [s.section_id, s]));
-    const targetSec = config.targetDurationSeconds || Math.max(60, docTree.sections.length * 40);
+    // Full-content length per page (what 100% coverage means); see contentDuration.ts.
+    const content = estimateDocumentContent(docTree, config);
 
     const chapterNodes: KnowledgeTreeNode[] = chapters.map((ch, ci) => ({
       id: `ch_${ci + 1}`,
@@ -312,9 +314,10 @@ export async function scanDocument(
           minWeight: Math.min(0.15, minWeight)
         });
         const textLen = (sec.raw_text || '').length;
-        // Importance: LLM when available, else text density (log-scaled) — drives the initial time split.
         const importance = llm ? llm.importance : Math.min(1, 0.25 + Math.log10(1 + textLen) / 4);
-        const decorative = llm?.is_admin_or_decorative || (!llm && textLen < 40);
+        const est = content.get(sid);
+        // Admin/decorative pages (agenda, credits) count as a short transition, not as content.
+        const fullSec = llm?.is_admin_or_decorative ? Math.min(est?.full_sec ?? 8, 8) : est?.full_sec ?? 10;
         const pageId = `pg_${sid}`;
         return {
           id: pageId,
@@ -322,7 +325,11 @@ export async function scanDocument(
           title: sec.title,
           section_id: sid,
           weight: Math.round(importance * 100) / 100,
-          duration_sec: Math.max(5, Math.round((decorative ? 0.3 : 0.4 + importance) * 100)),
+          // Initial split follows the content: each page starts at its full length, then everything is
+          // scaled to the chosen coverage.
+          full_sec: fullSec,
+          min_sec: Math.min(fullSec, est?.min_sec ?? 5),
+          duration_sec: fullSec,
           children: kws.map((k, i) => keywordNode(pageId, k, i))
         };
       })
@@ -335,6 +342,9 @@ export async function scanDocument(
       children: chapterNodes
     };
     propagateUp(root);
+    const fullSec = root.duration_sec || 0;
+    const coverage = config.contentCoverage;
+    const targetSec = coverage ? Math.max(30, Math.round(fullSec * coverage)) : config.targetDurationSeconds || fullSec;
 
     const calls = usageMeter.peek(runId);
     const summary = summarizeCalls(calls);
@@ -348,7 +358,8 @@ export async function scanDocument(
         min_keyword_weight: minWeight,
         max_keywords_per_page: limits.maxKeywordsPerPage,
         max_pages: limits.maxPages,
-        target_duration_sec: targetSec
+        target_duration_sec: targetSec,
+        coverage
       },
       stats: {
         pages_total: docTree.sections.length,
@@ -364,7 +375,7 @@ export async function scanDocument(
       },
       root
     };
-    // Scale the initial importance-based split to the configured lecture length.
+    // Scale the content-proportional split to the chosen coverage (or fixed minutes).
     knowledgeTree = rebalanceToTarget(knowledgeTree, targetSec);
     knowledgeTree = applyKeywordFilter(knowledgeTree, minWeight, limits.maxKeywordsPerPage);
 

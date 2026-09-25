@@ -141,7 +141,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSav
         {/* Header */}
         <div className="p-5  bg-cover   text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cover-deep flex items-center justify-center border border-white/20">
+            <div className="w-10 h-10 rounded-xl bg-navy-soft flex items-center justify-center border border-navy-line">
               <KeyRound className="w-5 h-5 text-navy" />
             </div>
             <div>

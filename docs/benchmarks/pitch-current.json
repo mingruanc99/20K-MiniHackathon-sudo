@@ -1,0 +1,22 @@
+{
+  "measured_at": "2026-09-25",
+  "conditions": "Template engine (0 API calls), content coverage 100%, 140 WPM. Reproduce: npx tsx tests/ts/fixtures/pitchMetrics.js",
+  "pipeline": [
+    { "deck": "CNN 5 slide, slide EN -> narration EN", "full_content_sec": 88, "estimated_sec": 98, "dar_p_pct": 11.0, "grounding_pct": 91.0, "connective_density_pct": 0.0, "heading_repeats": 0, "overall": 0.96, "decision": "NEEDS_REVIEW", "pipeline_ms": 96 },
+    { "deck": "CNN 5 slide, slide EN -> narration VI", "full_content_sec": 80, "estimated_sec": 82, "dar_p_pct": 3.0, "grounding_pct": 93.0, "connective_density_pct": 7.7, "heading_repeats": 0, "overall": 0.89, "decision": "FAIL", "failed_check": "language policy: English slide text is read verbatim; translating it needs the LLM engine", "pipeline_ms": 61 },
+    { "deck": "Vietnamese fixture 10 pages (tests/ts/fixtures/templateDeck.js)", "full_content_sec": 159, "estimated_sec": 168, "dar_p_pct": 5.9, "grounding_pct": 79.0, "connective_density_pct": 3.7, "heading_repeats": 0, "visual_coverage_pct": 100.0, "overall": 0.94, "decision": "AUTO_REPAIR", "pipeline_ms": 49 }
+  ],
+  "coverage_sizing": {
+    "note": "Template engine keeps one sentence per page, so it cannot go below ~55-65% coverage",
+    "fixture_10_pages": { "min_template_coverage_pct": 66, "dar_p_at_50_pct": 18.2 },
+    "cnn_5_slides": { "min_template_coverage_pct": 54, "dar_p_at_50_pct": 24.3 }
+  },
+  "ocr_tesseract_vie_eng": {
+    "note": "Synthetic images rendered in the browser (Edge headless), app code path ocrWithTesseract",
+    "ruled_table_confidence": 95, "ruled_table_cells_correct": "12/12 cells placed, 2 tone-mark errors",
+    "box_diagram_confidence": 89, "box_diagram_labels": "4/4",
+    "plain_text_confidence": "92-96",
+    "per_region_ms": "250-520", "warm_start_ms": 196, "cold_start_s": 22
+  },
+  "tests": { "passed": 35, "total": 35 }
+}

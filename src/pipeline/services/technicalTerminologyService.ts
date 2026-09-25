@@ -56,6 +56,14 @@ export interface NarrationValidationReport {
   status: 'PASSED' | 'WARNING' | 'FAILED';
 }
 
+/**
+ * A Vietnamese syllable written without diacritics (onset + vowel cluster + final), so words like
+ * "tham", "quanh", "gian" are not mistaken for English. English words such as "max", "global",
+ * "kernel" do not fit the pattern.
+ */
+const VIET_SYLLABLE =
+  /^(ngh|ng|nh|ch|gh|gi|kh|ph|qu|th|tr|[bcdghklmnprstvx])?(uye|uya|uay|uoi|uou|ieu|yeu|oai|oay|oeo|uyu|ua|uo|ie|ye|ai|ao|au|ay|eo|eu|ia|iu|oa|oe|oi|ui|uu|uy|ue|[aeiouy])(ch|ng|nh|[cmnpt])?$/;
+
 export class TechnicalTerminologyService {
   private static instance: TechnicalTerminologyService;
   private termsMap: Map<string, TermDefinition> = new Map();
@@ -196,7 +204,8 @@ export class TechnicalTerminologyService {
       .trim();
 
     // Step 1: Normalize awkward literal Vietnamese translations to canonical English
-    for (const [awkwardPhrase, canonicalTerm] of this.awkwardTranslations.entries()) {
+    // Longest phrase first, so "mạng nơ-ron tích chập" wins over "mạng nơ-ron".
+    for (const [awkwardPhrase, canonicalTerm] of Array.from(this.awkwardTranslations.entries()).sort((a, b) => b[0].length - a[0].length)) {
       const regex = new RegExp(`\\b${awkwardPhrase}\\b`, 'gi');
       if (regex.test(resolved)) {
         resolved = resolved.replace(regex, canonicalTerm);
@@ -208,7 +217,7 @@ export class TechnicalTerminologyService {
     // Step 2: Identify and preserve canonical technical terms.
     // One pass with longest-first alternation, so text rewritten by a long term ("feature map")
     // is never re-matched by a shorter key ("map" -> "mAP").
-    resolved = resolved.replace(this.getTermRegex(), (match) => {
+    resolved = resolved.replace(this.getTermRegex(), (match: string, ...rest: any[]) => {
       const def = this.termsMap.get(match.toLowerCase());
       if (!def) return match;
       if (this.isCaseSensitiveAcronym(def.canonical) && match !== def.canonical && match !== def.canonical.toUpperCase()) {
@@ -217,6 +226,13 @@ export class TechnicalTerminologyService {
       if (!preserved.includes(def.canonical)) {
         preserved.push(def.canonical);
         decisionTraces?.push(`Preserved canonical technical term "${def.canonical}" (standard AI/CV terminology).`);
+      }
+      // A lowercase canonical form keeps the capital when the term opens a sentence ("Stride bằng 2").
+      const offset = rest.find((x) => typeof x === 'number') as number;
+      const str = rest.find((x) => typeof x === 'string') as string;
+      const sentenceStart = offset === 0 || /[.!?]\s+$/.test(str.slice(Math.max(0, offset - 3), offset));
+      if (sentenceStart && def.canonical === def.canonical.toLowerCase() && match[0] !== match[0].toLowerCase()) {
+        return def.canonical.charAt(0).toUpperCase() + def.canonical.slice(1);
       }
       return def.canonical;
     });
@@ -290,8 +306,13 @@ export class TechnicalTerminologyService {
       const hasVietnameseDiacritic = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(word);
       const isCommonViWord = /^(là|và|của|cho|trong|để|với|các|những|một|này|được|có|không|như|khi|theo|từ|vào|ra|qua|giúp|tạo|quét|giảm|xử|lý|dự|đoán|mô|hình|thực|hiện|chúng|ta|bạn|nội|dung|bài|học|phần|pháp|toán)$/i.test(lower);
 
-      if (hasVietnameseDiacritic || isCommonViWord) {
-        continue; // Natural Vietnamese token
+      if (hasVietnameseDiacritic || isCommonViWord || VIET_SYLLABLE.test(lower)) {
+        continue; // Natural Vietnamese token (with or without diacritics: "tham", "quanh", "gian")
+      }
+      // Names are not code-switching: models/optimizers/products (AlexNet, LeNet-5, Adam, GPU).
+      // (Dictionary terms fall through so they are still recorded as preserved terms.)
+      if (!this.termsMap.has(lower) && (/\d/.test(word) || /\p{Ll}\p{Lu}/u.test(word) || /^\p{Lu}{2,}$/u.test(word) || (i > 0 && /^\p{Lu}/u.test(word)))) {
+        continue;
       }
 
       // Check multi-word technical term match

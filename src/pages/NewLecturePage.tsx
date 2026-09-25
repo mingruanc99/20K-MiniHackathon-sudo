@@ -17,7 +17,8 @@ import { FileType, LearnerLevel, UserConfiguration } from '../types';
 import { markLectureMoved } from './LectureBoardPage';
 
 const ACCEPT = '.pptx,.pdf,.md,.markdown,.txt';
-const DURATIONS = [3, 5, 10, 15, 20];
+/** Share of the input's full content to present (100% = everything on the slides, tables and notes). */
+const COVERAGES = [0.5, 0.75, 1];
 const LEVELS: { id: LearnerLevel; label: string }[] = [
   { id: 'beginner', label: 'Phổ thông' },
   { id: 'undergraduate', label: 'Đại học' },
@@ -50,7 +51,7 @@ function Segmented<T extends string | number>({
             aria-pressed={value === o.id}
             onClick={() => onChange(o.id)}
             className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-              value === o.id ? 'bg-paper-sheet font-semibold text-ink shadow-[0_1px_2px_rgba(16,48,42,0.12)]' : 'text-ink-soft hover:text-ink'
+              value === o.id ? 'bg-paper-sheet font-semibold text-ink shadow-[0_1px_2px_rgba(19,75,136,0.12)]' : 'text-ink-soft hover:text-ink'
             }`}
           >
             {o.label}
@@ -68,7 +69,7 @@ export const NewLecturePage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [dragOver, setDragOver] = useState(false);
-  const [minutes, setMinutes] = useState(5);
+  const [coverage, setCoverage] = useState(1);
   const [level, setLevel] = useState<LearnerLevel>('undergraduate');
   const [lang, setLang] = useState<'vi' | 'en'>('vi');
   const [engine, setEngine] = useState<'template' | 'llm'>('template');
@@ -102,7 +103,9 @@ export const NewLecturePage: React.FC = () => {
       natural_vietnamese: lang === 'vi',
       learnerLevel: level,
       priorKnowledge: '',
-      targetDurationSeconds: minutes * 60,
+      // Placeholder until the scan measures the content; replaced by coverage x full content length.
+      targetDurationSeconds: 300,
+      contentCoverage: coverage,
       targetWpm: 140,
       narrationStyle: 'academic',
       visualDensity: 'balanced',
@@ -114,6 +117,8 @@ export const NewLecturePage: React.FC = () => {
         cloudinaryService.uploadFile(file, file.name)
       ]);
       const ext = file.name.split('.').pop()?.toLowerCase() || 'pptx';
+      // The scan measured the content: the lecture length is now coverage x full content length.
+      const sized: UserConfiguration = { ...config, targetDurationSeconds: Math.round(scan.knowledgeTree.root.duration_sec || config.targetDurationSeconds) };
       let project = await projectService.createProject(
         user.uid,
         title.trim() || scan.documentTree.title,
@@ -124,7 +129,7 @@ export const NewLecturePage: React.FC = () => {
           cloudinaryPublicId: upload.public_id,
           cloudinaryUrl: upload.secure_url
         },
-        config,
+        sized,
         `${scan.documentTree.total_sections} trang`,
         scan.documentTree
       );
@@ -132,7 +137,7 @@ export const NewLecturePage: React.FC = () => {
         runId: `scan_${Date.now().toString(36)}`,
         projectId: project.projectId,
         projectTitle: project.title,
-        config,
+        config: sized,
         tree: scan.knowledgeTree,
         timings: [
           { stage: 'extract', ms: scan.timings.extractMs },
@@ -217,11 +222,11 @@ export const NewLecturePage: React.FC = () => {
           />
         </label>
         <Segmented
-          label="Thời lượng lời giảng"
-          value={minutes}
-          options={DURATIONS.map((m) => ({ id: m, label: `${m} phút` }))}
-          onChange={(v) => setMinutes(Number(v))}
-          hint="Hệ thống chia thời lượng cho từng phần; bạn chỉnh được ở bước duyệt."
+          label="Độ phủ nội dung"
+          value={coverage}
+          options={COVERAGES.map((c) => ({ id: c, label: c === 1 ? 'Toàn bộ (100%)' : `${Math.round(c * 100)}%` }))}
+          onChange={(v) => setCoverage(Number(v))}
+          hint={`Thời lượng tự tính theo lượng nội dung: giảng ${Math.round(coverage * 100)}% chữ, bảng và sơ đồ trên slide. Số phút hiện ở bước duyệt và chỉnh được.`}
         />
         <Segmented label="Người học" value={level} options={LEVELS} onChange={(v) => setLevel(v as LearnerLevel)} />
         <Segmented
@@ -242,7 +247,7 @@ export const NewLecturePage: React.FC = () => {
             { id: 'llm', label: 'AI viết' }
           ]}
           onChange={(v) => setEngine(v as 'template' | 'llm')}
-          hint={engine === 'llm' ? 'Tự nhiên hơn, tốn token API.' : 'Nhanh, không tốn token, bám sát chữ trên slide.'}
+          hint={engine === 'llm' ? 'Tự nhiên hơn, tốn token API.' : 'Không tốn token. Ghép ý trên slide thành câu: định nghĩa, các bước, ưu/nhược điểm, bảng số liệu.'}
         />
       </div>
 

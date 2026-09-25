@@ -214,6 +214,7 @@ export class PipelineOrchestrator {
           chapter: ch ? { title: ch.chapterTitle, isFirstPage: ch.isFirstPage, isOnlyChapter: chapterCount <= 1 } : undefined,
           visualReadings,
           notes: (docSec?.elements || []).filter((e) => e.type === 'note').map((e) => e.text),
+          elements: docSec?.elements,
           lessonTitle: blueprint.lecture_title || docTree.title
         });
         text = narrativeIntelligenceEngine.revoiceDraft(text, narrativeIr.narrative_beats[idx], isVi, {

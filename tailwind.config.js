@@ -23,7 +23,7 @@ export default {
           850: '#172033',
         },
         // Sổ đầu bài world (lecturer / learner surfaces)
-        cover: { DEFAULT: '#173f35', deep: '#10302a', foil: '#e6d9a8' },
+        cover: { DEFAULT: '#044a97', deep: '#134B88', foil: '#e6d9a8' },
         paper: { DEFAULT: '#f5f7f2', band: '#e9eee4', edge: '#dfe6da', sheet: '#fbfcf9', wash: '#fdf6f4' },
         rule: { DEFAULT: '#c9d6ca', strong: '#93aa98' },
         print: { DEFAULT: '#2c5a47', soft: '#557a69' },

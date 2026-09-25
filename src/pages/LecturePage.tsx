@@ -28,7 +28,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { projectService } from '../services/projectService';
 import { pipelineOrchestrator } from '../pipeline/orchestrator';
 import { scanDocument, ScanProgress } from '../pipeline/services/documentScanner';
-import { findNode, rebalanceToTarget, setNodeDuration, toggleExclude, toggleLock, treeToPipelineOverrides } from '../pipeline/services/knowledgeTreeOps';
+import { findNode, rebalanceToTarget, setNodeDuration, toggleLock, treeToPipelineOverrides } from '../pipeline/services/knowledgeTreeOps';
+import { COVERAGE_PRESETS, fullDurationOf, minTemplateCoverage, setCoverage, toggleExcludeKeepingCoverage, withContentEstimates } from '../pipeline/services/contentDuration';
 import { QualityVisualGuard } from '../pipeline/module4_guard/qualityGuard';
 import { benchmarkService, buildScanRunLog, summarizeRun } from '../services/benchmark/benchmarkService';
 import { BenchmarkRunLog } from '../services/benchmark/benchmarkTypes';
@@ -158,11 +159,17 @@ const PageRow: React.FC<{
   );
 };
 
-const StructureReview: React.FC<{ tree: KnowledgeTree; onChange: (t: KnowledgeTree) => void }> = ({ tree, onChange }) => {
+const StructureReview: React.FC<{ tree: KnowledgeTree; engine?: 'template' | 'llm'; onChange: (t: KnowledgeTree) => void }> = ({ tree, engine, onChange }) => {
   const [open, setOpen] = useState<Set<string>>(() => new Set(tree.root.children.slice(0, 2).map((c) => c.id)));
   const [note, setNote] = useState<{ pageId: string; text: string } | null>(null);
   const total = tree.root.duration_sec || 0;
   const minutes = Math.round(total / 60);
+  // Length as a share of the full content (null on trees built before content estimates).
+  const full = fullDurationOf(tree);
+  const coverage = full ? total / full : null;
+  // Template narration keeps at least one sentence per page, so very low coverage can't be met.
+  const minCov = engine !== 'llm' ? minTemplateCoverage(tree) : null;
+  const belowMin = minCov !== null && coverage !== null && coverage < minCov - 0.02;
   const secPerTick = 10;
   let pageIndex = 0;
 
@@ -177,24 +184,62 @@ const StructureReview: React.FC<{ tree: KnowledgeTree; onChange: (t: KnowledgeTr
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-ink">Giáo án: cấu trúc & thời lượng</h2>
-          <p className="text-sm text-ink-soft">Bỏ dấu ở trang không cần giảng. Thêm giờ cho trang này thì giờ được lấy từ các trang khác, tổng không đổi.</p>
+          <p className="text-sm text-ink-soft">
+            {full
+              ? 'Thời lượng tính theo lượng nội dung: 100% là giảng hết chữ, ghi chú, bảng và sơ đồ trên các trang đang bật. Thêm giờ cho một trang thì giờ lấy từ các trang khác.'
+              : 'Bỏ dấu ở trang không cần giảng. Thêm giờ cho trang này thì giờ được lấy từ các trang khác, tổng không đổi.'}
+          </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-ink-soft">
-          Tổng
-          <div className="flex overflow-hidden rounded-lg border border-rule-strong" role="group" aria-label="Tổng thời lượng">
-            {[3, 5, 10, 15, 20].map((m) => (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={minutes === m}
-                onClick={() => onChange(rebalanceToTarget(tree, m * 60))}
-                className={`border-r border-rule px-2.5 py-1 tabular-nums transition-colors last:border-r-0 ${minutes === m ? 'bg-cover font-semibold text-paper' : 'bg-paper-sheet text-ink-soft hover:bg-paper-band hover:text-ink'}`}
-              >
-                {m}′
-              </button>
-            ))}
+        {full ? (
+          <div className="flex flex-col items-end gap-1 text-sm text-ink-soft">
+            <div className="flex items-center gap-2">
+              Độ phủ
+              <div className="flex overflow-hidden rounded-lg border border-rule-strong" role="group" aria-label="Độ phủ nội dung">
+                {COVERAGE_PRESETS.map((c) => {
+                  const on = coverage !== null && Math.abs(coverage - c) < 0.02;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-pressed={on}
+                      title={`${Math.round(c * 100)}% nội dung ≈ ${fmtClock(full * c)}`}
+                      onClick={() => onChange(setCoverage(tree, c))}
+                      className={`border-r border-rule px-2.5 py-1 tabular-nums transition-colors last:border-r-0 ${on ? 'bg-cover font-semibold text-paper' : 'bg-paper-sheet text-ink-soft hover:bg-paper-band hover:text-ink'}`}
+                    >
+                      {Math.round(c * 100)}%
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {belowMin && (
+              <span role="status" className="max-w-xs text-right text-xs text-pen">
+                Cách viết Theo mẫu giữ ít nhất một câu mỗi trang, nên bài sẽ dài khoảng {fmtClock(full! * minCov!)} ({Math.round(minCov! * 100)}%). Tắt bớt trang hoặc chọn AI viết để ngắn hơn.
+              </span>
+            )}
+            <span className="text-xs tabular-nums">
+              <span className="font-semibold text-ink">{fmtClock(total)}</span>
+              {coverage !== null && ` · ${Math.round(coverage * 100)}% của ${fmtClock(full)} nội dung đầy đủ`}
+            </span>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-ink-soft">
+            Tổng
+            <div className="flex overflow-hidden rounded-lg border border-rule-strong" role="group" aria-label="Tổng thời lượng">
+              {[3, 5, 10, 15, 20].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={minutes === m}
+                  onClick={() => onChange(rebalanceToTarget(tree, m * 60))}
+                  className={`border-r border-rule px-2.5 py-1 tabular-nums transition-colors last:border-r-0 ${minutes === m ? 'bg-cover font-semibold text-paper' : 'bg-paper-sheet text-ink-soft hover:bg-paper-band hover:text-ink'}`}
+                >
+                  {m}′
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-lg border border-rule-strong bg-paper-sheet">
@@ -244,7 +289,7 @@ const StructureReview: React.FC<{ tree: KnowledgeTree; onChange: (t: KnowledgeTr
                     <input
                       type="checkbox"
                       checked={!ch.excluded}
-                      onChange={() => onChange(toggleExclude(tree, ch.id))}
+                      onChange={() => onChange(toggleExcludeKeepingCoverage(tree, ch.id))}
                       aria-label={`Giảng chương "${ch.title}"`}
                       className="h-4 w-4 rounded border-rule-strong accent-[#2c5a47]"
                     />
@@ -260,7 +305,7 @@ const StructureReview: React.FC<{ tree: KnowledgeTree; onChange: (t: KnowledgeTr
                       parentExcluded={Boolean(ch.excluded)}
                       secPerTick={secPerTick}
                       note={note?.pageId === pg.id ? note.text : undefined}
-                      onToggle={() => onChange(toggleExclude(tree, pg.id))}
+                      onToggle={() => onChange(toggleExcludeKeepingCoverage(tree, pg.id))}
                       onNudge={(d) => nudge(pg.id, d)}
                     />
                   ) : null;
@@ -532,6 +577,9 @@ export const LecturePage: React.FC = () => {
   useEffect(() => {
     if (!user || !id) return;
     projectService.getProject(id, user.uid).then((p) => {
+      // Lectures scanned before content estimates existed get them now, so they can be sized by coverage.
+      const doc = p?.knowledgeTree ? lectureDocument(p) : null;
+      if (p?.knowledgeTree && doc) p = { ...p, knowledgeTree: withContentEstimates(p.knowledgeTree, doc, p.configuration) };
       setProject(p);
       if (p?.clsgIr) setView('result');
       if (p) benchmarkService.listRuns(p.projectId, 1).then((runs) => setRun(runs.find((r) => r.kind === 'pipeline') || null));
@@ -632,7 +680,10 @@ export const LecturePage: React.FC = () => {
     switch (a.kind) {
       case 'set_duration': {
         const sec = Number(a.value) || project.configuration.targetDurationSeconds;
-        const tree = project.knowledgeTree ? rebalanceToTarget(project.knowledgeTree, sec) : undefined;
+        const kt = project.knowledgeTree;
+        const full = kt ? fullDurationOf(kt) : null;
+        // Keep the coverage setting in step with the new length, so later toggles don't undo the fix.
+        const tree = kt ? (full ? setCoverage(kt, sec / full) : rebalanceToTarget(kt, sec)) : undefined;
         generate({ tree, config: { targetDurationSeconds: sec } });
         break;
       }
@@ -775,8 +826,8 @@ export const LecturePage: React.FC = () => {
         ) : project.knowledgeTree ? (
           <>
             <StudyCalibrationPanel tree={project.knowledgeTree} docTree={lectureDocument(project)} onApply={updateTree} />
-            <StructureReview tree={project.knowledgeTree} onChange={updateTree} />
-            <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-2xl border border-rule bg-paper-sheet px-4 py-3 shadow-[0_8px_24px_-12px_rgba(16,48,42,0.28)] ">
+            <StructureReview tree={project.knowledgeTree} engine={project.configuration.narrationEngine} onChange={updateTree} />
+            <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-2xl border border-rule bg-paper-sheet px-4 py-3 shadow-[0_8px_24px_-12px_rgba(19,75,136,0.28)] ">
               <span className="text-sm text-ink-soft">
                 <span className="font-semibold tabular-nums text-ink">{activePages}</span> trang ·{' '}
                 <span className="font-semibold tabular-nums text-ink">{fmtClock(project.knowledgeTree.root.duration_sec)}</span>
@@ -819,7 +870,12 @@ export const LecturePage: React.FC = () => {
           <dl className="mt-3 space-y-2 text-sm">
             {[
               ['Tài liệu', `${project.source.fileName}${project.canonicalDocument ? ` · ${project.canonicalDocument.total_sections} trang` : ''}`],
-              ['Thời lượng', fmtClock(project.knowledgeTree?.root.duration_sec || cfg.targetDurationSeconds)],
+              ['Thời lượng', (() => {
+                const kt = project.knowledgeTree;
+                const full = kt ? fullDurationOf(kt) : null;
+                const clock = fmtClock(kt?.root.duration_sec || cfg.targetDurationSeconds);
+                return full && kt ? `${clock} · ${Math.round(((kt.root.duration_sec || 0) / full) * 100)}% nội dung` : clock;
+              })()],
               ['Người học', LEVEL_LABEL[cfg.learnerLevel] || cfg.learnerLevel],
               ['Ngôn ngữ', (cfg.narration_language || cfg.language) === 'en' ? 'English' : 'Tiếng Việt'],
               ['Cách viết', cfg.narrationEngine === 'llm' ? 'AI viết' : 'Theo mẫu']

@@ -80,7 +80,7 @@ export const LessonUnderstandingViewer: React.FC<LessonUnderstandingViewerProps>
 
         {/* Goal & Problem Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div className="p-3.5 rounded-xl bg-cover-deep border border-white/10 space-y-1.5">
+          <div className="p-3.5 rounded-xl bg-paper-band border border-rule space-y-1.5">
             <div className="text-navy font-semibold flex items-center gap-1.5">
               <Target className="w-4 h-4 text-print-soft" />
               <span>Mục Tiêu Bài Giảng (Lesson Goal)</span>
@@ -89,7 +89,7 @@ export const LessonUnderstandingViewer: React.FC<LessonUnderstandingViewerProps>
               {lessonModel.lesson_goal}
             </p>
           </div>
-          <div className="p-3.5 rounded-xl bg-cover-deep border border-white/10 space-y-1.5">
+          <div className="p-3.5 rounded-xl bg-paper-band border border-rule space-y-1.5">
             <div className="text-pen font-semibold flex items-center gap-1.5">
               <HelpCircle className="w-4 h-4 text-pen" />
               <span>Vấn Đề Trọng Tâm Cần Giải Quyết (Main Problem)</span>

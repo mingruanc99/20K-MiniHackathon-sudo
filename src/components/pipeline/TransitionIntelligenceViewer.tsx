@@ -167,7 +167,7 @@ function QualityBar({ label, value, color }: { label: string; value: number; col
 
 function QualityMetricsPanel({ quality }: { quality: TransitionQualityMetrics }) {
   return (
-    <div style={{ padding: '12px 16px', background: '#173f35', borderRadius: 8, marginTop: 12 }}>
+    <div style={{ padding: '12px 16px', background: '#044a97', borderRadius: 8, marginTop: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: '#c9d6ca', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
         Quality Metrics
       </div>
@@ -184,7 +184,7 @@ function QualityMetricsPanel({ quality }: { quality: TransitionQualityMetrics })
         <div style={{
           marginTop: 12,
           paddingTop: 10,
-          borderTop: '1px solid #2c5a47',
+          borderTop: '1px solid #3c6fae',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -304,7 +304,7 @@ function TransitionCard({
             <div style={{ fontSize: 10, fontWeight: 700, color: '#c9d6ca', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
               Bridge Text (spoken)
             </div>
-            <div style={{ background: '#10302a', borderRadius: 8, padding: '10px 14px', border: '1px solid #2c5a47' }}>
+            <div style={{ background: '#134B88', borderRadius: 8, padding: '10px 14px', border: '1px solid #3c6fae' }}>
               <div style={{ marginBottom: 8 }}>
                 <span style={{ fontSize: 10, color: '#e6d9a8', fontWeight: 700 }}>CLOSES section "{transition.from_concept_label}":</span>
                 <p style={{ fontSize: 12, color: '#e9eee4', margin: '4px 0 0 0', lineHeight: 1.6, fontStyle: 'italic' }}>
@@ -403,7 +403,7 @@ function FlowDiagram({
                   cursor: trToThis ? 'pointer' : 'default',
                   minWidth: 110,
                   padding: '10px 14px',
-                  background: isSelected ? 'rgba(59,130,246,0.15)' : '#173f35',
+                  background: isSelected ? 'rgba(59,130,246,0.15)' : '#044a97',
                   border: `2px solid ${isSelected ? '#e6d9a8' : '#2c5a47'}`,
                   borderRadius: 10,
                   textAlign: 'center',
@@ -496,8 +496,8 @@ function AggregateStats({ map }: { map: LectureTransitionMap }) {
           : getQualityColor(s.value);
         return (
           <div key={s.label} style={{
-            background: '#173f35',
-            border: '1px solid #2c5a47',
+            background: '#044a97',
+            border: '1px solid #3c6fae',
             borderRadius: 10,
             padding: '12px 14px',
             textAlign: 'center',
@@ -531,8 +531,8 @@ The skeleton graph connects them. It defines which points are adjacent, which jo
 
   return (
     <div style={{
-      background: '#10302a',
-      border: '1px solid #2c5a47',
+      background: '#134B88',
+      border: '1px solid #3c6fae',
       borderRadius: 12,
       padding: '16px 20px',
       marginBottom: 20,
@@ -541,7 +541,7 @@ The skeleton graph connects them. It defines which points are adjacent, which jo
         <div style={{ fontSize: 13, fontWeight: 700, color: '#f5f7f2' }}>
           🎬 Before / After Demo
         </div>
-        <div style={{ display: 'flex', gap: 0, background: '#173f35', borderRadius: 8, padding: 3, border: '1px solid #2c5a47' }}>
+        <div style={{ display: 'flex', gap: 0, background: '#044a97', borderRadius: 8, padding: 3, border: '1px solid #3c6fae' }}>
           <button
             onClick={() => setShowAfter(false)}
             style={{
@@ -663,8 +663,8 @@ export default function TransitionIntelligenceViewer({
 
       {/* Flow Diagram */}
       <div style={{
-        background: '#10302a',
-        border: '1px solid #2c5a47',
+        background: '#134B88',
+        border: '1px solid #3c6fae',
         borderRadius: 12,
         padding: '16px 20px',
         marginBottom: 20,
@@ -698,7 +698,7 @@ export default function TransitionIntelligenceViewer({
             <div style={{
               position: 'sticky',
               top: 20,
-              background: '#10302a',
+              background: '#134B88',
               border: `1px solid ${RELATIONSHIP_COLORS[selectedTransition.relationship] ?? '#2c5a47'}`,
               borderRadius: 12,
               padding: '16px 20px',
@@ -732,7 +732,7 @@ export default function TransitionIntelligenceViewer({
                 <div style={{
                   fontSize: 12,
                   color: '#e9eee4',
-                  background: '#173f35',
+                  background: '#044a97',
                   padding: '10px 14px',
                   borderRadius: 8,
                   lineHeight: 1.7,
@@ -747,7 +747,7 @@ export default function TransitionIntelligenceViewer({
                 <div style={{
                   fontSize: 12,
                   color: '#e9eee4',
-                  background: '#173f35',
+                  background: '#044a97',
                   padding: '10px 14px',
                   borderRadius: 8,
                   lineHeight: 1.7,

@@ -42,6 +42,11 @@ export interface UserConfiguration {
   learnerLevel: LearnerLevel;
   priorKnowledge: string;
   targetDurationSeconds: number;
+  /**
+   * Lecture length as a share of the input's full content length (1 = present everything, 0.5 = half).
+   * When set, the scan derives `targetDurationSeconds` from the content instead of a fixed number of minutes.
+   */
+  contentCoverage?: number;
   targetWpm: number;
   narrationStyle: NarrationStyle;
   visualDensity: VisualDensity;

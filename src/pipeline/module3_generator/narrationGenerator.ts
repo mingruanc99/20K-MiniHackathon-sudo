@@ -5,11 +5,13 @@
  * Turns a SectionPlan + extracted page content into spoken narration.
  * Principles:
  * 1. Vietnamese-first narration, English technical terms preserved
- * 2. Role-based generation (CORE_CONCEPT, PROCESS, EXAMPLE, SUMMARY, DECORATIVE...)
+ * 2. Page lines are composed by the universal template composer (templateComposer.ts): each line is
+ *    read for its shape (definition, metric, step, fragment...), lines are grouped by indentation and
+ *    headings, and each group gets a sentence frame whose use conditions are explicit
  * 3. Grounded only in page content: bullets, speaker notes, and OCR readings of tables/diagrams.
  *    No canned topic text and no generic filler sentences.
- * 4. Headings: the lesson title is spoken once (first scene), a chapter title once (its first page),
- *    a section title is not announced by the template at all
+ * 4. Headings: the lesson title is spoken once (first scene), a chapter title once (its first page);
+ *    a section title may only be the subject of one list sentence on its own page
  * 5. Connectives are added only when the content licenses them (see discoursePolicy.ts)
  * 6. Calibrated to the word budget by adding more source content, never filler
  */
@@ -21,10 +23,12 @@ import {
   ListStrategy,
   LessonModel,
   TeachingUnit,
-  GlobalNarrativeContext
+  GlobalNarrativeContext,
+  ContentElement
 } from '../../types';
 import { technicalTerminologyService } from '../services/technicalTerminologyService';
 import { contentPurifierService } from '../services/contentPurifierService';
+import { composePage, ComposedPage, SourceLine } from './templateComposer';
 
 export interface NarrationContext {
   previousPlan?: SectionPlan;
@@ -42,11 +46,19 @@ export interface NarrationContext {
   /** Speaker notes on this page. */
   notes?: string[];
   lessonTitle?: string;
+  /** The page's extracted elements (keeps bullet levels and element types for the composer). */
+  elements?: ContentElement[];
 }
 
 const resolve = (s: string) => technicalTerminologyService.resolveAndPreserveSentence(s).resolvedText;
 const lowerFirst = (s: string) => (s && !/^[A-Z]{2,}/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 const endSentence = (s: string) => (/[.!?…:]$/.test(s.trim()) ? s.trim() : `${s.trim()}.`);
+const normKey = (s: string) => s.trim().toLowerCase().replace(/[.…:]+$/, '');
+/** Term normalization can lower a sentence-initial word ("Stride" -> "stride"); restore the capital. */
+const capitalizeSentences = (s: string) => s.replace(/(^|[.!?]\s+)(\p{Ll})/gu, (_, p: string, c: string) => p + c.toUpperCase());
+
+/** Element types whose text is not page body (headings, notes, or visuals read separately). */
+const NON_BODY_TYPES = new Set(['title', 'note', 'table', 'diagram', 'image']);
 
 export class NarrationGenerator {
   generateNarration(plan: SectionPlan, config: UserConfiguration, rawText?: string, context?: NarrationContext): string {
@@ -62,24 +74,24 @@ export class NarrationGenerator {
       return chapterIntro;
     }
 
-    // The page title is a heading, not content: never read it back as a body sentence.
-    const titleKey = (plan.title || '').trim().toLowerCase().replace(/[.…:]+$/, '');
-    const cleanRawText = this.cleanRaw(rawText || '', plan.slide_analysis?.excluded_content || [])
-      .split('\n')
-      .filter((line) => line.trim().toLowerCase().replace(/[.…:]+$/, '') !== titleKey)
-      .join('\n');
-    const bullets = this.extractBulletPoints(cleanRawText).map((b) => (isVietnamese ? resolve(b.replace(/\.+$/, '')) : b.replace(/\.+$/, '')));
+    const listStrategy: ListStrategy = plan.narrative_plan?.list_strategy || plan.slide_analysis?.list_strategy || 'NONE';
+    const composed = composePage(this.sourceLines(plan, rawText || '', context), context?.visualReadings || [], {
+      lang: isVietnamese ? 'vi' : 'en',
+      role,
+      listStrategy,
+      title: plan.title,
+      sceneKey: plan.section_id,
+      used: context?.usedPhrases,
+      resolve: isVietnamese ? resolve : undefined
+    });
 
-    let script = isVietnamese
-      ? this.generateVietnamese(plan, role, bullets, cleanRawText, context)
-      : this.generateEnglish(plan, role, bullets, context);
-
+    let script = this.frame(plan, role, composed, context, isVietnamese, targetWords);
     if (chapterIntro && !(plan.order === 1 && role === 'INTRODUCTION')) script = `${chapterIntro} ${script}`;
 
     if (isVietnamese) script = technicalTerminologyService.repairNarrationTargeted(script).repairedText;
     script = contentPurifierService.purifyNarration(script, { title: plan.title, role }).cleanedText;
-    script = this.calibrateToWordBudget(script, targetWords, plan, role, context, isVietnamese);
-    return script.trim();
+    script = this.calibrateToWordBudget(script, targetWords, plan, role, context, isVietnamese, composed.extras);
+    return capitalizeSentences(script.trim());
   }
 
   private chapterIntro(context: NarrationContext | undefined, isVi: boolean): string {
@@ -90,18 +102,48 @@ export class NarrationGenerator {
     return isVi ? `Chúng ta bắt đầu với ${title}.` : `Let's start with ${title}.`;
   }
 
-  private cleanRaw(rawText: string, excluded: string[]): string {
-    let text = rawText;
-    excluded.forEach((tok) => {
-      if (tok && tok.trim()) text = text.replace(new RegExp(tok.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '');
-    });
-    return text
-      .split('\n')
-      .filter((line) => {
-        const l = line.toLowerCase().trim();
-        return l && !l.includes('all rights reserved') && !l.includes('copyright') && !/^ngày\s*\d+/i.test(l) && !/^\[note:/i.test(l);
-      })
-      .join('\n');
+  /**
+   * Page body lines for the composer: extracted elements when available (bullet levels, element types),
+   * otherwise the raw text. Headings, notes, visuals, boilerplate and the page title are left out.
+   */
+  private sourceLines(plan: SectionPlan, rawText: string, context?: NarrationContext): SourceLine[] {
+    const titleKey = normKey(plan.title || '');
+    const excluded = (plan.slide_analysis?.excluded_content || []).filter((t) => t && t.trim());
+    const fromElements = (context?.elements || [])
+      .filter((e) => !NON_BODY_TYPES.has(e.type) && !e.region_id && e.text?.trim())
+      .flatMap((e) =>
+        e.text.split('\n').map((text) => ({
+          // An in-slide heading heads the lines after it.
+          text: e.type === 'heading' && !/:\s*$/.test(text) ? `${text}:` : text,
+          level: e.level ?? 2,
+          type: e.type
+        }))
+      );
+    const raw: SourceLine[] = fromElements.length
+      ? fromElements
+      : rawText.split('\n').map((text) => ({ text, level: Math.floor((text.match(/^\s*/)?.[0].length || 0) / 2) }));
+
+    const out: SourceLine[] = [];
+    for (const line of raw) {
+      let text = line.text;
+      excluded.forEach((tok) => {
+        text = text.replace(new RegExp(tok.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '');
+      });
+      const l = text.toLowerCase().trim();
+      if (!l || l.includes('all rights reserved') || l.includes('copyright') || /^ngày\s*\d+/i.test(l) || /^\[note:/i.test(l) || /^slide\s\d/i.test(l)) continue;
+      if (normKey(text) === titleKey) continue;
+      if (line.type === 'code') {
+        out.push({ ...line, text: text.trim() });
+        continue;
+      }
+      const cleaned = contentPurifierService.cleanBulletPoints([text])[0];
+      if (!cleaned) continue;
+      // The purifier drops list markers and trailing colons that the composer needs.
+      const numbered = text.match(/^\s*\d+[.)]\s+/)?.[0].trim() || '';
+      const colon = /:\s*$/.test(text) && !/:\s*$/.test(cleaned) ? ':' : '';
+      out.push({ ...line, text: `${numbered && !/^\d/.test(cleaned) ? `${numbered} ` : ''}${cleaned}${colon}` });
+    }
+    return out;
   }
 
   private inferFallbackRole(plan: SectionPlan): SlideRole {
@@ -117,45 +159,36 @@ export class NarrationGenerator {
     return 'KEY_EXPLANATION';
   }
 
-  private extractBulletPoints(rawText: string): string[] {
-    const lines = rawText
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 3)
-      .map((line) => line.replace(/^[•\-*\d.)]\s*/, ''))
-      .filter((line) => !/^slide\s/i.test(line));
-    return contentPurifierService.cleanBulletPoints(lines);
-  }
-
-  private generateVietnamese(plan: SectionPlan, role: SlideRole, bullets: string[], rawText: string, context?: NarrationContext): string {
+  /** Opening (by role) + composed body + visual descriptions. */
+  private frame(plan: SectionPlan, role: SlideRole, composed: ComposedPage, context: NarrationContext | undefined, isVi: boolean, targetWords: number): string {
     const parts: string[] = [];
-    const listStrategy: ListStrategy = plan.narrative_plan?.list_strategy || plan.slide_analysis?.list_strategy || 'NONE';
+    let body = composed.body;
+    const countWords = (xs: string[]) => xs.join(' ').split(/s+/).filter(Boolean).length;
+    // Bridges are optional framing: they are only spoken if the page's own content leaves room for them.
+    const roomForBridge = countWords([...body, ...composed.visuals]) < targetWords * 0.85;
 
-    // Opening
     if (plan.order === 1 || role === 'INTRODUCTION') {
-      const lesson = resolve(context?.lessonTitle || plan.title);
-      parts.push(`Chào mừng các bạn đến với bài học về ${lesson}.`);
+      const lesson = isVi ? resolve(context?.lessonTitle || plan.title) : context?.lessonTitle || plan.title;
+      parts.push(isVi ? `Chào mừng các bạn đến với bài học về ${lesson}.` : `Welcome to this lecture on ${lesson}.`);
       // The generated goal sentence only fills in when the page itself has nothing to say.
-      if (plan.instructional_goal && bullets.length === 0) {
-        parts.push(`Mục tiêu của phần mở đầu là ${lowerFirst(resolve(plan.instructional_goal).replace(/\.+$/, ''))}.`);
+      if (plan.instructional_goal && body.length === 0) {
+        const goal = lowerFirst((isVi ? resolve(plan.instructional_goal) : plan.instructional_goal).replace(/\.+$/, ''));
+        parts.push(isVi ? `Mục tiêu của phần mở đầu là ${goal}.` : `The goal of this part is to ${goal}.`);
       }
     } else if (role === 'HOOK' || role === 'THINK' || role === 'QUESTION') {
-      const q = rawText.match(/[^.!?\n]{10,}\?/);
-      if (q) parts.push(resolve(q[0].trim().replace(/^[•\-*\d.)]\s*/, '')));
-    } else {
-      const bridge = this.openingBridge(plan, role, context);
+      // The page's own question leads the scene.
+      const qi = body.findIndex((s) => s.endsWith('?'));
+      if (qi > 0) body = [body[qi], ...body.slice(0, qi), ...body.slice(qi + 1)];
+    } else if (roomForBridge) {
+      const bridge = this.openingBridge(plan, role, context, isVi, body);
       if (bridge) parts.push(bridge);
     }
 
-    // Body
-    const body = this.body(role, bullets, listStrategy, plan);
-    if (body) parts.push(body);
-
-    // Visual readings (tables/diagrams/charts) are part of the page's content.
-    for (const v of context?.visualReadings || []) {
-      if (v.summary) parts.push(endSentence(resolve(v.summary)));
+    parts.push(...body);
+    parts.push(...composed.visuals);
+    if (parts.length === 0 && plan.slide_analysis?.core_message) {
+      parts.push(endSentence(isVi ? resolve(plan.slide_analysis.core_message) : plan.slide_analysis.core_message));
     }
-
     return parts.join(' ').replace(/\s+/g, ' ').trim();
   }
 
@@ -163,7 +196,7 @@ export class NarrationGenerator {
    * Opening bridge from the previous page, only when the narrative plan says this page deepens it.
    * Uses the previous page's key concept, never its heading (headings are policed separately).
    */
-  private openingBridge(plan: SectionPlan, role: SlideRole, context?: NarrationContext): string {
+  private openingBridge(plan: SectionPlan, role: SlideRole, context: NarrationContext | undefined, isVi: boolean, body: string[]): string {
     const used = context?.usedOpenings || new Set<string>();
     const relation = plan.narrative_plan?.relationship_to_previous?.type;
     // Only real terms make a natural bridge ("Từ kernel, ta đi sâu hơn vào feature map"); arbitrary
@@ -172,10 +205,12 @@ export class NarrationGenerator {
     const isTerm = (c?: string) => Boolean(c && dict.has(c.toLowerCase()));
     const prevConcept = context?.previousPlan?.key_concepts?.find(isTerm);
     const curConcept = plan.key_concepts?.find(isTerm);
+    const bodyText = body.join(' ').toLowerCase();
 
     let bridge = '';
-    if (role === 'EXAMPLE') bridge = 'Hãy xem một ví dụ cụ thể.';
-    else if (role === 'SUMMARY') bridge = 'Như vậy, hãy nhìn lại những điểm chính.';
+    if (role === 'EXAMPLE' && !/(ví dụ|example)/.test(bodyText)) bridge = isVi ? 'Hãy xem một ví dụ cụ thể.' : "Let's look at a concrete example.";
+    else if (role === 'SUMMARY') bridge = isVi ? 'Như vậy, hãy nhìn lại những điểm chính.' : "Let's recap the key points.";
+    else if (!isVi) bridge = '';
     else if (relation === 'DEEPENS' && prevConcept && curConcept && prevConcept.toLowerCase() !== curConcept.toLowerCase()) {
       bridge = `Từ ${resolve(prevConcept)}, ta đi sâu hơn vào ${resolve(curConcept)}.`;
     } else if (relation === 'CONTRASTS' && prevConcept) {
@@ -186,37 +221,9 @@ export class NarrationGenerator {
     return bridge && !used.has(bridge.toLowerCase()) ? bridge : '';
   }
 
-  private body(role: SlideRole, bullets: string[], listStrategy: ListStrategy, plan: SectionPlan): string {
-    const sentences = contentPurifierService.cleanBulletPoints(bullets).map((b) => endSentence(b));
-    if (sentences.length === 0) return plan.slide_analysis?.core_message ? endSentence(resolve(plan.slide_analysis.core_message)) : '';
-
-    if (role === 'COMPARISON' && sentences.length >= 2) {
-      return `${sentences[0]} Trong khi đó, ${lowerFirst(sentences[1])} ${sentences.slice(2).join(' ')}`.trim();
-    }
-    if (role === 'EXAMPLE') {
-      return `Trong ví dụ này, ${lowerFirst(sentences[0])} ${sentences.slice(1).join(' ')}`.trim();
-    }
-    if (listStrategy === 'SEQUENTIAL_PROCESS' || role === 'PROCESS') {
-      const steps = sentences.slice(0, 5);
-      return steps.map((s, i) => (i === 0 ? `Đầu tiên, ${lowerFirst(s)}` : i === steps.length - 1 && steps.length > 2 ? `Cuối cùng, ${lowerFirst(s)}` : s)).join(' ');
-    }
-    return sentences.join(' ');
-  }
-
-  private generateEnglish(plan: SectionPlan, role: SlideRole, bullets: string[], context?: NarrationContext): string {
-    const parts: string[] = [];
-    if (plan.order === 1 || role === 'INTRODUCTION') parts.push(`Welcome to this lecture on ${context?.lessonTitle || plan.title}.`);
-    if (role === 'EXAMPLE') parts.push("Let's look at a concrete example.");
-    if (role === 'SUMMARY') parts.push("Let's recap the key points.");
-    parts.push(...bullets.map(endSentence));
-    for (const v of context?.visualReadings || []) if (v.summary) parts.push(endSentence(v.summary));
-    if (parts.length === 0 && plan.slide_analysis?.core_message) parts.push(endSentence(plan.slide_analysis.core_message));
-    return parts.join(' ');
-  }
-
   /**
    * Trims to the budget at a sentence boundary; when short, adds more *source* content
-   * (speaker notes, then raw visual text). Never inserts generic filler.
+   * (speaker notes, then table rows / raw visual text). Never inserts generic filler.
    */
   private calibrateToWordBudget(
     script: string,
@@ -224,7 +231,8 @@ export class NarrationGenerator {
     plan: SectionPlan,
     role: SlideRole,
     context: NarrationContext | undefined,
-    isVi: boolean
+    isVi: boolean,
+    visualExtras: string[] = []
   ): string {
     const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
@@ -241,13 +249,11 @@ export class NarrationGenerator {
     if (role === 'DECORATIVE' || plan.narrative_plan?.verbosity === 'minimal') return script;
 
     // Source-derived material only, in order of closeness to the page:
-    // speaker notes -> read visuals -> this unit's talking points -> definitions of this page's concepts
-    // (the last two come from the whole-lesson analysis of the same document).
+    // speaker notes -> table rows / visual text -> this unit's talking points -> definitions of this
+    // page's concepts (the last two come from the whole-lesson analysis of the same document).
     const extras: string[] = [];
     (context?.notes || []).forEach((n) => extras.push(...n.split(/(?<=[.!?])\s+/)));
-    (context?.visualReadings || []).forEach((v) => {
-      if (v.text) extras.push(isVi ? `${v.kind === 'table' ? 'Số liệu trong bảng gồm' : 'Các thành phần gồm'}: ${v.text.replace(/\n/g, '; ').slice(0, 280)}.` : v.text);
-    });
+    extras.push(...visualExtras);
     (context?.teachingUnit?.key_talking_points || []).forEach((p) => extras.push(p));
     const pageText = `${plan.title} ${(plan.key_concepts || []).join(' ')}`.toLowerCase();
     [...(context?.lessonModel?.core_concepts || []), ...(context?.lessonModel?.supporting_concepts || [])]
@@ -260,7 +266,7 @@ export class NarrationGenerator {
 
     const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
     const titleNorm = norm(plan.title || '');
-    const hasVi = (s: string) => /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(s);
+    const hasVi = (s: string) => /[̀-ͯ]/.test(s.normalize('NFD')) || /đ/i.test(s);
 
     let result = script;
     for (const e of extras) {

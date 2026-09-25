@@ -290,15 +290,15 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
 
           {/* Quick Metrics */}
           <div className="grid grid-cols-3 gap-2.5 shrink-0 text-center font-mono">
-            <div className="bg-cover-deep rounded-xl p-3 border border-white/10">
+            <div className="bg-paper-band rounded-xl p-3 border border-rule">
               <div className="text-[11px] text-ink-faint uppercase font-sans">Khái niệm</div>
               <div className="text-base font-extrabold text-ink mt-0.5">{activeKnowledge.concepts.length}</div>
             </div>
-            <div className="bg-cover-deep rounded-xl p-3 border border-white/10">
+            <div className="bg-paper-band rounded-xl p-3 border border-rule">
               <div className="text-[11px] text-ink-faint uppercase font-sans">Mệnh đề sự thật</div>
               <div className="text-base font-extrabold text-navy mt-0.5">{activeKnowledge.total_propositions}</div>
             </div>
-            <div className="bg-cover-deep rounded-xl p-3 border border-white/10">
+            <div className="bg-paper-band rounded-xl p-3 border border-rule">
               <div className="text-[11px] text-ink-faint uppercase font-sans">Dẫn chứng thị giác</div>
               <div className="text-base font-extrabold text-pen mt-0.5">{activeKnowledge.total_evidence_artifacts}</div>
             </div>
@@ -314,7 +314,7 @@ export const KnowledgeGraphCurriculumViewer: React.FC<KnowledgeGraphCurriculumVi
             </span>
           </div>
 
-          <div className="flex items-center bg-cover-deep p-1 rounded-xl gap-1 border border-white/10">
+          <div className="flex items-center bg-paper-band p-1 rounded-xl gap-1 border border-rule">
             {[3, 10, 30, 60].map((dur) => (
               <button
                 key={dur}

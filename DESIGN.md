@@ -2,8 +2,8 @@
 name: VideoLearn
 description: Biến slide bài giảng thành lời giảng đúng thời lượng
 colors:
-  cover: "#173f35"
-  cover-deep: "#10302a"
+  cover: "#044a97"
+  cover-deep: "#134B88"
   cover-foil: "#e6d9a8"
   paper: "#f5f7f2"
   paper-band: "#e9eee4"
@@ -205,16 +205,16 @@ components:
 
 **Creative North Star: "Sổ đầu bài" (the class logbook)**
 
-The lecturer and learner surfaces (`/`, `/lectures/new`, `/lectures/:id`) are a Vietnamese class logbook. A deep ledger-green cover band with foil lettering sits on top; below it is cool paper printed with thin green-gray rules. Every lecture is a ruled entry with its period number, date, minutes, the teacher's remark and a circled grade stamp. Entries are written in blue-black ink; the teacher's red pen appears only where something needs fixing. Status is the grade stamp, never a colored chip or a floating card.
+The lecturer and learner surfaces (`/`, `/lectures/new`, `/lectures/:id`) are a Vietnamese class logbook. A deep ledger-blue cover band (#044a97, matching the pitch deck) with foil lettering sits on top; below it is cool paper printed with thin green-gray rules. Every lecture is a ruled entry with its period number, date, minutes, the teacher's remark and a circled grade stamp. Entries are written in blue-black ink; the teacher's red pen appears only where something needs fixing. Status is the grade stamp, never a colored chip or a floating card.
 
 The printed form is Be Vietnam Pro at a few steady sizes with tabular figures everywhere (the whole world sets `font-variant-numeric: tabular-nums`). The hand is Patrick Hand, and only for what a teacher would write by hand: remarks, the "Lời phê" heading, grade stamps and the cover monogram. Tables are real ruled tables with printed column heads, vertical cell rules and a heavier rule under the header, like the pre-printed page.
 
-Depth is paper-flat: pages rest on the ground with a hairline edge and one long, faint green-tinted drop under the ledger sheet. The one signature motion is the stamp press: when a lecture has just been generated or re-checked, its grade stamp presses onto the entry once.
+Depth is paper-flat: pages rest on the ground with a hairline edge and one long, faint blue-tinted drop under the ledger sheet. The one signature motion is the stamp press: when a lecture has just been generated or re-checked, its grade stamp presses onto the entry once.
 
 **Scope.** This world is route-scoped by the `ledger-world` class on the app shell (`/` and `/lectures/*`). The "Nâng cao" studio (`/advanced`, `/projects/*`), the Knowledge Inspector and `/admin` keep the older studio look (see the legacy note below). The cover band is shared by every route.
 
 **Key Characteristics:**
-- Ledger-green cover band (56px, 4px cover-deep bottom rule) with foil wordmark over paper ground.
+- Ledger-blue cover band (56px, 4px cover-deep bottom rule) with foil wordmark over paper ground.
 - Ruled tables: printed 13px column heads in print green on paper-band, 1px rule cell dividers, a 2px print rule under the header.
 - Blue-black ink for entries; red pen only for remarks, warnings and errors that need fixing.
 - Circled, rotated (-5deg) Patrick Hand grade stamps as the only status marker.
@@ -225,7 +225,7 @@ The studio, Knowledge Inspector and admin surfaces now use the same logbook toke
 
 ## Colors
 
-A cool, printed palette: green for the book and its printing, blue-black for what is written, one red pen for correction.
+A cool, printed palette: a blue cover for the book, green for its printing, blue-black for what is written, one red pen for correction.
 
 ### Primary
 - **Ledger Cover** (cover): the cover band, every primary action ("Ghi bài mới", "Quét tài liệu", "Tạo bài giảng", "Lưu & kiểm tra lại", the main download), the active step dot, the selected total-duration toggle, the scan progress fill.
@@ -300,11 +300,11 @@ Focused tasks (new lecture) narrow to a 672px single column with 32px between gr
 
 ## Elevation & Depth
 
-Paper-flat. Surfaces are separated by rules and the sheet-on-paper contrast; the few shadows are green-tinted and long, like a page lying on a desk.
+Paper-flat. Surfaces are separated by rules and the sheet-on-paper contrast; the few shadows are blue-tinted and long, like a page lying on a desk.
 
 ### Shadow Vocabulary
-- **Ledger sheet** (`box-shadow: 0 1px 0 #dfe6da, 0 12px 28px -20px rgba(16,48,42,0.45)`): the home ledger sheet only.
-- **Cover press** (`box-shadow: 0 1px 2px rgba(16,48,42,0.35)`): the page-level primary action on the home heading row.
+- **Ledger sheet** (`box-shadow: 0 1px 0 #dfe6da, 0 12px 28px -20px rgba(19,75,136,0.45)`): the home ledger sheet only.
+- **Cover press** (`box-shadow: 0 1px 2px rgba(19,75,136,0.35)`): the page-level primary action on the home heading row.
 - **Floating bar** (`box-shadow: 0 8px 24px -12px rgba(15,23,42,0.25)`): the sticky generate bar at the bottom of the lesson-plan review, over sheet at 95% with backdrop blur.
 - **Selected option** (`box-shadow: 0 1px 2px rgba(15,23,42,0.08)`): the selected segmented option.
 
@@ -318,7 +318,7 @@ Printed, lightly rounded. Ruled tables, the ledger sheet, ledger tabs (top corne
 ## Components
 
 ### Buttons
-Plain and printed; the cover green says which one matters.
+Plain and printed; the cover blue says which one matters.
 - **Shape:** 12px radius.
 - **Primary:** cover fill, paper/white 14px semibold label, 10px 20px (8px 16px in compact spots), optional 16px leading icon or spinner. One per view or action row.
 - **Hover / Focus:** fill deepens to cover-deep; focus-visible draws a 2px print outline or ring with 2px offset. Disabled goes to rule-strong fill with a not-allowed cursor (or 50% opacity inside the Lời phê panel).

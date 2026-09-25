@@ -112,8 +112,8 @@ export const VideoPreview: React.FC<{ ir: VerifiedCLSG_IR | null }> = ({ ir }) =
             </div>
           ) : (
             <div className="p-5 rounded-xl bg-cover-deep border border-cover-deep/50">
-              <MonitorPlay className="w-10 h-10 text-ink-faint mx-auto mb-2" />
-              <p className="text-xs text-ink-faint">Giảng viên đang thuyết giảng — tập trung vào dòng diễn giải âm thanh.</p>
+              <MonitorPlay className="w-10 h-10 text-cover-foil mx-auto mb-2" />
+              <p className="text-xs text-paper">Giảng viên đang thuyết giảng — tập trung vào dòng diễn giải âm thanh.</p>
             </div>
           )}
         </div>

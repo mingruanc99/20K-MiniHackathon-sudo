@@ -32,8 +32,8 @@
   font-variant-numeric: tabular-nums;
 }
 .ledger-world ::selection {
-  background: #d7e6da;
-  color: #10302a;
+  background: #e4ecf6;
+  color: #134b88;
 }
 .ledger-world :focus-visible {
   outline: 2px solid #2c5a47;

@@ -7,32 +7,32 @@
       "cover": {
         "role": "primary",
         "displayName": "Ledger Cover",
-        "canonical": "#173f35",
+        "canonical": "#044a97",
         "tonalRamp": [
-          "#06120f",
-          "#0b1d18",
-          "#0f2822",
-          "#13342b",
-          "#3a5c53",
-          "#748c86",
-          "#aebcb8",
-          "#e8eceb"
+          "#0a2d53",
+          "#0e355f",
+          "#103c6c",
+          "#11447b",
+          "#356ba6",
+          "#7fa1c6",
+          "#c8d7e7",
+          "#edf2f7"
         ],
         "scope": "logbook routes (/ and /lectures/*)"
       },
       "cover-deep": {
         "role": "primary",
         "displayName": "Deep Cover",
-        "canonical": "#10302a",
+        "canonical": "#134b88",
         "tonalRamp": [
-          "#040d0c",
-          "#071613",
-          "#0a1f1b",
-          "#0d2722",
-          "#344f4a",
-          "#70837f",
-          "#abb7b4",
-          "#e7eaea"
+          "#08294e",
+          "#092f59",
+          "#0b3563",
+          "#0d3a6c",
+          "#326296",
+          "#789ac0",
+          "#c4d3e3",
+          "#eef2f7"
         ],
         "scope": "logbook routes (/ and /lectures/*)"
       },
@@ -54,33 +54,33 @@
       },
       "print": {
         "role": "secondary",
-        "displayName": "Print Green",
-        "canonical": "#2c5a47",
+        "displayName": "Print Blue",
+        "canonical": "#2563a6",
         "tonalRamp": [
-          "#0c1914",
-          "#142921",
-          "#1c3a2d",
-          "#244a3a",
-          "#4c7363",
-          "#809c91",
-          "#b5c5bf",
-          "#eaefed"
+          "#133457",
+          "#183f6a",
+          "#1c4b7f",
+          "#215792",
+          "#447fc0",
+          "#90afd1",
+          "#d3dfec",
+          "#edf2f8"
         ],
         "scope": "logbook routes (/ and /lectures/*)"
       },
       "print-soft": {
         "role": "secondary",
         "displayName": "Soft Print",
-        "canonical": "#557a69",
+        "canonical": "#5388c1",
         "tonalRamp": [
-          "#18221d",
-          "#273830",
-          "#364e43",
-          "#466456",
-          "#6f8e80",
-          "#99afa5",
-          "#c4d0cb",
-          "#eef2f0"
+          "#223e5d",
+          "#2c5078",
+          "#356294",
+          "#4075af",
+          "#7a9fc8",
+          "#afc6de",
+          "#e5ecf4",
+          "#edf2f8"
         ],
         "scope": "logbook routes (/ and /lectures/*)"
       },
@@ -428,7 +428,7 @@
       },
       "column-head": {
         "displayName": "Column Head",
-        "purpose": "Printed column heads of ruled tables, 13px semibold print green."
+        "purpose": "Printed column heads of ruled tables, 13px semibold print blue."
       },
       "label": {
         "displayName": "Label",
@@ -462,12 +462,12 @@
     "shadows": [
       {
         "name": "ledger-sheet",
-        "value": "0 1px 0 #dfe6da, 0 12px 28px -20px rgba(16,48,42,0.45)",
+        "value": "0 1px 0 #dfe6da, 0 12px 28px -20px rgba(14,64,119,0.45)",
         "purpose": "The home ledger sheet only."
       },
       {
         "name": "cover-press",
-        "value": "0 1px 2px rgba(16,48,42,0.35)",
+        "value": "0 1px 2px rgba(14,64,119,0.35)",
         "purpose": "Page-level primary action on the home heading row."
       },
       {
@@ -545,9 +545,9 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Cover-green action; one per view or action row.",
+      "description": "Cover-blue action; one per view or action row.",
       "html": "<button class=\"ds-btn-primary\">Tạo bài giảng</button>",
-      "css": ".ds-btn-primary{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;background:#173f35;color:#f5f7f2;font-size:14px;line-height:20px;font-weight:600;padding:10px 20px;border:none;border-radius:12px;cursor:pointer;transition:background-color .15s}.ds-btn-primary:hover{background:#10302a}.ds-btn-primary:focus-visible{outline:2px solid #2c5a47;outline-offset:2px}.ds-btn-primary:disabled{background:#93aa98;cursor:not-allowed}"
+      "css": ".ds-btn-primary{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;background:#134b88;color:#f5f7f2;font-size:14px;line-height:20px;font-weight:600;padding:10px 20px;border:none;border-radius:12px;cursor:pointer;transition:background-color .15s}.ds-btn-primary:hover{background:#0e4077}.ds-btn-primary:focus-visible{outline:2px solid #2563a6;outline-offset:2px}.ds-btn-primary:disabled{background:#93aa98;cursor:not-allowed}"
     },
     {
       "name": "Secondary Button",
@@ -555,7 +555,7 @@
       "refersTo": "button-secondary",
       "description": "Sheet button with a rule-strong edge for every non-primary action.",
       "html": "<button class=\"ds-btn-secondary\">SSML cho TTS</button>",
-      "css": ".ds-btn-secondary{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;background:#fbfcf9;color:#4b5577;font-size:14px;line-height:20px;font-weight:500;padding:8px 14px;border:1px solid #93aa98;border-radius:12px;cursor:pointer;transition:background-color .15s}.ds-btn-secondary:hover{background:#e9eee4}.ds-btn-secondary:focus-visible{outline:2px solid #2c5a47;outline-offset:2px}"
+      "css": ".ds-btn-secondary{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;background:#fbfcf9;color:#4b5577;font-size:14px;line-height:20px;font-weight:500;padding:8px 14px;border:1px solid #93aa98;border-radius:12px;cursor:pointer;transition:background-color .15s}.ds-btn-secondary:hover{background:#e9eee4}.ds-btn-secondary:focus-visible{outline:2px solid #2563a6;outline-offset:2px}"
     },
     {
       "name": "Text Field",
@@ -563,15 +563,15 @@
       "refersTo": "input-text",
       "description": "Sheet field with label above; print focus ring.",
       "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Tên bài giảng</span><input class=\"ds-input\" placeholder=\"Ví dụ: Mạng nơ-ron tích chập\"></label>",
-      "css": ".ds-field{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;display:block;width:320px}.ds-field-label{display:block;font-size:14px;font-weight:500;color:#1b2559}.ds-input{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;margin-top:8px;width:100%;box-sizing:border-box;background:#fbfcf9;border:1px solid #93aa98;border-radius:12px;padding:10px 14px;font-size:14px;color:#1b2559;caret-color:#1b2559}.ds-input::placeholder{color:#5c6482}.ds-input:focus{outline:none;border-color:#2c5a47;box-shadow:0 0 0 2px rgba(44,90,71,.2)}"
+      "css": ".ds-field{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;display:block;width:320px}.ds-field-label{display:block;font-size:14px;font-weight:500;color:#1b2559}.ds-input{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;margin-top:8px;width:100%;box-sizing:border-box;background:#fbfcf9;border:1px solid #93aa98;border-radius:12px;padding:10px 14px;font-size:14px;color:#1b2559;caret-color:#1b2559}.ds-input::placeholder{color:#5c6482}.ds-input:focus{outline:none;border-color:#2563a6;box-shadow:0 0 0 2px rgba(37,99,166,.2)}"
     },
     {
       "name": "Cover Band",
       "kind": "nav",
       "refersTo": "cover-band",
-      "description": "Sticky ledger-green top bar with foil monogram and wordmark; paper pill for the active item.",
+      "description": "Sticky ledger-blue top bar with foil monogram and wordmark; paper pill for the active item.",
       "html": "<header class=\"ds-cover\"><span class=\"ds-mono\">V</span><span class=\"ds-word\">VideoLearn</span><nav class=\"ds-nav\"><a class=\"ds-nav-item is-active\" href=\"#\">Sổ bài giảng</a><a class=\"ds-nav-item\" href=\"#\">Nâng cao</a></nav></header>",
-      "css": ".ds-cover{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;display:flex;align-items:center;gap:16px;height:56px;padding:0 24px;background:#173f35;color:#f5f7f2;border-bottom:4px solid #10302a}.ds-mono{font-family:'Patrick Hand','Be Vietnam Pro',cursive;display:grid;place-items:center;width:32px;height:32px;border:1px solid rgba(230,217,168,.6);border-radius:6px;font-size:18px;color:#e6d9a8}.ds-word{font-size:15px;font-weight:600;letter-spacing:.025em;color:#e6d9a8}.ds-nav{display:flex;gap:4px}.ds-nav-item{padding:6px 12px;border-radius:8px;font-size:14px;font-weight:500;color:rgba(245,247,242,.8);text-decoration:none;transition:background-color .15s,color .15s}.ds-nav-item:hover{background:rgba(255,255,255,.1);color:#f5f7f2}.ds-nav-item.is-active{background:#f5f7f2;color:#173f35}.ds-nav-item:focus-visible{outline:2px solid #e6d9a8;outline-offset:2px}"
+      "css": ".ds-cover{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;display:flex;align-items:center;gap:16px;height:56px;padding:0 24px;background:#134b88;color:#f5f7f2;border-bottom:4px solid #0e4077}.ds-mono{font-family:'Patrick Hand','Be Vietnam Pro',cursive;display:grid;place-items:center;width:32px;height:32px;border:1px solid rgba(230,217,168,.6);border-radius:6px;font-size:18px;color:#e6d9a8}.ds-word{font-size:15px;font-weight:600;letter-spacing:.025em;color:#e6d9a8}.ds-nav{display:flex;gap:4px}.ds-nav-item{padding:6px 12px;border-radius:8px;font-size:14px;font-weight:500;color:rgba(245,247,242,.8);text-decoration:none;transition:background-color .15s,color .15s}.ds-nav-item:hover{background:rgba(255,255,255,.1);color:#f5f7f2}.ds-nav-item.is-active{background:#f5f7f2;color:#134b88}.ds-nav-item:focus-visible{outline:2px solid #e6d9a8;outline-offset:2px}"
     },
     {
       "name": "Ledger Tabs",
@@ -579,7 +579,7 @@
       "refersTo": "ledger-tab",
       "description": "Tabbed book edge filtering the ledger, with tabular counts (pen for the Cần sửa count).",
       "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab is-active\" role=\"tab\" aria-selected=\"true\">Tất cả<span>12</span></button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Cần sửa<span class=\"is-pen\">2</span></button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Chờ duyệt<span>3</span></button></div>",
-      "css": ".ds-tabs{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;display:flex;gap:4px;border-bottom:1px solid #93aa98;padding:0 4px}.ds-tab{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;margin-bottom:-1px;padding:6px 14px 8px;font-size:14px;color:#4b5577;background:#e9eee4;border:1px solid transparent;border-bottom:0;border-radius:8px 8px 0 0;cursor:pointer;font-variant-numeric:tabular-nums}.ds-tab:hover{color:#1b2559}.ds-tab.is-active{background:#f5f7f2;border-color:#93aa98;font-weight:600;color:#1b2559}.ds-tab span{margin-left:6px;color:#5c6482;font-weight:400}.ds-tab span.is-pen{color:#BE1E2D}.ds-tab:focus-visible{outline:2px solid #2c5a47;outline-offset:2px}"
+      "css": ".ds-tabs{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;display:flex;gap:4px;border-bottom:1px solid #93aa98;padding:0 4px}.ds-tab{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;margin-bottom:-1px;padding:6px 14px 8px;font-size:14px;color:#4b5577;background:#e9eee4;border:1px solid transparent;border-bottom:0;border-radius:8px 8px 0 0;cursor:pointer;font-variant-numeric:tabular-nums}.ds-tab:hover{color:#1b2559}.ds-tab.is-active{background:#f5f7f2;border-color:#93aa98;font-weight:600;color:#1b2559}.ds-tab span{margin-left:6px;color:#5c6482;font-weight:400}.ds-tab span.is-pen{color:#BE1E2D}.ds-tab:focus-visible{outline:2px solid #2563a6;outline-offset:2px}"
     },
     {
       "name": "Ruled Ledger Table",
@@ -587,7 +587,7 @@
       "refersTo": "ledger-table",
       "description": "The logbook page: printed column heads, cell rules, handwritten remark and grade stamp per entry.",
       "html": "<table class=\"ds-ledger\"><thead><tr><th class=\"c\">Tiết</th><th>Tên bài</th><th class=\"r\">Thời lượng</th><th>Nhận xét</th><th class=\"c\">Xếp loại</th></tr></thead><tbody><tr><td class=\"c faint\">1</td><td><b>Mạng nơ-ron tích chập</b><small>24 trang · cnn.pptx</small></td><td class=\"r\"><b>5:12</b><span class=\"faint\"> / 5:00</span></td><td><span class=\"ds-remark is-pen\">Xem lại: Từ nối, Lặp tiêu đề</span></td><td class=\"c\"><span class=\"ds-stamp is-pen\">Cần sửa</span></td></tr><tr><td class=\"c faint\">2</td><td><b>Hồi quy tuyến tính</b><small>18 trang · linreg.pdf</small></td><td class=\"r\"><b>9:58</b><span class=\"faint\"> / 10:00</span></td><td><span class=\"ds-remark\">Điểm 88 · 12.400 token</span></td><td class=\"c\"><span class=\"ds-stamp\">Tốt</span></td></tr></tbody></table>",
-      "css": ".ds-ledger{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;width:640px;border-collapse:collapse;background:#f5f7f2;border:1px solid #93aa98;color:#1b2559;font-variant-numeric:tabular-nums;text-align:left;box-shadow:0 1px 0 #dfe6da,0 12px 28px -20px rgba(16,48,42,.45)}.ds-ledger th{background:#e9eee4;color:#2c5a47;font-size:13px;font-weight:600;padding:10px 12px;border-bottom:2px solid rgba(44,90,71,.6);border-right:1px solid #c9d6ca}.ds-ledger td{padding:12px;border-bottom:1px solid #c9d6ca;border-right:1px solid #c9d6ca;font-size:14px;vertical-align:middle;transition:background-color .15s}.ds-ledger tbody tr:hover td{background:rgba(233,238,228,.7)}.ds-ledger td b{font-weight:600;font-size:15px}.ds-ledger td small{display:block;font-size:12px;color:#5c6482}.ds-ledger .r{text-align:right}.ds-ledger .c{text-align:center}.ds-ledger .faint{color:#5c6482}.ds-remark{font-family:'Patrick Hand','Be Vietnam Pro',cursive;font-size:17px;line-height:1.375;color:#4b5577}.ds-remark.is-pen{color:#BE1E2D}.ds-stamp{font-family:'Patrick Hand','Be Vietnam Pro',cursive;display:inline-flex;align-items:center;justify-content:center;min-width:4.5rem;padding:.1rem .6rem;border:2px solid currentColor;border-radius:999px;font-size:1.05rem;line-height:1.5rem;transform:rotate(-5deg);opacity:.92;white-space:nowrap;color:#2c5a47}.ds-stamp.is-pen{color:#BE1E2D}"
+      "css": ".ds-ledger{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;width:640px;border-collapse:collapse;background:#f5f7f2;border:1px solid #93aa98;color:#1b2559;font-variant-numeric:tabular-nums;text-align:left;box-shadow:0 1px 0 #dfe6da,0 12px 28px -20px rgba(14,64,119,.45)}.ds-ledger th{background:#e9eee4;color:#2563a6;font-size:13px;font-weight:600;padding:10px 12px;border-bottom:2px solid rgba(37,99,166,.6);border-right:1px solid #c9d6ca}.ds-ledger td{padding:12px;border-bottom:1px solid #c9d6ca;border-right:1px solid #c9d6ca;font-size:14px;vertical-align:middle;transition:background-color .15s}.ds-ledger tbody tr:hover td{background:rgba(233,238,228,.7)}.ds-ledger td b{font-weight:600;font-size:15px}.ds-ledger td small{display:block;font-size:12px;color:#5c6482}.ds-ledger .r{text-align:right}.ds-ledger .c{text-align:center}.ds-ledger .faint{color:#5c6482}.ds-remark{font-family:'Patrick Hand','Be Vietnam Pro',cursive;font-size:17px;line-height:1.375;color:#4b5577}.ds-remark.is-pen{color:#BE1E2D}.ds-stamp{font-family:'Patrick Hand','Be Vietnam Pro',cursive;display:inline-flex;align-items:center;justify-content:center;min-width:4.5rem;padding:.1rem .6rem;border:2px solid currentColor;border-radius:999px;font-size:1.05rem;line-height:1.5rem;transform:rotate(-5deg);opacity:.92;white-space:nowrap;color:#2563a6}.ds-stamp.is-pen{color:#BE1E2D}"
     },
     {
       "name": "Grade Stamp",
@@ -595,7 +595,7 @@
       "refersTo": "grade-stamp",
       "description": "Circled, rotated handwritten status mark; presses in once after a run.",
       "html": "<div class=\"ds-stamps\"><span class=\"ds-gstamp ds-press\">Tốt</span><span class=\"ds-gstamp is-pen\">Cần sửa</span><span class=\"ds-gstamp is-wait\">Chờ duyệt</span><span class=\"ds-gstamp is-new\">Mới</span></div>",
-      "css": ".ds-stamps{display:flex;gap:20px;padding:16px;background:#f5f7f2}.ds-gstamp{font-family:'Patrick Hand','Be Vietnam Pro',cursive;display:inline-flex;align-items:center;justify-content:center;min-width:4.5rem;padding:.1rem .6rem;border:2px solid currentColor;border-radius:999px;font-size:1.05rem;line-height:1.5rem;transform:rotate(-5deg);opacity:.92;white-space:nowrap;color:#2c5a47}.ds-gstamp.is-pen{color:#BE1E2D}.ds-gstamp.is-wait{color:#4b5577}.ds-gstamp.is-new{color:#5c6482}@keyframes ds-stamp-press{0%{transform:scale(1.7) rotate(-16deg);opacity:0;filter:blur(2px)}60%{opacity:.95;filter:blur(0)}100%{transform:scale(1) rotate(-5deg);opacity:.92}}.ds-press{animation:ds-stamp-press .55s cubic-bezier(.16,1,.3,1) .25s both}@media (prefers-reduced-motion:reduce){.ds-press{animation:none}}"
+      "css": ".ds-stamps{display:flex;gap:20px;padding:16px;background:#f5f7f2}.ds-gstamp{font-family:'Patrick Hand','Be Vietnam Pro',cursive;display:inline-flex;align-items:center;justify-content:center;min-width:4.5rem;padding:.1rem .6rem;border:2px solid currentColor;border-radius:999px;font-size:1.05rem;line-height:1.5rem;transform:rotate(-5deg);opacity:.92;white-space:nowrap;color:#2563a6}.ds-gstamp.is-pen{color:#BE1E2D}.ds-gstamp.is-wait{color:#4b5577}.ds-gstamp.is-new{color:#5c6482}@keyframes ds-stamp-press{0%{transform:scale(1.7) rotate(-16deg);opacity:0;filter:blur(2px)}60%{opacity:.95;filter:blur(0)}100%{transform:scale(1) rotate(-5deg);opacity:.92}}.ds-press{animation:ds-stamp-press .55s cubic-bezier(.16,1,.3,1) .25s both}@media (prefers-reduced-motion:reduce){.ds-press{animation:none}}"
     },
     {
       "name": "Lời phê Panel",
@@ -603,7 +603,7 @@
       "refersTo": "remark-panel",
       "description": "The teacher's red-pen correction sheet with fix actions.",
       "html": "<section class=\"ds-phe\"><h2><span>Lời phê</span><em>1 điểm cần sửa, kèm cách sửa</em></h2><div class=\"ds-phe-item\"><h3>Thời lượng lệch mục tiêu <small>Chưa đạt</small></h3><p>Lời giảng dài hơn 18% so với 5 phút.</p><button class=\"ds-phe-primary\">Đặt lại 5 phút</button><button class=\"ds-phe-secondary\">Sửa cảnh</button></div></section>",
-      "css": ".ds-phe{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;width:480px;background:#fdf6f4;border:1px solid #eab4b9;border-radius:8px;color:#1b2559}.ds-phe h2{display:flex;align-items:baseline;gap:12px;margin:0;padding:12px 16px;border-bottom:1px solid #eab4b9}.ds-phe h2 span{font-family:'Patrick Hand','Be Vietnam Pro',cursive;font-size:24px;line-height:1;font-weight:400;color:#BE1E2D}.ds-phe h2 em{font-style:normal;font-size:14px;font-weight:400;color:rgba(184,50,42,.8)}.ds-phe-item{padding:16px}.ds-phe-item h3{margin:0;font-size:14px;font-weight:600}.ds-phe-item h3 small{margin-left:8px;font-size:12px;font-weight:500;color:#BE1E2D}.ds-phe-item p{margin:8px 0 12px;font-size:14px;color:#4b5577}.ds-phe-primary,.ds-phe-secondary{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;font-size:14px;padding:6px 12px;border-radius:12px;cursor:pointer;margin-right:8px}.ds-phe-primary{background:#173f35;color:#fff;border:none;font-weight:600}.ds-phe-primary:hover{background:#10302a}.ds-phe-secondary{background:#fbfcf9;color:#4b5577;border:1px solid #93aa98;font-weight:500}.ds-phe-secondary:hover{background:#e9eee4}.ds-phe button:focus-visible{outline:2px solid #2c5a47;outline-offset:2px}"
+      "css": ".ds-phe{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;width:480px;background:#fdf6f4;border:1px solid #eab4b9;border-radius:8px;color:#1b2559}.ds-phe h2{display:flex;align-items:baseline;gap:12px;margin:0;padding:12px 16px;border-bottom:1px solid #eab4b9}.ds-phe h2 span{font-family:'Patrick Hand','Be Vietnam Pro',cursive;font-size:24px;line-height:1;font-weight:400;color:#BE1E2D}.ds-phe h2 em{font-style:normal;font-size:14px;font-weight:400;color:rgba(184,50,42,.8)}.ds-phe-item{padding:16px}.ds-phe-item h3{margin:0;font-size:14px;font-weight:600}.ds-phe-item h3 small{margin-left:8px;font-size:12px;font-weight:500;color:#BE1E2D}.ds-phe-item p{margin:8px 0 12px;font-size:14px;color:#4b5577}.ds-phe-primary,.ds-phe-secondary{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;font-size:14px;padding:6px 12px;border-radius:12px;cursor:pointer;margin-right:8px}.ds-phe-primary{background:#134b88;color:#fff;border:none;font-weight:600}.ds-phe-primary:hover{background:#0e4077}.ds-phe-secondary{background:#fbfcf9;color:#4b5577;border:1px solid #93aa98;font-weight:500}.ds-phe-secondary:hover{background:#e9eee4}.ds-phe button:focus-visible{outline:2px solid #2563a6;outline-offset:2px}"
     },
     {
       "name": "Segmented Control",
@@ -611,15 +611,15 @@
       "refersTo": "segmented-track",
       "description": "Paper-band track; selected option is a sheet pill.",
       "html": "<div class=\"ds-seg\"><button aria-pressed=\"false\">3 phút</button><button aria-pressed=\"true\" class=\"is-on\">5 phút</button><button aria-pressed=\"false\">10 phút</button></div>",
-      "css": ".ds-seg{display:inline-flex;gap:4px;padding:4px;background:#e9eee4;border-radius:12px}.ds-seg button{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;padding:6px 12px;border:none;border-radius:8px;background:transparent;font-size:14px;color:#4b5577;cursor:pointer;transition:color .15s}.ds-seg button:hover{color:#1b2559}.ds-seg button.is-on{background:#fbfcf9;color:#1b2559;font-weight:600;box-shadow:0 1px 2px rgba(15,23,42,.08)}.ds-seg button:focus-visible{outline:2px solid #2c5a47;outline-offset:2px}"
+      "css": ".ds-seg{display:inline-flex;gap:4px;padding:4px;background:#e9eee4;border-radius:12px}.ds-seg button{font-family:'Be Vietnam Pro',Inter,system-ui,sans-serif;padding:6px 12px;border:none;border-radius:8px;background:transparent;font-size:14px;color:#4b5577;cursor:pointer;transition:color .15s}.ds-seg button:hover{color:#1b2559}.ds-seg button.is-on{background:#fbfcf9;color:#1b2559;font-weight:600;box-shadow:0 1px 2px rgba(15,23,42,.08)}.ds-seg button:focus-visible{outline:2px solid #2563a6;outline-offset:2px}"
     }
   ],
   "narrative": {
     "northStar": "Sổ đầu bài (the class logbook)",
-    "overview": "The lecturer and learner surfaces (`/`, `/lectures/new`, `/lectures/:id`) are a Vietnamese class logbook. A deep ledger-green cover band with foil lettering sits on top; below it is cool paper printed with thin green-gray rules. Every lecture is a ruled entry with its period number, date, minutes, the teacher's remark and a circled grade stamp. Entries are written in blue-black ink; the teacher's red pen appears only where something needs fixing. Status is the grade stamp, never a colored chip or a floating card.\n\nThe printed form is Be Vietnam Pro at a few steady sizes with tabular figures everywhere (the whole world sets `font-variant-numeric: tabular-nums`). The hand is Patrick Hand, and only for what a teacher would write by hand: remarks, the \"Lời phê\" heading, grade stamps and the cover monogram. Tables are real ruled tables with printed column heads, vertical cell rules and a heavier rule under the header, like the pre-printed page.\n\nDepth is paper-flat: pages rest on the ground with a hairline edge and one long, faint green-tinted drop under the ledger sheet. The one signature motion is the stamp press: when a lecture has just been generated or re-checked, its grade stamp presses onto the entry once.",
+    "overview": "The lecturer and learner surfaces (`/`, `/lectures/new`, `/lectures/:id`) are a Vietnamese class logbook. A deep ledger-blue cover band with foil lettering sits on top; below it is cool paper printed with thin green-gray rules. Every lecture is a ruled entry with its period number, date, minutes, the teacher's remark and a circled grade stamp. Entries are written in blue-black ink; the teacher's red pen appears only where something needs fixing. Status is the grade stamp, never a colored chip or a floating card.\n\nThe printed form is Be Vietnam Pro at a few steady sizes with tabular figures everywhere (the whole world sets `font-variant-numeric: tabular-nums`). The hand is Patrick Hand, and only for what a teacher would write by hand: remarks, the \"Lời phê\" heading, grade stamps and the cover monogram. Tables are real ruled tables with printed column heads, vertical cell rules and a heavier rule under the header, like the pre-printed page.\n\nDepth is paper-flat: pages rest on the ground with a hairline edge and one long, faint blue-tinted drop under the ledger sheet. The one signature motion is the stamp press: when a lecture has just been generated or re-checked, its grade stamp presses onto the entry once.",
     "keyCharacteristics": [
-      "Ledger-green cover band (56px, 4px cover-deep bottom rule) with foil wordmark over paper ground.",
-      "Ruled tables: printed 13px column heads in print green on paper-band, 1px rule cell dividers, a 2px print rule under the header.",
+      "Ledger-blue cover band (56px, 4px cover-deep bottom rule) with foil wordmark over paper ground.",
+      "Ruled tables: printed 13px column heads in print blue on paper-band, 1px rule cell dividers, a 2px print rule under the header.",
       "Blue-black ink for entries; red pen only for remarks, warnings and errors that need fixing.",
       "Circled, rotated (-5deg) Patrick Hand grade stamps as the only status marker.",
       "Be Vietnam Pro everywhere else; tabular figures in every time, count and score."
@@ -664,7 +664,7 @@
     "dos": [
       "Do tell a lecture's status only with its grade stamp: print for graded, pen for Cần sửa, ink-soft for Chờ duyệt, ink-faint for Mới.",
       "Do present lists of lectures, pages and scenes as ruled tables with 13px semibold print column heads, 1px rule cell dividers and a 2px print/60 rule under the header.",
-      "Do give each view or action row exactly one cover-green primary action; the rest are secondary or text.",
+      "Do give each view or action row exactly one cover-blue primary action; the rest are secondary or text.",
       "Do set Patrick Hand only for remarks, the Lời phê heading, stamps and the monogram, between 15px and 24px.",
       "Do use tabular figures for every time, count and score, and show \"—\" when no measured value exists.",
       "Do keep text a user must read at 12px or above: 28px titles, 18px section heads, 15px entry titles and script, 14px body, 13px column heads, 12px meta.",
@@ -677,7 +677,7 @@
       "Don't use cover foil off the cover band.",
       "Don't use Patrick Hand for buttons, labels, headings, column heads or body copy.",
       "Don't add uppercase tracked labels (kickers or eyebrows) above headings.",
-      "Don't bring studio indigo, slate cards or the role-hue badges onto logbook routes, or ledger green onto studio routes."
+      "Don't bring studio indigo, slate cards or the role-hue badges onto logbook routes, or ledger blue onto studio routes."
     ]
   }
 }

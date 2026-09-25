@@ -136,7 +136,7 @@ export const NarrativeInspector: React.FC<NarrativeInspectorProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cover-deep  text-navy text-xs font-bold uppercase tracking-wider font-mono border border-white/10">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-navy-soft text-navy text-xs font-bold uppercase tracking-wider font-mono border border-navy-line">
                 <Sparkles className="w-3.5 h-3.5 text-pen" />
                 Narrative Intelligence Layer (NIL)
               </span>
@@ -154,15 +154,15 @@ export const NarrativeInspector: React.FC<NarrativeInspectorProps> = ({
 
           {/* Quick Metrics */}
           <div className="grid grid-cols-3 gap-2.5 shrink-0 text-center">
-            <div className="bg-cover-deep  rounded-xl p-3 border border-white/10">
+            <div className="bg-paper-band  rounded-xl p-3 border border-rule">
               <div className="text-[11px] text-navy font-medium uppercase">Persona</div>
               <div className="text-xs font-bold font-mono text-ink mt-0.5">{activeNarrative.persona_archetype}</div>
             </div>
-            <div className="bg-cover-deep  rounded-xl p-3 border border-white/10">
+            <div className="bg-paper-band  rounded-xl p-3 border border-rule">
               <div className="text-[11px] text-navy font-medium uppercase">Curiosity Hooks</div>
               <div className="text-base font-extrabold font-mono text-pen">{activeNarrative.total_curiosity_hooks}</div>
             </div>
-            <div className="bg-cover-deep  rounded-xl p-3 border border-white/10">
+            <div className="bg-paper-band  rounded-xl p-3 border border-rule">
               <div className="text-[11px] text-navy font-medium uppercase">Avg Cog-Load</div>
               <div className="text-base font-extrabold font-mono text-print-soft">{Math.round(activeNarrative.average_cognitive_load * 100)}%</div>
             </div>

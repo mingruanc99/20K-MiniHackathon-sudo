@@ -19,6 +19,13 @@ export interface KnowledgeTreeNode {
   section_id?: string;
   /** Seconds of lecture time (document/chapter/page). */
   duration_sec?: number;
+  /**
+   * Pages: seconds needed to present all of the page's content (text, notes, read tables/diagrams)
+   * at the configured WPM, i.e. its length at 100% coverage. See contentDuration.ts.
+   */
+  full_sec?: number;
+  /** Pages: shortest length the template engine can produce (the page's first sentence). */
+  min_sec?: number;
   /** Importance 0..1 (keywords; pages carry their LLM/local importance too). */
   weight?: number;
   keyword?: WeightedKeyword;
@@ -32,6 +39,8 @@ export interface KnowledgeTreeSettings {
   max_keywords_per_page: number;
   max_pages: number;
   target_duration_sec: number;
+  /** Chosen share of the full content length (1 = present everything). Absent on trees sized in minutes. */
+  coverage?: number;
 }
 
 export interface KnowledgeTreeStats {

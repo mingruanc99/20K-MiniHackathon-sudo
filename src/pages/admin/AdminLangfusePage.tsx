@@ -160,7 +160,7 @@ export const AdminLangfusePage: React.FC = () => {
               href={projectConfig.tracesUrl}
               target="_blank"
               rel="noreferrer"
-              className="px-3 py-1.5 bg-cover-deep hover:bg-cover-deep text-ink rounded-lg text-xs font-medium inline-flex items-center space-x-1.5 transition border border-white/10"
+              className="px-3 py-1.5 bg-paper-band hover:bg-cover-deep text-ink rounded-lg text-xs font-medium inline-flex items-center space-x-1.5 transition border border-rule"
             >
               <span>Xem Traces Cloud</span>
               <ArrowUpRight className="w-3.5 h-3.5 text-pen" />
@@ -169,7 +169,7 @@ export const AdminLangfusePage: React.FC = () => {
               href={projectConfig.generationsUrl}
               target="_blank"
               rel="noreferrer"
-              className="px-3 py-1.5 bg-cover-deep hover:bg-cover-deep text-ink rounded-lg text-xs font-medium inline-flex items-center space-x-1.5 transition border border-white/10"
+              className="px-3 py-1.5 bg-paper-band hover:bg-cover-deep text-ink rounded-lg text-xs font-medium inline-flex items-center space-x-1.5 transition border border-rule"
             >
               <span>Xem Generations</span>
               <ArrowUpRight className="w-3.5 h-3.5 text-pen" />
@@ -178,7 +178,7 @@ export const AdminLangfusePage: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-          <div className="p-3 bg-cover-deep rounded-xl border border-white/10 space-y-1">
+          <div className="p-3 bg-paper-band rounded-xl border border-rule space-y-1">
             <div className="text-[11px] text-ink-faint uppercase tracking-wider font-semibold flex items-center space-x-1">
               <Key className="w-3 h-3 text-print-soft" />
               <span>Public Key (Client & Telemetry)</span>
@@ -186,7 +186,7 @@ export const AdminLangfusePage: React.FC = () => {
             <div className="font-mono text-print-soft text-xs select-all truncate">{projectConfig.publicKey}</div>
           </div>
 
-          <div className="p-3 bg-cover-deep rounded-xl border border-white/10 space-y-1">
+          <div className="p-3 bg-paper-band rounded-xl border border-rule space-y-1">
             <div className="text-[11px] text-ink-faint uppercase tracking-wider font-semibold flex items-center space-x-1">
               <Shield className="w-3 h-3 text-pen" />
               <span>Secret Key (Ingestion Auth)</span>
@@ -194,7 +194,7 @@ export const AdminLangfusePage: React.FC = () => {
             <div className="font-mono text-pen text-xs select-all truncate">{projectConfig.secretKeyMasked}</div>
           </div>
 
-          <div className="p-3 bg-cover-deep rounded-xl border border-white/10 space-y-1">
+          <div className="p-3 bg-paper-band rounded-xl border border-rule space-y-1">
             <div className="text-[11px] text-ink-faint uppercase tracking-wider font-semibold flex items-center space-x-1">
               <Database className="w-3 h-3 text-print-soft" />
               <span>Cấu Hình Môi Trường (.env)</span>
