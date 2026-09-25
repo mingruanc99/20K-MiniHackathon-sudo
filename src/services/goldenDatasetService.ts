@@ -12,7 +12,7 @@
  */
 import { GoldenTestCase, RegressionReport, UserConfiguration } from '../types';
 import { MarkdownExtractor } from '../pipeline/module1_extractor/markdownExtractor';
-import { getBuiltinCnnTree } from '../pipeline/module1_extractor/extractorFactory';
+import { getBuiltinCnnTree } from '../pipeline/module1_extractor/builtinCnnTree';
 import { pipelineOrchestrator } from '../pipeline/orchestrator';
 import { benchmarkService } from './benchmark/benchmarkService';
 

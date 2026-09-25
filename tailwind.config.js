@@ -32,9 +32,9 @@ export default {
         navy: { DEFAULT: '#134B88', soft: '#e4ecf6', line: '#b7cbe3' }
       },
       fontFamily: {
-        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        sans: ['"Be Vietnam Pro"', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
-        ledger: ['"Be Vietnam Pro"', 'Inter', 'system-ui', 'sans-serif'],
+        ledger: ['"Be Vietnam Pro"', 'system-ui', 'sans-serif'],
         hand: ['"Patrick Hand"', '"Be Vietnam Pro"', 'cursive'],
       },
     },

@@ -4,7 +4,7 @@
  * so the board column always matches reality.
  */
 import { Project, CanonicalDocumentTree } from '../types';
-import { getBuiltinCnnTree } from '../pipeline/module1_extractor/extractorFactory';
+import { getBuiltinCnnTree } from '../pipeline/module1_extractor/builtinCnnTree';
 
 export type LectureStage = 'uploaded' | 'review' | 'done' | 'attention';
 

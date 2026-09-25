@@ -4,7 +4,7 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased font-sans;
+    @apply bg-paper text-ink antialiased font-sans;
   }
   ::selection {
     background: #e0e7ff; /* indigo-100 */
@@ -27,7 +27,7 @@
  * Sổ đầu bài world: lecturer / learner surfaces (see DESIGN.md)
  * --------------------------------------------------------------------- */
 .ledger-world {
-  font-family: 'Be Vietnam Pro', Inter, system-ui, sans-serif;
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
   color: #1b2559;
   font-variant-numeric: tabular-nums;
 }

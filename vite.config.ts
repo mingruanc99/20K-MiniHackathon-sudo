@@ -17,5 +17,18 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    // Long-lived vendor chunks: they change rarely, so browsers keep them cached between deploys.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('firebase')) return 'firebase';
+          if (id.includes('pdfjs-dist')) return 'pdfjs';
+          if (id.includes('jszip')) return 'jszip';
+          if (/[\\/](react|react-dom|react-router|react-router-dom|scheduler|@remix-run)[\\/]/.test(id)) return 'react';
+          return undefined;
+        }
+      }
+    }
   }
 });

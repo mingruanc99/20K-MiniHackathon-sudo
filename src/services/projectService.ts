@@ -34,6 +34,16 @@ export class ProjectService {
     return JSON.parse(JSON.stringify(data, (_, value) => (value === undefined ? null : value)));
   }
 
+  /** Local copy only (synchronous), so the logbook can render before Firestore answers. */
+  listLocalProjects(userId: string): Project[] {
+    try {
+      const list: Project[] = JSON.parse(localStorage.getItem(this.getLocalKey(userId)) || '[]');
+      return list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    } catch {
+      return [];
+    }
+  }
+
   async listProjects(userId: string): Promise<Project[]> {
     const localMap = new Map<string, Project>();
 
@@ -67,7 +77,17 @@ export class ProjectService {
       }
     }
 
+    // Seed the sample lecture once per user, so a logbook the user emptied stays empty.
+    const seededKey = `vl_seeded_${userId}`;
+    let seeded = false;
+    try {
+      seeded = localStorage.getItem(seededKey) === '1';
+      localStorage.setItem(seededKey, '1');
+    } catch {
+      /* storage unavailable */
+    }
     if (localMap.size === 0) {
+      if (seeded) return [];
       const initialProjects = [this.getBuiltinCnnProject(userId)];
       if (typeof window !== 'undefined' && window.localStorage) {
         localStorage.setItem(this.getLocalKey(userId), JSON.stringify(initialProjects));
@@ -257,17 +277,44 @@ export class ProjectService {
   }
 
   async deleteProject(projectId: string, userId: string): Promise<void> {
+    await this.deleteProjects([projectId], userId);
+  }
+
+  /**
+   * Deletes lectures with their benchmark run logs. Runs go first: their Firestore rule reads the
+   * parent project to check ownership, so they cannot be removed once the project is gone.
+   * Returns the ids that could not be deleted from Firestore (they stay in the list).
+   */
+  async deleteProjects(projectIds: string[], userId: string): Promise<string[]> {
+    const failed: string[] = [];
     if (this.canUseFirestore()) {
-      try {
-        await deleteDoc(doc(db, 'projects', projectId));
-      } catch (err) {
-        console.warn('Firestore delete failed:', err);
-      }
+      await Promise.all(
+        projectIds.map(async (id) => {
+          try {
+            if (!id.startsWith('proj_demo')) {
+              const runs = await getDocs(collection(db, 'projects', id, 'runs'));
+              await Promise.all(runs.docs.map((d) => deleteDoc(d.ref)));
+            }
+            await deleteDoc(doc(db, 'projects', id));
+          } catch (err) {
+            console.warn('Firestore delete failed:', id, err);
+            failed.push(id);
+          }
+        })
+      );
     }
 
-    const list = await this.listProjects(userId);
-    const filtered = list.filter((p) => p.projectId !== projectId);
-    localStorage.setItem(this.getLocalKey(userId), JSON.stringify(filtered));
+    const gone = new Set(projectIds.filter((id) => !failed.includes(id)));
+    try {
+      const key = this.getLocalKey(userId);
+      const list: Project[] = JSON.parse(localStorage.getItem(key) || '[]');
+      localStorage.setItem(key, JSON.stringify(list.filter((p) => !gone.has(p.projectId))));
+      const runs: { project_id?: string }[] = JSON.parse(localStorage.getItem('clsg_benchmark_runs') || '[]');
+      localStorage.setItem('clsg_benchmark_runs', JSON.stringify(runs.filter((r) => !r.project_id || !gone.has(r.project_id))));
+    } catch (err) {
+      console.warn('Local store delete error:', err);
+    }
+    return failed;
   }
 
   getBuiltinCnnProject(userId: string): Project {

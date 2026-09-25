@@ -1,39 +1,45 @@
 // src/App.tsx
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { LectureBoardPage } from './pages/LectureBoardPage';
-import { NewLecturePage } from './pages/NewLecturePage';
-import { LecturePage } from './pages/LecturePage';
-import { AdvancedPage } from './pages/AdvancedPage';
-import { NewProjectPage } from './pages/NewProjectPage';
-import { ProjectDetailPage } from './pages/ProjectDetailPage';
 
 // Admin Components & Pages
 import { AdminRoute } from './components/admin/AdminRoute';
-import { AdminLayout } from './components/admin/AdminLayout';
-import { AdminOverviewPage } from './pages/admin/AdminOverviewPage';
-import { AdminContentQualityPage } from './pages/admin/AdminContentQualityPage';
-import { AdminLessonsPage } from './pages/admin/AdminLessonsPage';
-import { AdminUsersPage } from './pages/admin/AdminUsersPage';
-import { AdminAILlmPage } from './pages/admin/AdminAILlmPage';
-import { AdminLangfusePage } from './pages/admin/AdminLangfusePage';
-import { AdminEvaluationPage } from './pages/admin/AdminEvaluationPage';
-import { AdminPromptPage } from './pages/admin/AdminPromptPage';
-import { AdminErrorCenterPage } from './pages/admin/AdminErrorCenterPage';
-import { AdminTTSPage } from './pages/admin/AdminTTSPage';
-import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
-import { KnowledgeInspectorPage } from './pages/KnowledgeInspectorPage';
+
+// Pages load on demand so the first visit only downloads the logbook and the login screen.
+const NewLecturePage = lazy(() => import('./pages/NewLecturePage').then((m) => ({ default: m.NewLecturePage })));
+const LecturePage = lazy(() => import('./pages/LecturePage').then((m) => ({ default: m.LecturePage })));
+const AdvancedPage = lazy(() => import('./pages/AdvancedPage').then((m) => ({ default: m.AdvancedPage })));
+const NewProjectPage = lazy(() => import('./pages/NewProjectPage').then((m) => ({ default: m.NewProjectPage })));
+const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage').then((m) => ({ default: m.ProjectDetailPage })));
+const AdminLayout = lazy(() => import('./components/admin/AdminLayout').then((m) => ({ default: m.AdminLayout })));
+const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage').then((m) => ({ default: m.AdminOverviewPage })));
+const AdminContentQualityPage = lazy(() => import('./pages/admin/AdminContentQualityPage').then((m) => ({ default: m.AdminContentQualityPage })));
+const AdminLessonsPage = lazy(() => import('./pages/admin/AdminLessonsPage').then((m) => ({ default: m.AdminLessonsPage })));
+const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })));
+const AdminAILlmPage = lazy(() => import('./pages/admin/AdminAILlmPage').then((m) => ({ default: m.AdminAILlmPage })));
+const AdminLangfusePage = lazy(() => import('./pages/admin/AdminLangfusePage').then((m) => ({ default: m.AdminLangfusePage })));
+const AdminEvaluationPage = lazy(() => import('./pages/admin/AdminEvaluationPage').then((m) => ({ default: m.AdminEvaluationPage })));
+const AdminPromptPage = lazy(() => import('./pages/admin/AdminPromptPage').then((m) => ({ default: m.AdminPromptPage })));
+const AdminErrorCenterPage = lazy(() => import('./pages/admin/AdminErrorCenterPage').then((m) => ({ default: m.AdminErrorCenterPage })));
+const AdminTTSPage = lazy(() => import('./pages/admin/AdminTTSPage').then((m) => ({ default: m.AdminTTSPage })));
+const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage').then((m) => ({ default: m.AdminSettingsPage })));
+const KnowledgeInspectorPage = lazy(() => import('./pages/KnowledgeInspectorPage').then((m) => ({ default: m.KnowledgeInspectorPage })));
+
+const PageFallback: React.FC = () => (
+  <div className="flex min-h-[40vh] items-center justify-center text-sm text-ink-soft">Đang mở trang…</div>
+);
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 text-sm text-slate-500">
+      <div className="min-h-screen flex items-center justify-center bg-paper text-sm text-ink-soft">
         Đang kiểm tra phiên đăng nhập...
       </div>
     );
@@ -43,13 +49,18 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <Navigate to="/login" replace />;
   }
 
-  return <AppLayout>{children}</AppLayout>;
+  return (
+    <AppLayout>
+      <Suspense fallback={<PageFallback />}>{children}</Suspense>
+    </AppLayout>
+  );
 };
 
 export const App: React.FC = () => {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -161,6 +172,7 @@ export const App: React.FC = () => {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );

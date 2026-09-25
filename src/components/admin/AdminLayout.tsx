@@ -1,5 +1,5 @@
 // src/components/admin/AdminLayout.tsx
-import React, { useState, createContext, useContext } from 'react';
+import React, { useState, createContext, useContext, Suspense } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
@@ -281,7 +281,9 @@ export const AdminLayout: React.FC = () => {
 
           {/* Page Content Outlet */}
           <main className="flex-1 p-4 lg:p-8 max-w-7xl w-full mx-auto">
-            <Outlet />
+            <Suspense fallback={<div className="py-16 text-center text-sm text-ink-soft">Đang mở trang…</div>}>
+              <Outlet />
+            </Suspense>
           </main>
         </div>
       </div>

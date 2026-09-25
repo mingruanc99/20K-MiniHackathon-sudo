@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VideoLearn · Báo cáo sản phẩm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Patrick+Hand&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --cover: #173f35; --cover-deep: #10302a; --foil: #e6d9a8;
+    --paper: #f5f7f2; --band: #e9eee4; --edge: #dfe6da; --sheet: #fbfcf9;
+    --rule: #c9d6ca; --rule-strong: #93aa98;
+    --print: #2c5a47; --print-soft: #557a69;
+    --ink: #1b2559; --ink-soft: #4b5577; --ink-faint: #5c6482;
+    --pen: #BE1E2D; --pen-soft: #f9e3e5; --pen-line: #eab4b9;
+    --navy: #134B88; --navy-soft: #e4ecf6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--paper); }
+  body { font-family: 'Be Vietnam Pro', system-ui, sans-serif; color: var(--ink); font-variant-numeric: tabular-nums; overflow: hidden; }
+  ::selection { background: #d7e6da; color: var(--cover-deep); }
+
+  /* Stage: 1600x900 scaled to the viewport */
+  .viewport { position: fixed; inset: 0; display: grid; place-items: center; }
+  .stage { width: 1600px; height: 900px; position: relative; transform-origin: center; }
+  .slide {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    background-color: var(--paper);
+    background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, var(--edge) 55px, var(--edge) 56px);
+    overflow: hidden;
+    opacity: 0; visibility: hidden; transform: translateX(24px);
+    transition: opacity .35s cubic-bezier(.16,1,.3,1), transform .45s cubic-bezier(.16,1,.3,1), visibility 0s .45s;
+  }
+  .slide.active { opacity: 1; visibility: visible; transform: none; transition: opacity .35s cubic-bezier(.16,1,.3,1), transform .45s cubic-bezier(.16,1,.3,1); }
+  .slide.past { transform: translateX(-24px); }
+  @media (prefers-reduced-motion: reduce) { .slide, .slide.active { transition: none; transform: none; } }
+
+  /* Red margin line of a logbook page */
+  .margin {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 76px; background: var(--cover-deep);
+  }
+  .band {
+    height: 76px; flex: none; display: flex; align-items: center; gap: 18px; padding: 0 23px;
+    background: var(--cover); color: var(--paper); border-bottom: 4px solid var(--cover-deep); position: relative; z-index: 1;
+  }
+  .band .mark { width: 38px; height: 38px; border: 1px solid rgba(230,217,168,.6); border-radius: 6px; display: grid; place-items: center; font-family: 'Patrick Hand', cursive; font-size: 24px; color: var(--foil); }
+  .band .name { font-weight: 600; letter-spacing: .02em; color: var(--foil); font-size: 20px; }
+  .band .sub { color: rgba(245,247,242,.82); font-size: 16px; }
+  .band .tiet { margin-left: auto; font-size: 16px; color: rgba(245,247,242,.8); }
+
+  .body { flex: 1; padding: 40px 72px 48px 160px; position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 0; }
+  h1 { font-size: 64px; line-height: 1.08; margin: 0; font-weight: 700; letter-spacing: -.02em; color: var(--ink); }
+  h2 { font-size: 44px; line-height: 1.15; margin: 0 0 26px; font-weight: 700; letter-spacing: -.015em; color: var(--ink); }
+  p, li { font-size: 24px; line-height: 1.5; }
+  .lead { font-size: 28px; color: var(--ink-soft); max-width: 60ch; margin: 18px 0 0; }
+  .hand { font-family: 'Patrick Hand', cursive; }
+  .remark { font-family: 'Patrick Hand', cursive; color: var(--pen); font-size: 28px; line-height: 1.3; }
+  .muted { color: var(--ink-faint); }
+  .print { color: var(--print); }
+  .navy { color: var(--navy); }
+  /* Accent navy: result figures and emphasis that is not a correction */
+  .big, .ledger td.num.print, .ledger td.num.print b { color: var(--navy); }
+
+  .stamp {
+    display: inline-flex; align-items: center; justify-content: center; padding: 2px 18px; min-width: 110px;
+    border: 3px solid currentColor; border-radius: 999px; font-family: 'Patrick Hand', cursive; font-size: 28px;
+    transform: rotate(-5deg); opacity: .92; white-space: nowrap;
+  }
+  .stamp.good { color: var(--print); } .stamp.red { color: var(--pen); } .stamp.soft { color: var(--ink-soft); }
+  .slide.active .stamp.press { animation: press .55s cubic-bezier(.16,1,.3,1) .35s both; }
+  @keyframes press { 0% { transform: scale(1.7) rotate(-16deg); opacity: 0; filter: blur(2px);} 60% {opacity:.95; filter: blur(0);} 100% { transform: rotate(-5deg); opacity: .92; } }
+
+  /* Ruled ledger table */
+  table.ledger { width: 100%; border-collapse: collapse; background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; overflow: hidden; }
+  .ledger th { background: var(--band); color: var(--print); font-size: 19px; font-weight: 600; text-align: left; padding: 12px 18px; border-bottom: 2px solid rgba(44,90,71,.6); border-right: 1px solid var(--rule); }
+  .ledger td { font-size: 22px; padding: 12px 18px; border-bottom: 1px solid var(--rule); border-right: 1px solid var(--rule); vertical-align: top; }
+  .ledger th:last-child, .ledger td:last-child { border-right: 0; }
+  .ledger tr:last-child td { border-bottom: 0; }
+  .num { text-align: right; white-space: nowrap; }
+  .big { font-size: 30px; font-weight: 700; }
+  .strike { text-decoration: line-through; text-decoration-color: var(--pen); color: var(--ink-faint); }
+
+  .cols { display: grid; gap: 28px; }
+  .c2 { grid-template-columns: 1fr 1fr; } .c3 { grid-template-columns: repeat(3, 1fr); }
+  .sheet { background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; padding: 24px 28px; }
+  .sheet h3 { margin: 0 0 10px; font-size: 26px; color: var(--navy); }
+  .sheet p { margin: 0; font-size: 21px; color: var(--ink-soft); }
+  .sheet ul { margin: 8px 0 0; padding-left: 22px; }
+  .sheet li { font-size: 21px; color: var(--ink-soft); }
+
+  .flow { display: flex; align-items: stretch; gap: 0; margin-top: 8px; }
+  .flow .step { flex: 1; background: var(--sheet); border: 1px solid var(--rule-strong); padding: 20px; position: relative; }
+  .flow .step + .step { border-left: 0; }
+  .flow .step .n { font-family: 'Patrick Hand', cursive; color: var(--navy); font-size: 26px; }
+  .flow .step h3 { margin: 4px 0 8px; font-size: 24px; }
+  .flow .step p { margin: 0; font-size: 19px; color: var(--ink-soft); line-height: 1.45; }
+
+  .pipe { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+  .pipe .node { background: var(--sheet); border: 1px solid var(--rule-strong); border-radius: 6px; padding: 16px 18px; }
+  .pipe .node b { display: block; font-size: 21px; color: var(--ink); }
+  .pipe .node span { font-size: 17px; color: var(--ink-soft); line-height: 1.4; display: block; margin-top: 4px; }
+  .pipe .node .tag { font-family: 'Patrick Hand', cursive; font-size: 19px; color: var(--navy); margin-top: 8px; }
+  .pipe .node.todo { border-style: dashed; background: transparent; }
+  .pipe .node.todo .tag { color: var(--pen); }
+
+  .quote { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 18px 22px; font-size: 21px; line-height: 1.5; color: var(--ink-soft); }
+  .quote .lbl { display: block; font-size: 17px; font-weight: 600; color: var(--navy); margin-bottom: 6px; }
+  mark.bad { background: var(--pen-soft); color: var(--pen); padding: 0 4px; border-radius: 3px; text-decoration: line-through; }
+
+  .foot { margin-top: auto; padding-top: 16px; font-size: 16px; color: var(--ink-faint); }
+
+  /* Ruler progress */
+  .ruler { position: fixed; left: 0; right: 0; bottom: 0; height: 4px; background: var(--edge); z-index: 5; }
+  .ruler i { display: block; height: 100%; width: 100%; background: var(--navy); transform-origin: left; transform: scaleX(0); transition: transform .4s cubic-bezier(.16,1,.3,1); }
+  .timer { position: fixed; right: 18px; top: 14px; z-index: 6; font-size: 18px; color: var(--foil); background: rgba(16,48,42,.85); border: 1px solid rgba(230,217,168,.4); padding: 4px 12px; border-radius: 6px; display: none; }
+  .timer.on { display: block; } .timer.late { color: #f0a39b; border-color: #f0a39b; }
+  .notes { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(900px, 92vw); z-index: 6; background: rgba(16,48,42,.94); color: var(--paper); border: 1px solid rgba(230,217,168,.35); border-radius: 8px; padding: 14px 18px; font-size: 16px; line-height: 1.5; display: none; }
+  .notes.on { display: block; }
+  .notes b { color: var(--foil); font-weight: 600; }
+  .help { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6; font-size: 13px; color: var(--paper); background: var(--cover-deep); padding: 4px 12px; border-radius: 6px; transition: opacity .6s; }
+  .help.gone { opacity: 0; pointer-events: none; }
+  .nav { position: fixed; inset: 0 auto 0 0; width: 18vw; z-index: 4; cursor: w-resize; }
+  .nav.next { left: auto; right: 0; cursor: e-resize; }
+
+  @media print {
+    @page { size: 1600px 900px; margin: 0; }
+    html, body { background: #fff; overflow: visible; }
+    .viewport { position: static; display: block; }
+    .stage { transform: none !important; width: 1600px; height: auto; }
+    .slide { position: relative; opacity: 1; visibility: visible; transform: none; height: 900px; page-break-after: always; border-radius: 0; box-shadow: none; }
+    .ruler, .timer, .notes, .help, .nav { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="viewport"><div class="stage" id="stage">
+
+<!-- 1. Bìa -->
+<section class="slide" data-notes="Giới thiệu đội và sản phẩm. Nêu cấu trúc bài trình bày: chiến lược sản phẩm, lõi AI, tối ưu và bảo mật, hạ tầng, đội ngũ, định hướng.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">Sổ bài giảng</span><span class="tiet"></span></div>
+  <div class="body" style="justify-content:center">
+    <p class="print" style="font-size:24px;margin:0 0 14px;font-weight:600">Báo cáo sản phẩm · 10 phút</p>
+    <h1>VideoLearn: chuyển tài liệu bài giảng<br>thành lời giảng đúng thời lượng và đúng thuật ngữ.</h1>
+    <p class="lead">Hệ thống đọc slide của giảng viên, cho phép điều chỉnh trọng số từng phần nội dung, sinh lời giảng và kiểm định chất lượng trước khi chuyển sang TTS hoặc dựng video.</p>
+    <p class="muted" style="font-size:22px;margin-top:44px">My · Dinh · Minh · Thiên · Kiệt &nbsp;—&nbsp; nền tảng biểu diễn bài giảng CLSG-IR</p>
+  </div>
+</section>
+
+<!-- 2. Bài toán & định vị -->
+<section class="slide" data-notes="Nêu ba nỗi đau và định vị sản phẩm như một trình biên dịch giáo dục, không phải công cụ tạo video.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">1 · Bài toán &amp; định vị</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Bài toán của giảng viên khi chuyển slide thành bài giảng video</h2>
+    <table class="ledger">
+      <tr><th style="width:70px">#</th><th>Nỗi đau</th><th style="width:38%">Ảnh hưởng</th></tr>
+      <tr><td class="muted">1</td><td><b>Dựng bài giảng thủ công</b>: viết kịch bản, canh thời lượng, thu âm, ghép hình ảnh.</td><td>Tốn nhiều thời gian và chi phí cho mỗi bài giảng.</td></tr>
+      <tr><td class="muted">2</td><td><b>Nội dung sinh tự động thiếu căn cứ</b> (hallucination), đọc lại slide máy móc.</td><td>Giảng viên phải kiểm tra lại từng câu trước khi sử dụng.</td></tr>
+      <tr><td class="muted">3</td><td><b>Thuật ngữ chuyên ngành bị dịch hoặc phát âm sai.</b></td><td>Ảnh hưởng tới độ tin cậy chuyên môn.</td></tr>
+    </table>
+    <div class="sheet" style="margin-top:26px"><h3>Định vị</h3><p>VideoLearn là một “trình biên dịch giáo dục”: tài liệu gốc được biên dịch thành biểu diễn CLSG-IR gồm mục tiêu sư phạm, lời giảng theo ngân sách từ, kế hoạch ngắt nghỉ trước TTS và gợi ý hình ảnh có mốc thời gian. Sản phẩm không trực tiếp sinh video.</p></div>
+  </div>
+</section>
+
+<!-- 3. Giải pháp / luồng sử dụng -->
+<section class="slide" data-notes="Mô tả luồng sử dụng bốn bước. Có thể chuyển sang demo trực tiếp tại địa chỉ triển khai.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">1 · Luồng sử dụng</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Luồng sử dụng gồm bốn bước</h2>
+    <div class="flow">
+      <div class="step"><span class="n">1</span><h3>Ghi bài mới</h3><p>Tải lên PPTX, PDF hoặc Markdown. Hệ thống đọc cấu trúc, định vị bảng, biểu đồ, sơ đồ, hình ảnh và chỉ OCR các vùng này. Ngân sách thời gian quét: 55 giây.</p></div>
+      <div class="step"><span class="n">2</span><h3>Duyệt giáo án</h3><p>Cây chương → trang → keyword có trọng số thời lượng. Điều chỉnh một trang sẽ phân bổ lại các trang khác, tổng thời lượng giữ nguyên.</p></div>
+      <div class="step"><span class="n">3</span><h3>Tạo lời giảng</h3><p>Hai chế độ: theo mẫu (không tiêu tốn token) hoặc AI viết. Áp dụng quy tắc từ nối, quy tắc tiêu đề, SSML ngắt nghỉ và gợi ý hình ảnh.</p></div>
+      <div class="step"><span class="n">4</span><h3>Kiểm định &amp; xuất</h3><p>Đo 10 chỉ số chất lượng; mỗi vấn đề kèm hướng dẫn và thao tác sửa. Xuất kịch bản .txt, SSML và CLSG-IR (.json).</p></div>
+    </div>
+    <div style="display:flex;gap:24px;align-items:center;margin-top:34px">
+      <span class="stamp good">Tốt</span><span class="stamp soft">Chờ duyệt</span><span class="stamp red">Cần sửa</span>
+      <span class="muted" style="font-size:21px">Trạng thái mỗi bài giảng được thể hiện bằng dấu xếp loại trong sổ bài giảng.</span>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Moat -->
+<section class="slide" data-notes="Ba lợi thế cạnh tranh tập trung vào ngách sâu thay vì tính năng bề nổi.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">1 · Lợi thế cạnh tranh</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Tập trung vào ba ngách chuyên sâu</h2>
+    <div class="cols c3">
+      <div class="sheet"><h3>Thuật ngữ chuẩn</h3><p>Một từ điển thuật ngữ dùng chung cho trích xuất keyword, sinh lời giảng và kiểm định. Thuật ngữ tiêu chuẩn (CNN, kernel, feature map) được giữ nguyên; chỉ từ tiếng Anh thông dụng trong câu tiếng Việt được Việt hoá.</p></div>
+      <div class="sheet"><h3>Cá nhân hoá học tập</h3><p>Đề cương và kết quả quiz được dùng để phân bổ lại thời lượng: ưu tiên nội dung có trong đề cương và nội dung người học còn yếu; đồng thời liệt kê những nội dung chưa có trong slide.</p></div>
+      <div class="sheet"><h3>Kiểm định minh bạch</h3><p>Mọi chỉ số được tính trên lời giảng cuối cùng, không áp điểm sàn. Mỗi lần chạy ghi nhật ký chỉ số, thời gian từng bước và lượng token thực tế.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. GTM & metrics -->
+<section class="slide" data-notes="Chiến lược tiếp cận thị trường và hệ chỉ số người dùng. Nêu rõ chỉ số nào đã có dữ liệu.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">1 · Thị trường &amp; chỉ số</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Chiến lược tiếp cận và hệ chỉ số đánh giá</h2>
+    <div class="cols c2">
+      <div class="sheet"><h3>Go-to-market</h3><ul>
+        <li>Dùng thử miễn phí có điều kiện: người dùng đồng ý chia sẻ dữ liệu ẩn danh cho đánh giá và cải thiện mô hình.</li>
+        <li>Nhóm khởi đầu: giảng viên khối ngành CNTT/AI (slide tiếng Anh, lời giảng tiếng Việt, mật độ thuật ngữ cao).</li>
+        <li>Nhóm thứ hai: người tự ôn tập với đề cương và kết quả quiz.</li>
+        <li>Xây dựng social proof từ cộng đồng nhỏ trước khi mở rộng.</li>
+      </ul></div>
+      <div class="sheet"><h3>Chỉ số người dùng</h3>
+        <table class="ledger" style="margin-top:6px">
+          <tr><th>Chỉ số</th><th>Hiện trạng</th></tr>
+          <tr><td>Sửa lời giảng theo cảnh, kiểm định lại</td><td class="print">Có trong sản phẩm</td></tr>
+          <tr><td>Tỉ lệ tạo lại, sửa nhanh</td><td class="print">Có thao tác, chưa tổng hợp</td></tr>
+          <tr><td>Tỉ lệ copy / tải kịch bản</td><td class="muted">Định hướng</td></tr>
+          <tr><td>Điểm đánh giá, phản hồi</td><td class="muted">Định hướng</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Pipeline -->
+<section class="slide" data-notes="Kiến trúc pipeline hiện tại và cách các module tương ứng với các agent trong kế hoạch.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">2 · AI core &amp; pipeline</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Pipeline nhiều bước, mỗi bước có đầu ra kiểm tra được</h2>
+    <div class="pipe">
+      <div class="node"><b>M1 · Trích xuất</b><span>Đọc PPTX/PDF theo luật, lưu toạ độ phần tử; định vị bảng, biểu đồ, SmartArt, hình ảnh, trang scan.</span><span class="tag">OCR theo vùng</span></div>
+      <div class="node"><b>Cây tri thức</b><span>Keyword TF-IDF giữ dấu tiếng Việt, Gemini chấm trọng số theo lô; chia chương; phân bổ thời lượng.</span><span class="tag">Trọng số điều chỉnh được</span></div>
+      <div class="node"><b>M2 · Lập kế hoạch</b><span>Hiểu toàn bài, vai trò sư phạm từng trang, ngân sách từ W = thời lượng × WPM / 60.</span><span class="tag">Script agent</span></div>
+      <div class="node"><b>M3 · Diễn đạt</b><span>Lời giảng (mẫu hoặc AI) → quy tắc tiêu đề và từ nối → SSML ngắt nghỉ → gợi ý hình ảnh 13 loại có mốc thời gian.</span><span class="tag">Storyboard · Audio config</span></div>
+      <div class="node"><b>M4 · Kiểm định</b><span>Hiệu chỉnh không bổ sung nội dung ngoài nguồn, lập lại prosody, đo 10 chỉ số, ra quyết định, ghi nhật ký.</span><span class="tag">QA loop</span></div>
+    </div>
+    <p class="foot">Mô hình mặc định: Gemini 3.6 Flash qua proxy máy chủ. Hỗ trợ khoá riêng của người dùng cho Gemini, Claude, OpenAI và OpenRouter (bao gồm các mô hình Qwen). Chế độ theo mẫu không gọi API.</p>
+  </div>
+</section>
+
+<!-- 7. Hallucination & accuracy -->
+<section class="slide" data-notes="Các cơ chế bảo đảm độ chính xác: căn cứ nguồn, thuật ngữ, OCR theo vùng, quy tắc diễn ngôn.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">2 · Độ chính xác</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Lời giảng bám sát tài liệu gốc</h2>
+    <div class="cols c2" style="align-items:start">
+      <div class="cols" style="gap:16px">
+        <div class="sheet"><h3>Căn cứ nguồn</h3><p>Khi lời giảng ngắn hơn ngân sách, hệ thống chỉ bổ sung từ ghi chú giảng viên, bảng/sơ đồ đã OCR và định nghĩa rút từ chính tài liệu; không chèn câu đệm. Chỉ số grounding đo tỉ lệ từ nội dung có trong nguồn.</p></div>
+        <div class="sheet"><h3>OCR theo vùng</h3><p>Chỉ các vùng đã định vị được OCR. tesseract.js (tiền xử lý ảnh, dựng lại hàng/cột bảng) cho bảng và trang scan; Gemini vision cho sơ đồ, biểu đồ và hình ảnh.</p></div>
+      </div>
+      <div class="cols" style="gap:16px">
+        <div class="sheet"><h3>Thư viện thuật ngữ</h3><p>Chuẩn hoá cách viết thuật ngữ, thay bản dịch gượng bằng thuật ngữ chuẩn, giữ nguyên câu tiếng Anh trích dẫn từ slide.</p></div>
+        <div class="sheet"><h3>Quy tắc diễn ngôn</h3><p>Từ nối chỉ được giữ khi có quan hệ đối lập, nhân quả hoặc trình tự thực sự; tối đa 1 trên 3 câu và 25% toàn bài. Mỗi tiêu đề mục được nhắc tối đa một lần; tiêu đề chương chỉ xuất hiện ở trang đầu chương.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 8. Memory & cá nhân hoá -->
+<section class="slide" data-notes="Trình bày phần bộ nhớ hiện có và tính năng cá nhân hoá theo đề cương và quiz, minh hoạ bằng tệp mẫu.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">2 · Bộ nhớ &amp; cá nhân hoá</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Dữ liệu học tập điều chỉnh trọng số bài giảng</h2>
+    <div class="cols c2" style="align-items:start">
+      <div>
+        <p style="margin:0 0 14px;font-size:24px"><b>Trọng số trang</b> = α · slide gốc + β · mức khớp đề cương + γ · mức sai trong quiz</p>
+        <table class="ledger">
+          <tr><th>Kết quả đọc tệp mẫu</th><th class="num">Giá trị</th></tr>
+          <tr><td>Số bài quiz / điểm trung bình</td><td class="num">2 bài · 60%</td></tr>
+          <tr><td>Vùng kiến thức cần củng cố</td><td class="num">4</td></tr>
+          <tr><td>Câu trả lời sai (kèm đáp án, phân tích)</td><td class="num">8</td></tr>
+          <tr><td>Thuật ngữ trọng tâm</td><td class="num">np.vstack, df.describe, OPTICS…</td></tr>
+        </table>
+        <p class="foot" style="margin-top:10px">Đề cương: .docx, .md, .txt. Kết quả quiz: .md hoặc .json.</p>
+      </div>
+      <div class="cols" style="gap:16px">
+        <div class="sheet"><h3>Áp dụng vào giáo án</h3><p>Trang khớp đề cương và lỗ hổng quiz được tăng thời lượng; trang ngoài đề cương được giảm; trang đã khoá giữ nguyên; tổng thời lượng không đổi. Keyword trọng tâm ôn tập được đánh dấu.</p></div>
+        <div class="sheet"><h3>Bộ nhớ ngắn hạn</h3><p>Mỗi bài giảng lưu cây trọng số, chỉnh sửa lời giảng và nhật ký các lần chạy; kết quả LLM được cache theo nội dung.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 9. Chi phí & đo lường -->
+<section class="slide" data-notes="Cơ chế đo token và chi phí hiện có. Nêu rõ con số 20 USD là mục tiêu vận hành.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">3 · Chi phí &amp; đo lường</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Đo lường token và chi phí cho từng lần chạy</h2>
+    <div class="cols c2" style="align-items:start">
+      <table class="ledger">
+        <tr><th>Cơ chế hiện có</th></tr>
+        <tr><td>Token lấy từ dữ liệu usage của API: prompt, output và thinking; các lần gọi không có usage được đánh dấu “ước tính”.</td></tr>
+        <tr><td>Chi phí tính theo bảng giá từng mô hình; mô hình chưa có giá công bố được ghi “chưa xác định”.</td></tr>
+        <tr><td>Cache kết quả LLM theo nội dung; lượt dùng cache được ghi nhận với 0 token.</td></tr>
+        <tr><td>Nhật ký benchmark mỗi lần chạy (Firestore và JSON): chỉ số, thời gian từng bước, từng lần gọi LLM.</td></tr>
+        <tr><td>Quét tài liệu gom keyword theo lô, tuân thủ giới hạn RPM của gói miễn phí.</td></tr>
+      </table>
+      <div class="cols" style="gap:16px">
+        <div class="sheet"><h3>Mục tiêu vận hành</h3><p>Khoảng 20 USD cho 1,5 tháng thử nghiệm, dựa trên chế độ theo mẫu làm mặc định, cache và mô hình chi phí thấp cho tác vụ phụ.</p></div>
+        <div class="sheet"><h3>Độ trễ đo được</h3><p>Pipeline 62 trang (chế độ theo mẫu): 260 ms. Trích keyword 200 trang: 227 ms.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 10. Bảo mật & guardrails -->
+<section class="slide" data-notes="Hiện trạng bảo mật và guardrails.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">3 · Bảo mật &amp; guardrails</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Bảo vệ khoá API, dữ liệu người dùng và đầu ra</h2>
+    <table class="ledger">
+      <tr><th style="width:30%">Hạng mục</th><th>Cơ chế</th><th style="width:17%">Trạng thái</th></tr>
+      <tr><td>Khoá API</td><td>Khoá dùng chung chỉ nằm trong biến môi trường máy chủ, được sử dụng qua proxy <code>/api</code> có kiểm tra origin; không đưa vào mã phía trình duyệt.</td><td><span class="stamp good" style="font-size:22px;min-width:0">Đang áp dụng</span></td></tr>
+      <tr><td>Dữ liệu người dùng</td><td>Quy tắc Firestore: bài giảng và nhật ký chỉ chủ sở hữu được đọc và ghi.</td><td><span class="stamp good" style="font-size:22px;min-width:0">Đang áp dụng</span></td></tr>
+      <tr><td>Lọc đầu ra</td><td>Loại bỏ metadata, nhãn nội bộ, số trang, ký tự lỗi khỏi lời giảng; đo tỉ lệ vi phạm.</td><td><span class="stamp good" style="font-size:22px;min-width:0">Đang áp dụng</span></td></tr>
+      <tr><td>Golden dataset</td><td>Bộ ca kiểm thử chạy qua pipeline, so sánh với lần chạy gần nhất để phát hiện suy giảm chất lượng.</td><td><span class="stamp good" style="font-size:22px;min-width:0">Đang áp dụng</span></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 11. Benchmark -->
+<section class="slide" data-notes="Số liệu benchmark hiện tại. Trình bày khách quan cả chỉ số đạt và chưa đạt.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">3 · Kết quả đo lường</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Kết quả benchmark hiện tại</h2>
+    <table class="ledger">
+      <tr><th>Chỉ số</th><th class="num">Kết quả</th><th>Phạm vi đo</th></tr>
+      <tr><td>Grounding (từ nội dung có trong nguồn)</td><td class="num print"><b>90,9%</b></td><td>Deck CNN 5 slide</td></tr>
+      <tr><td>Grounding</td><td class="num print"><b>100%</b></td><td>3 ca golden (CNN, Quicksort, ACID)</td></tr>
+      <tr><td>Câu mở đầu bằng từ nối sau bộ lọc</td><td class="num print"><b>2/10</b></td><td>Bản nháp thử nghiệm có từ nối ở 11/11 câu</td></tr>
+      <tr><td>Lặp tiêu đề mục / chương</td><td class="num print"><b>0</b></td><td>Deck 62 trang</td></tr>
+      <tr><td>Độ lệch thời lượng (DAR-P)</td><td class="num"><b>23,2%</b></td><td>Deck CNN, mục tiêu 180 s; ngưỡng đạt ≤ 15%</td></tr>
+      <tr><td>Phủ khái niệm · điểm tổng (golden)</td><td class="num print"><b>50–100% · 0,92–0,95</b></td><td>4 ca; tiêu chí thời lượng chưa đạt do nội dung ca thử ngắn so với mục tiêu 60 s</td></tr>
+      <tr><td>Kiểm thử tự động</td><td class="num print"><b>26/26</b></td><td>Quy tắc diễn ngôn, cây trọng số, hiệu chỉnh quiz, nhật ký token</td></tr>
+    </table>
+    <p class="foot">Chế độ theo mẫu, đo ngày 25/09/2026. Dữ liệu chi tiết: docs/benchmarks/pitch-2026-09-25.json.</p>
+  </div>
+</section>
+
+<!-- 12. Hạ tầng -->
+<section class="slide" data-notes="Kiến trúc MVP đang vận hành.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">4 · Hạ tầng &amp; triển khai</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Kiến trúc MVP đang vận hành</h2>
+    <table class="ledger">
+      <tr><th style="width:26%">Tầng</th><th>Thành phần</th></tr>
+      <tr><td>Frontend</td><td>React 18, TypeScript, Vite, Tailwind; triển khai trên Vercel. Pipeline xử lý chạy trên trình duyệt.</td></tr>
+      <tr><td>Serverless</td><td><code>/api/llm/gemini</code> (proxy LLM), <code>/api/telemetry/langfuse</code> (telemetry).</td></tr>
+      <tr><td>Dữ liệu</td><td>Firebase Authentication, Firestore (bài giảng, nhật ký benchmark), Cloudinary (tệp nguồn).</td></tr>
+      <tr><td>OCR</td><td>tesseract.js tải theo nhu cầu (2 worker song song) và Gemini vision.</td></tr>
+      <tr><td>Quan sát</td><td>Langfuse, nhật ký benchmark theo từng lần chạy, trang đánh giá trong khu quản trị.</td></tr>
+      <tr><td>Backend Python</td><td>FastAPI có trong mã nguồn, chưa triển khai trong môi trường vận hành.</td></tr>
+    </table>
+    <p class="foot">Địa chỉ triển khai: clsg-ir-studio.vercel.app</p>
+  </div>
+</section>
+
+<!-- 13. Đội ngũ -->
+<section class="slide" data-notes="Phân công trong đội.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">5 · Đội ngũ</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Phân công công việc</h2>
+    <table class="ledger">
+      <tr><th style="width:12%">Thành viên</th><th style="width:22%">Vai trò</th><th>Trách nhiệm chính</th></tr>
+      <tr><td><b>My</b></td><td>Product &amp; Pitch Lead</td><td>Khảo sát người dùng, phân tích 3–5 đối thủ, pitch deck và bộ câu hỏi Q&amp;A, unit economics (chi phí token/video so với giá bán), chọn bộ tài liệu demo.</td></tr>
+      <tr><td><b>Dinh</b></td><td>DevOps &amp; Infrastructure</td><td>Dockerfile, CI/CD dev/staging, kết nối OpenRouter / Qwen, cache Redis, giám sát P99 và token, xác thực và bảo vệ dữ liệu.</td></tr>
+      <tr><td><b>Minh</b></td><td>Lead Dev</td><td>API contract / JSON schema, orchestrator end-to-end, frontend React (kịch bản, timeline, tạo lại, copy), bộ nhớ ngắn hạn và dài hạn.</td></tr>
+      <tr><td><b>Thiên</b></td><td>Main Dev</td><td>Prompt và workflow cho Research / Script agent, QA loop chống hallucination, thư viện thuật ngữ và phoneme, guardrails.</td></tr>
+      <tr><td><b>Kiệt</b></td><td>Sub Dev</td><td>Storyboard agent (mốc thời gian, gợi ý hình ảnh), giới hạn ký tự khung hình, metadata TTS (nhịp thở, ngắt nghỉ), hệ thống đánh giá golden dataset và chỉ số người dùng.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 14. Định hướng tương lai -->
+<section class="slide" data-notes="Các hạng mục trong kế hoạch chưa có trong hệ thống.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">Định hướng tương lai</span><span class="tiet"></span></div>
+  <div class="body">
+    <h2>Các hạng mục tiếp theo</h2>
+    <table class="ledger">
+      <tr><th style="width:22%">Mảng</th><th>Hạng mục</th><th style="width:14%">Phụ trách</th></tr>
+      <tr><td>Agent</td><td>Research agent tìm số liệu cập nhật trên web; kịch bản hội thoại hai giọng; bộ nhớ dài hạn theo văn phong từng giảng viên.</td><td>Thiên · Minh</td></tr>
+      <tr><td>Storyboard &amp; audio</td><td>Giới hạn ký tự cho từng khung hình; nhịp thở, từ cảm thán; phoneme mapping cho TTS; tích hợp TTS và dựng video.</td><td>Kiệt</td></tr>
+      <tr><td>Kiểm định</td><td>Đối chiếu từng câu với transcript giảng viên; LLM judge; mở rộng golden dataset bằng bài giảng thực tế.</td><td>Thiên · Kiệt</td></tr>
+      <tr><td>Chi phí</td><td>Định tuyến mô hình Qwen cho tác vụ phụ, cache Redis phía máy chủ, hạn mức token Normal / VIP, bảng theo dõi P99 và token trên mỗi phút video.</td><td>Dinh</td></tr>
+      <tr><td>Bảo mật</td><td>Bộ lọc prompt injection và nội dung ngoài phạm vi ở tầng serverless; xác thực người dùng cho proxy LLM.</td><td>Dinh · Thiên</td></tr>
+      <tr><td>Hạ tầng</td><td>Dockerfile, CI/CD GitHub Actions, môi trường staging; triển khai backend FastAPI; logging tập trung.</td><td>Dinh</td></tr>
+      <tr><td>Sản phẩm</td><td>Quiz trực tiếp trong VideoLearn; thu thập tỉ lệ copy, tạo lại và điểm đánh giá; khảo sát giảng viên.</td><td>My · Minh</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 15. Kết -->
+<section class="slide" data-notes="Cảm ơn và mời hội đồng đặt câu hỏi.">
+  <div class="band"><span class="mark">V</span><span class="name">VideoLearn</span><span class="sub">Hỏi đáp</span><span class="tiet"></span></div>
+  <div class="body" style="justify-content:center">
+    <h1>Xin cảm ơn quý hội đồng.</h1>
+    <p class="lead">Trải nghiệm sản phẩm: clsg-ir-studio.vercel.app</p>
+    <div style="display:flex;align-items:center;gap:28px;margin-top:44px">
+      <span class="stamp good press">Hỏi đáp</span>
+      <span class="muted" style="font-size:22px">My · Dinh · Minh · Thiên · Kiệt</span>
+    </div>
+  </div>
+</section>
+
+</div></div>
+
+<div class="nav prev" aria-hidden="true"></div>
+<div class="nav next" aria-hidden="true"></div>
+<div class="ruler"><i id="bar"></i></div>
+<div class="timer" id="timer">10:00</div>
+<div class="notes" id="notes"></div>
+<div class="help">← → chuyển trang · F toàn màn hình · T đồng hồ · N ghi chú</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var stage = document.getElementById('stage');
+  var bar = document.getElementById('bar');
+  var notes = document.getElementById('notes');
+  var timerEl = document.getElementById('timer');
+  var idx = 0;
+
+  slides.forEach(function (s, i) {
+    var t = s.querySelector('.tiet');
+    if (t) t.textContent = 'Tiết ' + (i + 1) + ' / ' + slides.length;
+  });
+
+  function fit() {
+    var k = Math.min(window.innerWidth / 1600, window.innerHeight / 900);
+    stage.style.transform = 'scale(' + k + ')';
+  }
+
+  function show(n) {
+    idx = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach(function (s, i) {
+      s.classList.toggle('active', i === idx);
+      s.classList.toggle('past', i < idx);
+    });
+    bar.style.transform = 'scaleX(' + (idx + 1) / slides.length + ')';
+    notes.innerHTML = '<b>Tiết ' + (idx + 1) + ':</b> ' + (slides[idx].getAttribute('data-notes') || '');
+    try { history.replaceState(null, '', '#' + (idx + 1)); } catch (e) {}
+  }
+
+  var start = null, tick = null;
+  function toggleTimer() {
+    if (tick) { clearInterval(tick); tick = null; timerEl.classList.remove('on'); return; }
+    start = Date.now(); timerEl.classList.add('on');
+    tick = setInterval(function () {
+      var left = 600 - Math.floor((Date.now() - start) / 1000);
+      var a = Math.abs(left);
+      timerEl.textContent = (left < 0 ? '−' : '') + Math.floor(a / 60) + ':' + String(a % 60).padStart(2, '0');
+      timerEl.classList.toggle('late', left < 0);
+    }, 250);
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (['ArrowRight', 'PageDown', ' ', 'Enter'].indexOf(e.key) >= 0) { e.preventDefault(); show(idx + 1); }
+    else if (['ArrowLeft', 'PageUp', 'Backspace'].indexOf(e.key) >= 0) { e.preventDefault(); show(idx - 1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key === 'f' || e.key === 'F') { if (!document.fullscreenElement) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+    else if (e.key === 't' || e.key === 'T') toggleTimer();
+    else if (e.key === 'n' || e.key === 'N') notes.classList.toggle('on');
+  });
+  document.querySelector('.nav.prev').addEventListener('click', function () { show(idx - 1); });
+  document.querySelector('.nav.next').addEventListener('click', function () { show(idx + 1); });
+  var x0 = null;
+  document.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (x0 === null) return;
+    var dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 40) show(idx + (dx < 0 ? 1 : -1));
+    x0 = null;
+  });
+
+  var help = document.querySelector('.help');
+  setTimeout(function () { help.classList.add('gone'); }, 4000);
+  window.addEventListener('resize', fit);
+  fit();
+  var fromHash = parseInt((location.hash || '').slice(1), 10);
+  show(isNaN(fromHash) ? 0 : fromHash - 1);
+})();
+</script>
+</body>
+</html>
