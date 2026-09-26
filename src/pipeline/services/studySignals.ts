@@ -78,9 +78,13 @@ function topicsFromLines(lines: { text: string; heading?: number; bold?: string[
       c.keyTerms.push(...line.bold.filter((b) => b.length > 1 && b.length < 60));
     }
   }
-  return topics
+  const cleaned = topics
     .map((t) => ({ ...t, text: t.text.trim(), keyTerms: Array.from(new Set(t.keyTerms.map((k) => k.replace(/[:：]\s*$/, '').trim()).filter(Boolean))) }))
     .filter((t) => t.title || t.text);
+  // The document's own title ("# Đề cương ôn tập cuối kỳ" with the chapters below it) is not a topic.
+  const first = cleaned[0];
+  if (first && cleaned.length > 1 && !first.text && !first.keyTerms.length && cleaned[1].level > first.level) return cleaned.slice(1);
+  return cleaned;
 }
 
 async function parseDocx(buf: ArrayBuffer): Promise<SyllabusTopic[]> {

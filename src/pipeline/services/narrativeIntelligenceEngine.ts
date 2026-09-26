@@ -29,13 +29,11 @@ import {
 export interface RevoiceContext {
   role?: string;
   isChapterStart?: boolean;
-  /** Analogy keys already voiced in this lecture (mutated). */
-  usedAnalogies: Set<string>;
 }
 
 const QUESTION_ROLES = new Set(['HOOK', 'INTRODUCTION', 'THINK', 'QUESTION']);
 
-export class NarrativeIntelligenceEngine {
+class NarrativeIntelligenceEngine {
   private analogyCatalog: Record<string, AnalogyPoint & { cue: RegExp }> = {
     pose: {
       cue: /(pose|keypoint|khung xương)/i,
@@ -153,14 +151,8 @@ export class NarrativeIntelligenceEngine {
       text = sentences.join(' ');
     }
 
-    // 3. Analogy, once per lecture, only when its concept is actually being explained here.
-    const key = Object.keys(this.analogyCatalog).find((k) => this.analogyCatalog[k].source_domain === beat.analogy?.source_domain);
-    if (key && isVietnamese && !ctx.usedAnalogies.has(key) && this.analogyCatalog[key].cue.test(text)) {
-      const a = this.analogyCatalog[key];
-      text = `${text} Có thể hình dung ${a.target_concept} giống như ${a.source_domain}: ${a.mapping_explanation}.`;
-      ctx.usedAnalogies.add(key);
-    }
-
+    // No analogy is spoken here: the catalog analogies are not in the user's document, so saying them
+    // would present invented content as the lecture. beat.analogy stays in the Narrative IR as a hint.
     return text;
   }
 

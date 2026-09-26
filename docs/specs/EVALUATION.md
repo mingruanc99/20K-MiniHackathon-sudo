@@ -53,8 +53,12 @@ All metrics are computed on the **final** lecture, after repairs. T_target is th
 | **Prosody validity** | pauses whose duration is inside the range for their type (syntactic 150–250 ms, emphasis 300–450, concept boundary 500–700, section transition 800–1200) / pauses | reported |
 | **Keyword coverage** | top-3 active keywords per active page that are actually spoken / all such keywords | reported |
 | **Visual coverage** | located regions whose OCR reading shows up in the narration (≥ 20% overlap of content tokens) / located regions | reported |
+| **Formula integrity** | 1 − altered formula spans / formula spans in the narration. A span written with math symbols (operators, arrows, Greek letters, LaTeX) must appear verbatim in its section's source; spacing is the only difference allowed | 100% (any altered span fails) |
+| **Style conformance** | 0.6 × (1 − styled scenes containing a banned phrase / styled scenes) + 0.4 × sentence-length fit to the style profile. Only scenes the LLM wrote in the chosen style count | ≥ 0.9 pass, else warning (never fails) |
 
 Grounding is a lexical proxy. A high score does not prove the narration is factually correct.
+
+Formula integrity and style conformance are checks only: they are not part of the dimension scores. A failed formula check still makes the decision **FAIL**, because a wrong formula is worse than a missing one.
 
 ### Dimension scores and the decision
 
@@ -83,6 +87,7 @@ The guard repairs the text without inventing content:
 - It strips metadata and labels.
 - It removes duplicate sentences.
 - It trims over-long intros.
+- It restores formulas to their source spelling. A narration span that matches a source formula up to spacing, dash/multiplication variants or LaTeX-vs-Unicode spelling is rewritten to the source form (`θ ← θ − α∇J(θ)` → `$\theta \leftarrow \theta - \alpha \nabla J(\theta)$`). The scene's on-screen `formulas` are always the source formulas, verbatim.
 
 After repairing the text, it **re-plans prosody** from the final words.
 

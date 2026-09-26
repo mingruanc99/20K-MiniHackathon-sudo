@@ -2,14 +2,16 @@
 /**
  * Re-weights the knowledge tree for exam review from a syllabus and quiz results.
  *
- *   final_p = α · slide_p + β · syllabus_p + γ · quizGap_p        (each term normalized to 0..1)
+ *   want_p = duration_p × (1 + (β · syllabus_p + γ · quizGap_p) / α)   (syllabus_p, quizGap_p in 0..1)
  *
- * slide_p     current share of lecture time of page p (what the deck itself emphasizes)
+ * duration_p  current time of page p (what the deck itself emphasizes); α = weight of the slides
  * syllabus_p  best TF-IDF cosine between the page and a syllabus topic (+ bonus for its bold key terms)
- * quizGap_p   Σ gap.weight · similarity(page, gap): where the learner actually failed
- * Page durations are then set proportional to final_p (locked pages keep theirs) and the tree is
- * rebalanced to the same total length. Gaps matched to a page add "focus" keywords there; gaps that
- * match no page are reported (the deck does not cover them).
+ * quizGap_p   Σ gap.weight · similarity(page, gap) over the gaps this page teaches (a gap counts on its
+ *             best-matching page and pages nearly as good, not on every page that mentions a word)
+ * Pages with a signal grow to want_p; the extra time is taken from pages with no signal, which keep at
+ * least MIN_KEEP of their time (if that is not enough, every increase shrinks by the same factor).
+ * The total length stays the same and locked pages keep their time. Gaps matched to a page add "focus"
+ * keywords there; gaps that match no page are reported (the deck does not cover them).
  * When an LLM is available it maps topics/gaps to pages as well, which helps when the syllabus is
  * Vietnamese and the slides are English; the stronger of the two scores wins.
  */
@@ -45,6 +47,23 @@ export interface CalibrationResult {
 }
 
 type Vec = Map<string, number>;
+
+/** Share of its time a page with no syllabus/quiz signal always keeps. */
+const MIN_KEEP = 0.4;
+
+/** True when the page (or a chapter above it) is locked by the user. */
+function byLocked(tree: KnowledgeTree, pageId: string): boolean {
+  const walk = (n: KnowledgeTreeNode, lockedAbove: boolean): boolean | undefined => {
+    const locked = lockedAbove || Boolean(n.locked);
+    if (n.id === pageId) return locked;
+    for (const c of n.children) {
+      const r = walk(c, locked);
+      if (r !== undefined) return r;
+    }
+    return undefined;
+  };
+  return Boolean(walk(tree.root, false));
+}
 
 function buildIdf(docs: string[][]): Map<string, number> {
   const df = new Map<string, number>();
@@ -168,10 +187,15 @@ export async function calibrateWithStudySignals(
   const gapBest = gaps.map(() => -1);
   gaps.forEach((g, gi) => {
     const gv = vectorize(contentTokens(g.text), idf);
-    pages.forEach((p, pi) => {
+    const scores = pages.map((p, pi) => {
       const termHit = g.keyTerms.some((k) => k.length > 2 && pageTextLower[pi].includes(k.toLowerCase())) ? 0.25 : 0;
-      const s = Math.max(cosine(gv, pageVecs[pi]) + termHit, llmScore(llm?.gaps, g.id, p.section_id));
-      if (s >= 0.15) {
+      return Math.max(cosine(gv, pageVecs[pi]) + termHit, llmScore(llm?.gaps, g.id, p.section_id));
+    });
+    const best = Math.max(...scores, 0);
+    scores.forEach((s, pi) => {
+      // A mistake belongs to the page that teaches it: the best match, plus pages nearly as good
+      // (a PyTorch question must not also weigh on the NumPy page because both mention arrays).
+      if (s >= 0.15 && s >= best * 0.75) {
         quiz[pi] += g.weight * s;
         reasons[pi].push({ label: `Quiz sai: ${g.label}`, score: s * g.weight });
       }
@@ -187,13 +211,27 @@ export async function calibrateWithStudySignals(
     return m > 0 ? xs.map((x) => x / m) : xs.map(() => 0);
   };
   const before = pages.map((p) => p.duration_sec || 0);
-  const slideN = norm(before);
-  const sylN = norm(syl);
+  const sylN = norm(syl.map((s) => (s >= 0.18 ? s : 0)));
   const quizN = norm(quiz);
-  const wSum = (topics.length ? weights.syllabus : 0) + (gaps.length ? weights.quiz : 0) + weights.slide || 1;
-  const final = pages.map(
-    (_, i) => (weights.slide * slideN[i] + (topics.length ? weights.syllabus * sylN[i] : 0) + (gaps.length ? weights.quiz * quizN[i] : 0)) / wSum
-  );
+  // Each page keeps its own time and grows with its signals: multiplier = 1 + (β·syllabus + γ·quiz) / α.
+  // The extra time comes from pages with no signal (they keep at least MIN_KEEP of their time), so a
+  // page the learner failed never loses time to another page the way a plain re-normalisation would.
+  const alpha = Math.max(0.05, weights.slide);
+  const boost = pages.map((_, i) => ((topics.length ? weights.syllabus * sylN[i] : 0) + (gaps.length ? weights.quiz * quizN[i] : 0)) / alpha);
+  const locked = pages.map((p) => Boolean(byLocked(tree, p.id)));
+  const hasSignal = boost.map((b, i) => b > 0.01 && !locked[i]);
+  const want = before.map((b, i) => (hasSignal[i] ? b * (1 + boost[i]) : b));
+  const extra = want.reduce((sum, w, i) => sum + (hasSignal[i] ? w - before[i] : 0), 0);
+  const donors = before.map((b, i) => (!hasSignal[i] && !locked[i] ? b : 0));
+  const donorTotal = donors.reduce((a, b) => a + b, 0);
+  const pool = donorTotal * (1 - MIN_KEEP);
+  const scale = extra > pool ? pool / extra : 1;
+  const taken = extra * scale;
+  const final = before.map((b, i) => {
+    if (locked[i]) return b;
+    if (hasSignal[i]) return b + (want[i] - b) * scale;
+    return donorTotal ? b - (donors[i] / donorTotal) * taken : b;
+  });
 
   // Apply: set page durations proportional to final (locked pages untouched), keep total.
   const target = tree.root.duration_sec || tree.settings.target_duration_sec;
@@ -208,7 +246,7 @@ export async function calibrateWithStudySignals(
 
   pages.forEach((p, i) => {
     const node = byId.get(p.id)!;
-    if (!node.locked) node.duration_sec = Math.max(5, Math.round(final[i] * 1000));
+    if (!node.locked) node.duration_sec = Math.max(5, Math.round(final[i]));
   });
   // Focus keywords from matched gaps
   gaps.forEach((g, gi) => {

@@ -1,19 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React,{ useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import { CompactChart } from '../../components/admin/CompactChart';
 import { useAdmin } from '../../components/admin/AdminLayout';
 import {
-  Cpu,
-  Zap,
-  DollarSign,
-  Clock,
-  Layers,
-  Sparkles,
   Flame,
-  ArrowUpRight,
-  TrendingUp,
-  Activity,
-  RefreshCw
+  ArrowUpRight,RefreshCw
 } from 'lucide-react';
 
 export const AdminAILlmPage: React.FC = () => {

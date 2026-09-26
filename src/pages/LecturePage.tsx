@@ -4,8 +4,8 @@
  * The full studio (M1–M4 viewers) and the detailed Knowledge Inspector stay one click away
  * under "Nâng cao".
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import React,{ useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Check,
@@ -37,6 +37,7 @@ import { diagnoseLecture, FixAction, FixItem } from '../services/qualityFixes';
 import { KnowledgeTree, KnowledgeTreeNode, Project, UserConfiguration } from '../types';
 import { DECISION_LABEL, fmtClock, gradeStamp, lectureDocument, lectureStage } from '../services/lectureStatus';
 import { markLectureMoved } from './LectureBoardPage';
+import { exportStudioScript } from '../pipeline/export/scriptMarkdown';
 import { StudyCalibrationPanel } from '../components/knowledge/StudyCalibrationPanel';
 
 type View = 'review' | 'result';
@@ -328,7 +329,12 @@ const FixPanel: React.FC<{ fixes: FixItem[]; busy: boolean; onAction: (a: FixAct
     <h2 id="fix-title" className="flex items-baseline gap-3 border-b border-pen-line px-4 py-3">
       <span className="font-hand text-2xl leading-none text-pen">Lời phê</span>
       <span className="text-sm text-pen/80">
-        {fixes.length} điểm cần sửa, kèm cách sửa <AlertTriangle className="inline h-3.5 w-3.5 align-[-2px]" />
+        {(() => {
+          const required = fixes.filter((f) => !f.optional).length;
+          const optional = fixes.length - required;
+          return [required ? `${required} điểm cần sửa, kèm cách sửa` : '', optional ? `${optional} gợi ý không bắt buộc` : ''].filter(Boolean).join(' · ');
+        })()}{' '}
+        <AlertTriangle className="inline h-3.5 w-3.5 align-[-2px]" />
       </span>
     </h2>
     <ol className="divide-y divide-pen-line/70">
@@ -336,7 +342,7 @@ const FixPanel: React.FC<{ fixes: FixItem[]; busy: boolean; onAction: (a: FixAct
         <li key={f.checkId} className="space-y-2 px-4 py-4">
           <div className="flex flex-wrap items-baseline gap-x-2">
             <h3 className="text-sm font-semibold text-ink">{f.title}</h3>
-            <span className={`text-xs font-medium ${f.severity === 'FAILED' ? 'text-pen' : 'text-pen'}`}>{f.severity === 'FAILED' ? 'Chưa đạt' : 'Cảnh báo'}</span>
+            <span className={`text-xs font-medium ${f.optional ? 'text-ink-faint' : 'text-pen'}`}>{f.optional ? 'Tuỳ chọn' : f.severity === 'FAILED' ? 'Chưa đạt' : 'Cảnh báo'}</span>
           </div>
           <p className="text-sm text-ink-soft">{f.why}</p>
           <ul className="list-disc space-y-0.5 pl-5 text-sm text-ink-soft">
@@ -392,7 +398,7 @@ const ResultView: React.FC<{
   const lang = (ir.configuration.narration_language || ir.configuration.language) === 'en' ? 'en-US' : 'vi-VN';
   const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
   const fixes = useMemo(() => diagnoseLecture(project), [project]);
-  const flagged = useMemo(() => new Set(fixes.flatMap((f) => f.sceneIds)), [fixes]);
+  const flagged = useMemo(() => new Set(fixes.filter((f) => !f.optional).flatMap((f) => f.sceneIds)), [fixes]);
   useEffect(() => () => canSpeak && window.speechSynthesis.cancel(), []);
 
   const openEditors = (ids: string[]) => {
@@ -428,6 +434,9 @@ const ResultView: React.FC<{
   const base = slug(project.title);
   const script = ir.scenes.map((s) => `[${fmtClock(s.scene_start_time_sec)}] ${s.topic}\n${s.narration.text}`).join('\n\n');
   const ssml = ir.scenes.map((s) => `<!-- ${s.section_id}: ${s.topic} -->\n${s.prosody_plan.ssml_full}`).join('\n\n');
+  // Video Studio handoff script (source/HANDOFF-TEAM-KICH-BAN.md), linted with the same rules.
+  const studio = useMemo(() => exportStudioScript(ir, { sourceFileName: project.source?.fileName }), [ir, project.source?.fileName]);
+  const studioErrors = studio.issues.filter((i) => i.level === 'error').length;
   const editCount = Object.keys(drafts).length;
 
   const stats: { label: string; value: React.ReactNode; note?: string; warn?: boolean }[] = [
@@ -463,11 +472,40 @@ const ResultView: React.FC<{
         ))}
       </dl>
 
+      {ir.generation_notes && ir.generation_notes.length > 0 && (() => {
+        // Only blame the AI when "AI viết" was chosen and some pages fell back to the template.
+        const llmCount = ir.scenes.filter((s) => s.narration_source === 'llm').length;
+        const aiFailed = ir.configuration.narrationEngine === 'llm' && llmCount < ir.scenes.length;
+        const heading = !aiFailed ? 'Lưu ý về bài giảng' : llmCount > 0 ? 'AI chỉ viết được một phần bài giảng' : 'AI không viết được bài giảng này, đang hiển thị lời giảng theo mẫu';
+        return (
+        <div role="status" className={`rounded-2xl border px-4 py-3 text-sm text-ink ${aiFailed ? 'border-pen-line bg-pen-soft' : 'border-rule bg-paper-sheet'}`}>
+          <p className={`font-semibold ${aiFailed ? 'text-pen' : 'text-ink'}`}>{heading}</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-ink-soft">
+            {ir.generation_notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
+        </div>
+        );
+      })()}
       {fixes.length > 0 && <FixPanel fixes={fixes} busy={busy} onAction={onAction} onJump={(id) => openEditors([id])} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => download(`${base}.txt`, script)} className="inline-flex items-center gap-1.5 rounded-xl bg-cover px-3.5 py-2 text-sm font-semibold text-paper hover:bg-cover-deep">
           <Download className="h-4 w-4" /> Kịch bản (.txt)
+        </button>
+        <button
+          type="button"
+          onClick={() => download(`${base}.kich-ban.md`, studio.markdown, 'text/markdown')}
+          title={studio.issues.length ? studio.issues.slice(0, 8).map((i) => `${i.level === 'error' ? 'Lỗi' : 'Lưu ý'} · ${i.where}: ${i.message}`).join('\n') : 'Đạt mọi kiểm tra của quy chuẩn kịch bản Studio'}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-rule-strong bg-paper-sheet px-3.5 py-2 text-sm font-medium text-ink-soft hover:bg-paper-band"
+        >
+          Kịch bản Studio (.md)
+          {studio.issues.length > 0 && (
+            <span className={`rounded-full px-1.5 text-xs tabular-nums ${studioErrors ? 'bg-pen-soft text-pen' : 'bg-paper-band text-ink-faint'}`}>
+              {studioErrors ? `${studioErrors} lỗi` : `${studio.issues.length} lưu ý`}
+            </span>
+          )}
         </button>
         <button type="button" onClick={() => download(`${base}.ssml.xml`, ssml, 'application/xml')} className="inline-flex items-center gap-1.5 rounded-xl border border-rule-strong bg-paper-sheet px-3.5 py-2 text-sm font-medium text-ink-soft hover:bg-paper-band">
           SSML cho TTS
@@ -571,7 +609,7 @@ export const LecturePage: React.FC = () => {
   const [editRequest, setEditRequest] = useState<{ ids: string[]; nonce: number } | null>(null);
   /** Set when a run or re-check just finished, so the grade stamp presses once. */
   const [gradedAt, setGradedAt] = useState(0);
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const saveTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -675,6 +713,13 @@ export const LecturePage: React.FC = () => {
     }
   };
 
+  // "Lưu và tạo lại" from the Knowledge Inspector lands here with ?rerun=1: generate once, then drop the flag.
+  useEffect(() => {
+    if (!project || searchParams.get('rerun') !== '1') return;
+    setSearchParams({}, { replace: true });
+    generate();
+  }, [project?.projectId]);
+
   const handleFix = (a: FixAction) => {
     if (!project) return;
     switch (a.kind) {
@@ -699,9 +744,6 @@ export const LecturePage: React.FC = () => {
         break;
       case 'edit_scenes':
         setEditRequest({ ids: (a.value as string[]) || [], nonce: Date.now() });
-        break;
-      case 'open_studio':
-        navigate(`/projects/${project.projectId}`);
         break;
     }
   };
@@ -903,11 +945,6 @@ export const LecturePage: React.FC = () => {
                 Sơ đồ trọng số, vùng ảnh & OCR
               </Link>
             </li>
-            <li>
-              <Link to={`/projects/${project.projectId}`} className="block rounded-lg px-2 py-1.5 text-ink-soft hover:bg-paper-band hover:text-ink">
-                Studio đầy đủ (M1–M4, SSML, visual cue)
-              </Link>
-            </li>
           </ul>
           <p className="mt-2 px-2 text-xs text-ink-faint">Trạng thái: {stage === 'done' ? 'đã tạo' : stage === 'attention' ? 'cần xem lại' : stage === 'review' ? 'chờ duyệt cấu trúc' : 'mới tải lên'}</p>
         </section>
@@ -915,5 +952,3 @@ export const LecturePage: React.FC = () => {
     </div>
   );
 };
-
-export default LecturePage;

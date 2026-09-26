@@ -51,8 +51,6 @@ export class InstructionalPlanner {
     if (config.narrationStyle === 'conversational') pauseFactor = 0.20;
     if (config.accessibility?.slowerPacing) pauseFactor = 0.24;
 
-    const netSpeakingSec = totalSec * (1.0 - pauseFactor);
-    const totalWordBudget = Math.round(netSpeakingSec * (wpm / 60));
 
     // Heuristic duration distribution weights
     let durations: number[];

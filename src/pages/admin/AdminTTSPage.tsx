@@ -1,16 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React,{ useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import {
   Volume2,
-  Mic,
-  Clock,
-  DollarSign,
-  CheckCircle2,
-  AlertTriangle,
-  Play,
-  Layers,
-  Sparkles,
-  RefreshCw
+  Mic,Layers,RefreshCw
 } from 'lucide-react';
 
 export const AdminTTSPage: React.FC = () => {

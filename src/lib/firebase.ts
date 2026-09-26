@@ -23,7 +23,6 @@ import {
   getDocs,
   query,
   where,
-  updateDoc,
   deleteDoc,
   serverTimestamp
 } from 'firebase/firestore';
@@ -77,7 +76,6 @@ export {
   getDocs,
   query,
   where,
-  updateDoc,
   deleteDoc,
   serverTimestamp
 };

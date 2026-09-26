@@ -113,7 +113,10 @@ const STARTS_WITH_VERB_EN = /^(?:is|are|can|will|uses?|makes?|allows?|reduces?|i
 const CODE_RE = /(^\s*(def|class|import|from|return|for|while|if|elif|else|try|except|const|let|var|function|public|private)\b.*[:({=])|[{};]\s*$|=>|\bconsole\.|\bprint\(|^\s*#include|^\s*\$ /;
 const EXAMPLE_RE = /^(ví dụ|vd|chẳng hạn|e\.g\.|eg\.|example|for example|for instance)\s*[:.,-]?\s*/iu;
 const NUMBER_VALUE_RE = /^[~≈<>≤≥]?\s*[-+]?\d[\d.,]*\s*(%|[a-zA-Zµ°/]{0,8}|nghìn|ngàn|triệu|tỷ|tỉ|giây|phút|giờ|ngày|lần)?(\s*\([^)]*\))?\.?$/iu;
-const MATH_RE = /[\^_√∑∏∫∂∇≈≤≥×÷]|\b(log|exp|sin|cos|tan|max|min|argmax|argmin|softmax|sigmoid)\s*\(|\([^)]*[,+\-*/][^)]*\)|[a-zA-Z]\s*[*/+\-]\s*[a-zA-Z0-9]/;
+const CITATION_TERM_RE = /^(nguồn|nguồn ảnh|nguồn tham khảo|tham khảo|trích dẫn|source|sources|credit|credits|reference|references|image credit)(\s*:|\s|$)/iu;
+// Operators between single-letter operands only ("x - y", "a/b", "W*x"): "Top-Down" and
+// "17 điểm / 19 cạnh" are words, not math.
+const MATH_RE = /[\^_√∑∏∫∂∇≈≤≥×÷]|\b(log|exp|sin|cos|tan|max|min|argmax|argmin|softmax|sigmoid)\s*\(|\([^)]*[,+\-*/][^)]*\)|(?<!\p{L})[a-zA-Z]\s*[*/+\-]\s*[a-zA-Z0-9](?![\p{L}\p{N}])/u;
 const SEPARATORS = [': ', ' – ', ' — ', ' - ', ' = ', ' => ', ' ≈ '];
 
 const wordCount = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
@@ -155,7 +158,8 @@ export function analyzeLine(line: SourceLine, lang: Lang): AnalyzedLine | null {
       return { ...base, shape: 'metric', term, body, sep: sep.trim() };
     }
     if (sep.trim() === '=' || sep.trim() === '≈' || MATH_RE.test(body)) return { ...base, shape: 'formula', term, body, sep: sep.trim() };
-    if (wordCount(body) >= 2) return { ...base, shape: 'definition', term, body, sep: sep.trim() };
+    // A term names something: "1–4: mắt, tai" is a numbered list item and "Nguồn: COCO" a citation, not definitions.
+    if (wordCount(body) >= 2 && /\p{L}/u.test(term) && !CITATION_TERM_RE.test(term)) return { ...base, shape: 'definition', term, body, sep: sep.trim() };
   }
 
   if (/[=≈]/.test(text) && MATH_RE.test(text)) return { ...base, shape: 'formula', ...splitFormula(text) };
@@ -190,7 +194,7 @@ function kindOf(head: AnalyzedLine | undefined, items: AnalyzedLine[], opts: Com
   return 'list';
 }
 
-export function groupLines(lines: AnalyzedLine[], opts: ComposeOptions): (LineGroup | AnalyzedLine)[] {
+function groupLines(lines: AnalyzedLine[], opts: ComposeOptions): (LineGroup | AnalyzedLine)[] {
   const out: (LineGroup | AnalyzedLine)[] = [];
   const hasLevels = new Set(lines.map((l) => l.level)).size > 1;
   let i = 0;
@@ -321,7 +325,7 @@ const hasViMark = (w: string) => /[̀-ͯ]/.test(w.normalize('NFD')) || /đ/i.tes
  * Wrapping it in a frame produces hybrid grammar ("X là bridging the gap"), so it is read verbatim.
  * Short phrases (<= 2 words: "max pooling", "CNN") are terms and stay frameable.
  */
-export function isForeignLine(text: string, lang: Lang): boolean {
+function isForeignLine(text: string, lang: Lang): boolean {
   const ws = text.split(/\s+/).filter((w) => /\p{L}/u.test(w));
   if (ws.length < 3) return false;
   const marked = ws.filter(hasViMark).length;
@@ -616,7 +620,7 @@ export interface ComposedPage {
 }
 
 /** Parses a table reading ("a | b\nc | d") back into rows. */
-export function tableRowsFromText(text: string): string[][] {
+function tableRowsFromText(text: string): string[][] {
   const rows = text
     .split('\n')
     .map((r) => r.split(' | ').map((c) => c.trim()))

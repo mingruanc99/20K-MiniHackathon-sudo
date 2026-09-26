@@ -339,6 +339,8 @@ export function applyHeadingPolicy(
           ? ownIdx === sIdx ? 'this topic' : ownIdx > sIdx ? 'the next part' : 'the earlier part'
           : ownIdx === sIdx ? 'nội dung này' : ownIdx > sIdx ? 'phần tiếp theo' : 'phần trước';
         current = replaceHeading(current, h.text, reference);
+        // The heading may have opened the sentence: "Các loại pooling bao gồm..." -> "Nội dung này bao gồm..."
+        current = current.charAt(0).toLocaleUpperCase(isEn ? 'en' : 'vi') + current.slice(1);
         stats.details.push({ sceneId, heading: h.text, action: 'replaced' });
       }
       if (!drop) kept.push(current);

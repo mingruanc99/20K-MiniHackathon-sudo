@@ -4,7 +4,7 @@
  * teacher's remark (what to do next) and a grade stamp (status). Entries needing action come first;
  * ledger-edge tabs filter by status. The entry that just changed gets its stamp pressed once.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React,{ useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Loader2, PenLine, Trash2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -415,4 +415,3 @@ export function markLectureMoved(projectId: string) {
   }
 }
 
-export default LectureBoardPage;

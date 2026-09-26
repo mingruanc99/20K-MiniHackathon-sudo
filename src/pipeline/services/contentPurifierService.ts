@@ -24,7 +24,7 @@ export interface ValidationReport {
   failures: string[];
 }
 
-export class ContentPurifierService {
+class ContentPurifierService {
   // 1. Pagination & Page Numbering Patterns (e.g., "1 / 52", "p. 10", "page 2 of 50")
   private paginationPatterns: RegExp[] = [
     /\b\d+\s*[/|]\s*\d+\b/g,
@@ -39,14 +39,6 @@ export class ContentPurifierService {
     /\b(?:all rights reserved|bản quyền|copyright|confidential|proprietary)\b/gi,
     /https?:\/\/[^\s]+/gi,
     /\b(?:v\d+\.\d+(?:\.\d+)?|version\s*\d+)\b/gi
-  ];
-
-  // 3. Section Role Badges, Prompt Directives & Internal Section Labels
-  private sectionLabelPatterns: RegExp[] = [
-    /\b(?:hãy suy nghĩ|hãy thử suy nghĩ|suy nghĩ một chút)\b/gi,
-    /\b(?:s[1-9]\d*|slide\s*\d+|section\s*\d+|phân cảnh\s*\d+)\b/gi,
-    /\b(?:hook|mechanism|example|technical|core_concept|key_explanation|summary|application|comparison|evidence|transition|decorative)\b/gi,
-    /\b(?:s1\s*[-–:]\s*hook|s2\s*[-–:]\s*think|s3\s*[-–:]\s*example|s4\s*[-–:]\s*mechanism)\b/gi
   ];
 
   // 4. Instructor Notes, Speaker Cues & Parenthetical Internal Directives
@@ -198,6 +190,9 @@ export class ContentPurifierService {
 
     // Step 0: Normalize Unicode, control characters, geometric bullets and ranges
     text = this.normalizeUnicodeAndSymbols(text);
+    // "Slide 1: Title" / "Trang 3 - Title": drop the label together with its separator
+    // (the pagination rule below would otherwise leave ": Title").
+    text = text.replace(/^(?:slide|trang|page)\s*\d+\s*[:.\-–—|]\s*/i, '');
 
     // Remove parenthetical instructor notes
     for (const pat of this.instructorNotePatterns) {
@@ -219,11 +214,13 @@ export class ContentPurifierService {
       text = text.replace(pat, ' ');
     }
 
-    // Clean bullets / dashes / numbering prefix
-    text = text.replace(/^[•\-\*·■□▪▫●◆▶◄►‣⁃∙\u25A0-\u25FF\uE000-\uF8FF\uFFFD\d\.\)]\s*/, '');
+    // A bullet glyph, or a list number followed by "." / ")" ("1. ", "2) "). A bare leading number is
+    // content ("17 điểm có tên"), not numbering, and stays.
+    text = text.replace(/^(?:[•\-\*·■□▪▫●◆▶◄►‣⁃∙■-◿-�]|\d{1,2}[.)](?=\s))\s*/, '');
 
-    // Clean up excessive punctuation and spacing
+    // Clean up excessive punctuation and spacing; a removed label can leave a leading separator.
     text = text.replace(/\s+/g, ' ').replace(/\s+([.,;:!?])/g, '$1').trim();
+    text = text.replace(/^[:;,.\-–—|·]+\s*/, '');
 
     return text;
   }

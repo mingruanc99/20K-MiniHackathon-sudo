@@ -3,7 +3,7 @@
  * Benchmark & evaluation from real run logs (no constants).
  * Sources: benchmark run logs (localStorage + Firestore projects/{id}/runs) and golden regression runs.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React,{ useEffect, useMemo, useState } from 'react';
 import { Download, RefreshCw, FlaskConical, Loader2, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { CompactChart } from '../../components/admin/CompactChart';
 import { benchmarkService } from '../../services/benchmark/benchmarkService';
@@ -342,4 +342,3 @@ const RunDetail: React.FC<{ run: BenchmarkRunLog }> = ({ run }) => (
   </div>
 );
 
-export default AdminEvaluationPage;

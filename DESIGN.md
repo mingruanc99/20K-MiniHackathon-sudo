@@ -211,7 +211,7 @@ The printed form is Be Vietnam Pro at a few steady sizes with tabular figures ev
 
 Depth is paper-flat: pages rest on the ground with a hairline edge and one long, faint blue-tinted drop under the ledger sheet. The one signature motion is the stamp press: when a lecture has just been generated or re-checked, its grade stamp presses onto the entry once.
 
-**Scope.** This world is route-scoped by the `ledger-world` class on the app shell (`/` and `/lectures/*`). The "Nâng cao" studio (`/advanced`, `/projects/*`), the Knowledge Inspector and `/admin` keep the older studio look (see the legacy note below). The cover band is shared by every route.
+**Scope.** This world is route-scoped by the `ledger-world` class on the app shell (`/` and `/lectures/*`). The Knowledge Inspector (`/knowledge`, the "Nâng cao" nav item) and `/admin` keep the older studio look (see the legacy note below). The cover band is shared by every route.
 
 **Key Characteristics:**
 - Ledger-blue cover band (56px, 4px cover-deep bottom rule) with foil wordmark over paper ground.

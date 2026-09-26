@@ -1,24 +1,13 @@
 // src/pages/admin/AdminSettingsPage.tsx
-import React, { useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import React,{ useState } from 'react';
 import { BOOTSTRAP_ADMIN_EMAIL, ADMIN_PERMISSIONS } from '../../services/rbacService';
-import { adminTelemetryService } from '../../services/adminTelemetryService';
 import {
   Settings,
-  Shield,
-  Key,
-  Flame,
-  CheckCircle2,
-  Lock,
-  Layers,
-  Sparkles,
-  Server,
-  UserCheck
+  Shield,CheckCircle2,
+  Lock,Server
 } from 'lucide-react';
 
 export const AdminSettingsPage: React.FC = () => {
-  const { user } = useAuth();
-  const [purifierStrictness, setPurifierStrictness] = useState<'strict' | 'standard'>('strict');
   const [autoRepairEnabled, setAutoRepairEnabled] = useState(true);
 
   return (

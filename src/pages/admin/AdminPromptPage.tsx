@@ -1,15 +1,9 @@
 // src/pages/admin/AdminPromptPage.tsx
-import React, { useState } from 'react';
+import React,{ useState } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import { PromptMetadata } from '../../types';
 import {
-  Sliders,
-  CheckCircle2,
-  Clock,
-  Layers,
-  Search,
-  ExternalLink,
-  Flame,
+  Sliders,Flame,
   ArrowUpRight,
   GitBranch,
   FileCode,

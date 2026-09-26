@@ -337,11 +337,20 @@ export class PPTXExtractor {
       const titleShape =
         shapes.find((s) => s.kind === 'text' && (s.phType === 'title' || s.phType === 'ctrTitle')) ||
         shapes.find((s) => s.kind === 'text' && s.phType !== 'ftr' && s.phType !== 'sldNum' && s.phType !== 'dt');
-      let slideTitle = titleShape?.paragraphs?.map((p) => p.text).join(' ').trim() || `Slide ${slideNum}`;
+      // A real title placeholder may wrap over several paragraphs; a plain text box used as the title
+      // usually holds "title / subtitle", so only its first paragraph is the title.
+      const isTitlePlaceholder = titleShape?.phType === 'title' || titleShape?.phType === 'ctrTitle';
+      const titleParas = (titleShape?.paragraphs || []).map((p) => p.text.trim()).filter(Boolean);
+      const titleText = isTitlePlaceholder ? titleParas.join(' ') : titleParas[0] || '';
+      let slideTitle = titleText || `Slide ${slideNum}`;
       slideTitle = contentPurifierService.cleanLine(slideTitle) || slideTitle;
       if (slideNum === 1 && titleShape) overallTitle = slideTitle;
 
       elements.push({ element_id: nextId(), type: 'title', text: slideTitle, level: 1, bbox: titleShape ? norm(titleShape.box) : undefined });
+      if (!isTitlePlaceholder && titleParas.length > 1) {
+        const subtitle = contentPurifierService.cleanLine(titleParas.slice(1).join(' '));
+        if (subtitle) elements.push({ element_id: nextId(), type: 'heading', text: subtitle, level: 2 });
+      }
 
       let regionIdx = 1;
       const addRegion = (r: Omit<VisualRegion, 'region_id' | 'section_id' | 'page_number' | 'source'>) => {

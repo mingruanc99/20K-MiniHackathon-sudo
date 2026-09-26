@@ -36,7 +36,7 @@ export interface FilteredContentResult {
   excludedContent: string[];
 }
 
-export class NarrativePlannerService {
+class NarrativePlannerService {
   // Common metadata and boilerplate patterns to filter out
   private metadataPatterns: RegExp[] = [
     /\b(aicb-[a-z0-9]+|data track|vinuniversity|stanford|mit|harvard)\b/i,

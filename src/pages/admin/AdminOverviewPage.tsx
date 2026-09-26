@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React,{ useState, useEffect } from 'react';
 import { useAdmin } from '../../components/admin/AdminLayout';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import { CompactChart } from '../../components/admin/CompactChart';
@@ -11,12 +11,8 @@ import {
   Clock,
   AlertTriangle,
   Award,
-  Sparkles,
-  TrendingUp,
-  ArrowUpRight,
-  Flame,
-  CheckCircle2,
-  RefreshCw
+  Sparkles,ArrowUpRight,
+  Flame,RefreshCw
 } from 'lucide-react';
 
 export const AdminOverviewPage: React.FC = () => {

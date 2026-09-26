@@ -20,7 +20,7 @@ export const ADMIN_PERMISSIONS: AdminPermission[] = [
   'manage_lessons'
 ];
 
-export class RBACService {
+class RBACService {
   /**
    * Evaluates if user has ADMIN privileges.
    * Explicitly bootstraps hkthien@husc.edu.vn as permanent root admin.

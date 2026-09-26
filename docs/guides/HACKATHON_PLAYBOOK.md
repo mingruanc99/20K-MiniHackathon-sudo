@@ -113,8 +113,8 @@ flowchart TD
         UI["Modern Web App<br/>(Upload File, Slider Config, Live Timeline)"]
     end
 
-    subgraph Server["Backend API Tier (FastAPI / Python)"]
-        M1["Module 1: Deterministic Extractor<br/>(python-pptx | < 50ms)"]
+    subgraph Server["Pipeline in the browser (src/pipeline)"]
+        M1["Module 1: Deterministic Extractor<br/>(JSZip PPTX / pdf.js | < 50ms)"]
         M2["Module 2: Instructional Planner<br/>(Pacing Budget Calculator & Objectives)"]
         M3a["Module 3a: Script & Visual Intent Gen<br/>(WHAT to say & WHAT to show)"]
         M3b["Module 3b: Prosody & Pause Planner<br/>(HOW to deliver: Cognitive Pauses & SSML)"]

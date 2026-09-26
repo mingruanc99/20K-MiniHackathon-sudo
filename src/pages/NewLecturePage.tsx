@@ -4,16 +4,17 @@
  * The scan builds the document, reads tables & diagrams and proposes the weighted tree;
  * the lecture then opens on its review step.
  */
-import React, { useRef, useState } from 'react';
+import React,{ useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileUp, FileText, Loader2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { projectService } from '../services/projectService';
 import { cloudinaryService } from '../services/cloudinaryService';
 import { scanDocument, ScanProgress } from '../pipeline/services/documentScanner';
-import { warmUpTesseract } from '../pipeline/module1_extractor/visualRegionOcr';
+import { warmUpOcr } from '../pipeline/module1_extractor/visualRegionOcr';
 import { benchmarkService, buildScanRunLog, summarizeRun } from '../services/benchmark/benchmarkService';
-import { FileType, LearnerLevel, UserConfiguration } from '../types';
+import { FileType, LearnerLevel, NarrationStyle, UserConfiguration } from '../types';
+import { STYLE_IDS, STYLE_PROFILES } from '../pipeline/module3_generator/styleProfiles';
 import { markLectureMoved } from './LectureBoardPage';
 
 const ACCEPT = '.pptx,.pdf,.md,.markdown,.txt';
@@ -73,6 +74,8 @@ export const NewLecturePage: React.FC = () => {
   const [level, setLevel] = useState<LearnerLevel>('undergraduate');
   const [lang, setLang] = useState<'vi' | 'en'>('vi');
   const [engine, setEngine] = useState<'template' | 'llm'>('template');
+  // Default voice: source/sample.md (presenter talking to "bạn").
+  const [style, setStyle] = useState<NarrationStyle>('engaging');
   const [progress, setProgress] = useState<ScanProgress | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -87,7 +90,7 @@ export const NewLecturePage: React.FC = () => {
     setError('');
     setFile(f);
     // Slides and PDFs may hold tables/diagrams: load OCR while the user fills in the rest of the form.
-    if (ext === 'pptx' || ext === 'pdf') warmUpTesseract();
+    if (ext === 'pptx' || ext === 'pdf') warmUpOcr();
     if (!title) setTitle(f.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' '));
   };
 
@@ -107,7 +110,7 @@ export const NewLecturePage: React.FC = () => {
       targetDurationSeconds: 300,
       contentCoverage: coverage,
       targetWpm: 140,
-      narrationStyle: 'academic',
+      narrationStyle: style,
       visualDensity: 'balanced',
       narrationEngine: engine
     };
@@ -249,6 +252,17 @@ export const NewLecturePage: React.FC = () => {
           onChange={(v) => setEngine(v as 'template' | 'llm')}
           hint={engine === 'llm' ? 'Tự nhiên hơn, tốn token API.' : 'Không tốn token. Ghép ý trên slide thành câu: định nghĩa, các bước, ưu/nhược điểm, bảng số liệu.'}
         />
+        <Segmented
+          label="Phong cách"
+          value={style}
+          options={STYLE_IDS.map((id) => ({ id, label: STYLE_PROFILES[id].label }))}
+          onChange={(v) => setStyle(v as NarrationStyle)}
+          hint={
+            engine === 'llm'
+              ? `${STYLE_PROFILES[style].intent} Công thức luôn giữ nguyên văn tài liệu.`
+              : 'Theo mẫu: phong cách đổi câu dẫn, câu hỏi và câu chốt; nội dung vẫn lấy nguyên từ slide.'
+          }
+        />
       </div>
 
       {error && <p className="rounded-xl bg-pen-soft px-4 py-3 text-sm text-pen">{error}</p>}
@@ -279,5 +293,3 @@ export const NewLecturePage: React.FC = () => {
     </div>
   );
 };
-
-export default NewLecturePage;

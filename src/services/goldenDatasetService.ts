@@ -16,7 +16,7 @@ import { getBuiltinCnnTree } from '../pipeline/module1_extractor/builtinCnnTree'
 import { pipelineOrchestrator } from '../pipeline/orchestrator';
 import { benchmarkService } from './benchmark/benchmarkService';
 
-export const DEFAULT_GOLDEN_CASES: GoldenTestCase[] = [
+const DEFAULT_GOLDEN_CASES: GoldenTestCase[] = [
   {
     case_id: 'golden_01_cnn',
     title: 'Convolutional Neural Networks Foundations',

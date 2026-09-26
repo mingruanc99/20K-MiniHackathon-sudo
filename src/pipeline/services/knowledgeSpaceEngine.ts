@@ -11,16 +11,13 @@
 import {
   CanonicalDocumentTree,
   KnowledgeIR,
-  ConceptNode,
-  EvidenceArtifact,
-  AtomicProposition,
-  EpistemicEdge,
+  ConceptNode,EpistemicEdge,
   CurriculumIR,
   TeachingUnitPlan,
   EpistemicRole
 } from '../../types';
 
-export class KnowledgeSpaceEngine {
+class KnowledgeSpaceEngine {
   /**
    * Reconstructs the presentation-independent Knowledge Space
    */

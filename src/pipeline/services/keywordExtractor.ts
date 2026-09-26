@@ -28,7 +28,7 @@ export interface KeywordOptions {
 const VI_STOP = new Set(
   (
     'và của là các có được cho trong với một những này đó khi để từ theo về như thì mà nên nhưng hay hoặc cũng đã sẽ đang ' +
-    'rất nhiều ít hơn nhất vào ra lên xuống tại bởi vì nếu thế nào gì ai đâu sao bao không chưa chỉ còn lại đều cả ' +
+    'rất nhiều ít hơn nhất vào ra lên xuống tại bởi vì nếu nào gì ai đâu sao bao không chưa chỉ còn lại đều cả ' +
     'mỗi mọi hết việc sự cái chiếc ta chúng tôi bạn họ nó mình đây kia ấy nào thêm qua trên dưới giữa ' +
     'sau trước bằng do nhằm cùng đến tới vậy tức dụ slide trang phần'
   ).split(/\s+/)
@@ -37,13 +37,13 @@ const VI_STOP = new Set(
 const EN_STOP = new Set(
   (
     'the a an and or of to in on for with by from as at is are was were be been being this that these those it its ' +
-    'we you they he she our your their not no but if then than so such can could will would should may might must ' +
+    'we you they he she our your their not no but if then than such can could will would should may might must ' +
     'do does did have has had using use used via into over under about between each which what when where who how ' +
     'all any some more most other also only just very page slide figure table'
   ).split(/\s+/)
 );
 
-export const isStop = (tok: string) => VI_STOP.has(tok) || EN_STOP.has(tok) || /^\d+$/.test(tok) || tok.length < 2;
+const isStop = (tok: string) => VI_STOP.has(tok) || EN_STOP.has(tok) || /^\d+$/.test(tok) || tok.length < 2;
 
 /** Splits text into lowercase tokens; keeps letters with diacritics, digits, and inner hyphens. */
 export function tokenize(text: string): string[] {
@@ -55,22 +55,72 @@ export function contentTokens(text: string): string[] {
   return tokenize(text).filter((t) => !isStop(t));
 }
 
-/** Candidate n-grams (1..3 tokens) that neither start nor end with a stopword. */
+const hasDiacritic = (tok: string) => /[^\x00-\x7F]/.test(tok);
+
+/** A Vietnamese syllable written without diacritics: onset + rhyme + final ("thao", "tin", "con", "nghia"). */
+const VI_SYLLABLE = /^(ngh|ng|nh|ch|gh|gi|kh|ph|qu|th|tr|[bcdghklmnprstvx])?(uye|uya|uyu|ieu|yeu|uoi|uou|oai|oay|oeo|uay|uai|uau|ue|uy|oa|oe|oo|uo|ia|ie|ye|ua|ai|ao|au|ay|eo|eu|iu|oi|ui|uu|[aeiouy])(ch|ng|nh|[cmnpt])?$/;
+
+/** Lowercased ASCII words written capitalized in the source ("Human", "Pose", "CNN"): English terms. */
+function capitalizedLatin(text: string): Set<string> {
+  // A capitalized word without diacritics can still be Vietnamese ("Thao tác", "So sánh", "Tin học"):
+  // it counts as an English term only when it cannot be a Vietnamese syllable, is written like a term
+  // (PyTorch, CNN) or is hyphenated (Top-Down).
+  return new Set(
+    (text.match(/\b[A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)*\b/g) || [])
+      .filter((w) => /[A-Z].*[A-Z]|[0-9]|-/.test(w) || (w.length >= 3 && !VI_SYLLABLE.test(w.toLowerCase())))
+      .map((w) => w.toLowerCase())
+  );
+}
+
+/**
+ * Candidate terms. A clause is cut into runs at stopwords and where English terms meet Vietnamese
+ * syllables ("Giới thiệu về Human Pose Estimation Thị giác Máy tính" -> "giới thiệu" | "human pose
+ * estimation" | "thị giác máy tính"), so no candidate glues pieces of two words together.
+ *  - English runs: every 1-3 token n-gram (terms nest: "pose estimation" in "human pose estimation").
+ *  - Vietnamese runs: the whole run when it has 2-4 syllables ("mạng nơ-ron tích chập"), plus its
+ *    2-syllable compounds (most Vietnamese words), never a lone syllable.
+ */
 function candidates(text: string): string[] {
   const out: string[] = [];
-  // Split on punctuation first so n-grams never cross clause boundaries.
-  for (const clause of text.split(/[.,;:!?()\[\]{}"“”\n|→•]+/)) {
-    const toks = tokenize(clause);
-    for (let i = 0; i < toks.length; i++) {
-      for (let n = 1; n <= 3 && i + n <= toks.length; n++) {
-        const gram = toks.slice(i, i + n);
-        if (isStop(gram[0]) || isStop(gram[gram.length - 1])) continue;
-        if (n === 1 && gram[0].length < 3) continue;
-        out.push(gram.join(' '));
+  const latin = capitalizedLatin(text);
+  const isEnglish = (t: string) => latin.has(t) && !hasDiacritic(t);
+  // Split on punctuation first so candidates never cross clause boundaries.
+  for (const clause of text.split(/[.,;:!?()\[\]{}"“”\n|→•&]+/)) {
+    const runs: { en: boolean; toks: string[] }[] = [];
+    for (const t of tokenize(clause)) {
+      const last = runs[runs.length - 1];
+      if (isStop(t)) {
+        runs.push({ en: false, toks: [] });
+        continue;
       }
+      const en = isEnglish(t);
+      if (last && last.toks.length && last.en === en) last.toks.push(t);
+      else runs.push({ en, toks: [t] });
+    }
+    for (const { en, toks } of runs) {
+      if (!toks.length) continue;
+      if (en) {
+        for (let i = 0; i < toks.length; i++) for (let n = 1; n <= 3 && i + n <= toks.length; n++) out.push(toks.slice(i, i + n).join(' '));
+        continue;
+      }
+      if (toks.length >= 2 && toks.length <= 4) out.push(toks.join(' '));
+      if (toks.length >= 3) for (let i = 0; i + 2 <= toks.length; i++) out.push(toks.slice(i, i + 2).join(' '));
+      // Lowercase English words inside Vietnamese text ("kernel", "pooling") can stand alone.
+      if (toks.length === 1 && !hasDiacritic(toks[0]) && toks[0].length >= 4) out.push(toks[0]);
     }
   }
   return out;
+}
+
+/** True when two n-grams overlap without one containing the other (sliding windows of one phrase). */
+function partialOverlap(a: string, b: string): boolean {
+  if (a.includes(b) || b.includes(a)) return false;
+  const A = a.split(' ');
+  const B = b.split(' ');
+  for (let k = 1; k < Math.min(A.length, B.length) + 1; k++) {
+    if (A.slice(-k).join(' ') === B.slice(0, k).join(' ') || B.slice(-k).join(' ') === A.slice(0, k).join(' ')) return true;
+  }
+  return false;
 }
 
 function displayForm(gram: string, original: string): string {
@@ -149,6 +199,8 @@ export function extractLocalKeywords(pages: PageText[], opts: KeywordOptions): M
       const subsumed = kept.some((k) => k.gram.includes(s.gram) && k.count >= s.count);
       const subsumesKept = kept.findIndex((k) => s.gram.includes(k.gram) && s.count >= k.count);
       if (subsumed) continue;
+      // A higher-scored window of the same phrase is already kept ("pose estimation thị" vs "human pose estimation").
+      if (kept.some((k) => partialOverlap(k.gram, s.gram))) continue;
       if (subsumesKept >= 0 && s.score >= kept[subsumesKept].score * 0.6) kept.splice(subsumesKept, 1);
       kept.push(s);
       if (kept.length >= opts.maxPerPage * 3) break;

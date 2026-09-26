@@ -13,7 +13,7 @@ export interface CloudinaryUploadResult {
   bytes: number;
 }
 
-export class CloudinaryService {
+class CloudinaryService {
   private cloudName: string;
   private uploadPreset: string;
 

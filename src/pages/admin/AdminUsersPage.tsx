@@ -1,20 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React,{ useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import {
-  Users,
-  Search,
-  CheckCircle2,
-  Clock,
-  Shield,
-  BookOpen,
-  Cpu,
-  Volume2,
-  AlertTriangle,
-  X,
-  Mail,
-  RefreshCw
+  Search,Cpu,
+  Volume2,X,RefreshCw
 } from 'lucide-react';
-import { UserAdminRecord, UserRole } from '../../types';
+import { UserAdminRecord } from '../../types';
 
 export const AdminUsersPage: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<UserAdminRecord | null>(null);
@@ -37,13 +27,6 @@ export const AdminUsersPage: React.FC = () => {
     });
     return () => unsub();
   }, []);
-
-  const handleRoleChange = (userId: string, newRole: UserRole) => {
-    const success = adminTelemetryService.changeUserRole(userId, newRole);
-    if (success && selectedUser && selectedUser.id === userId) {
-      setSelectedUser({ ...selectedUser, role: newRole });
-    }
-  };
 
   const filteredUsers = users.filter((u) => {
     if (roleFilter !== 'all' && u.role !== roleFilter) return false;

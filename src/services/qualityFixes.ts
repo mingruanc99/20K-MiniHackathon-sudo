@@ -8,7 +8,7 @@ import { countLeadingConnectives, countHeadingMentions, splitSentences, HeadingS
 import { contentPurifierService } from '../pipeline/services/contentPurifierService';
 import { technicalTerminologyService } from '../pipeline/services/technicalTerminologyService';
 
-export type FixActionKind = 'set_duration' | 'switch_engine' | 'regenerate' | 'review_structure' | 'edit_scenes' | 'open_studio';
+export type FixActionKind = 'set_duration' | 'switch_engine' | 'regenerate' | 'review_structure' | 'edit_scenes';
 
 export interface FixAction {
   kind: FixActionKind;
@@ -26,6 +26,8 @@ export interface FixItem {
   sceneIds: string[];
   actions: FixAction[];
   severity: 'FAILED' | 'WARNING';
+  /** A suggestion the lecturer may ignore (listed after the required fixes). */
+  optional?: boolean;
 }
 
 const minutesLabel = (sec: number) => {
@@ -43,13 +45,17 @@ export function diagnoseLecture(project: Project): FixItem[] {
   if (!ir || !report) return [];
   const scenes = ir.scenes;
   const cfg = project.configuration;
-  const isLlm = cfg.narrationEngine === 'llm';
+  // What actually wrote the narration, not what was selected: "AI viết" falls back to the template engine
+  // when Gemini fails (rate limit), and blaming the AI for template text sends the user the wrong way.
+  // Lectures generated before narration_source existed fall back to the setting.
+  const hasSource = scenes.some((s) => s.narration_source);
+  const isLlm = hasSource ? scenes.some((s) => s.narration_source === 'llm') : cfg.narrationEngine === 'llm';
   const lang = (cfg.narration_language || cfg.language) === 'en' ? 'en' : 'vi';
   const failing = report.checks.filter((c) => c.status !== 'PASSED');
   const items: FixItem[] = [];
 
   const push = (c: ValidationCheck, item: Omit<FixItem, 'checkId' | 'severity'>) =>
-    items.push({ ...item, checkId: c.check_id, severity: c.status === 'FAILED' ? 'FAILED' : 'WARNING' });
+    items.push({ ...item, checkId: c.check_id, severity: c.status === 'FAILED' && !c.optional ? 'FAILED' : 'WARNING', optional: c.optional || c.check_id === 'chk_language_terminology' });
 
   for (const c of failing) {
     switch (c.check_id) {
@@ -165,9 +171,9 @@ export function diagnoseLecture(project: Project): FixItem[] {
         push(c, {
           title: 'Chêm tiếng Anh không cần thiết',
           why: 'Một số câu dùng từ tiếng Anh thông thường (scan, image, process…) thay vì tiếng Việt; thuật ngữ chuẩn như CNN, kernel vẫn được giữ.',
-          how: ['Sửa các cảnh được đánh dấu: thay từ tiếng Anh thông thường bằng tiếng Việt.'],
+          how: ['Không bắt buộc: nếu muốn, thay từ tiếng Anh thông thường bằng tiếng Việt ở các cảnh được đánh dấu.'],
           sceneIds: ids,
-          actions: [{ kind: 'edit_scenes', label: 'Sửa các cảnh này', value: ids, primary: true }]
+          actions: [{ kind: 'edit_scenes', label: 'Xem các cảnh này', value: ids }]
         });
         break;
       }
@@ -187,11 +193,12 @@ export function diagnoseLecture(project: Project): FixItem[] {
         push(c, {
           title: c.rule_name,
           why: c.message,
-          how: ['Xem chi tiết trong Studio đầy đủ.'],
+          how: [String(c.actual_value)],
           sceneIds: [],
-          actions: [{ kind: 'open_studio', label: 'Mở Studio' }]
+          actions: [{ kind: 'regenerate', label: 'Tạo lại' }]
         });
     }
   }
-  return items;
+  // Required fixes first, suggestions last.
+  return items.sort((a, b) => Number(Boolean(a.optional)) - Number(Boolean(b.optional)));
 }

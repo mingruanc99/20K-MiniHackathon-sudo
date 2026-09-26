@@ -21,6 +21,33 @@ import { technicalTerminologyService } from '../services/technicalTerminologySer
 
 const escapeXml = (w: string) => w.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+// Word ends are checked with a lookahead: \b only knows ASCII letters, so it never matches after "là" or "dụ".
+const END = String.raw`(?=[\s,.:;!?]|$)`;
+const EXAMPLE_START = new RegExp(`^(ví dụ|chẳng hạn|lấy ví dụ|hãy tưởng tượng|hãy hình dung|thử hình dung|giả sử|trong thực tế|for example|for instance|imagine|suppose)${END}`, 'i');
+const CONTRAST_START = new RegExp(`^(nhưng|tuy nhiên|tuy vậy|ngược lại|trái lại|however|but|yet|in contrast)${END}`, 'i');
+const TERM_LANDING = new RegExp(`(đó chính là|chính là|được gọi là|gọi là|hay còn gọi là|nghĩa là|tức là|is called|known as)${END}`, 'i');
+const CLOSING = /(tổng kết|tóm lại|nói ngắn gọn|kết luận|cảm ơn|hẹn gặp lại|in summary|to summarize|thank you)/i;
+
+/**
+ * Pause after a sentence, from what the sentence does and what comes next (natural lecture rhythm),
+ * always inside the type's range checked by the guard (PAUSE_RANGES_MS):
+ *   question -> time to think; term landed ("Đó chính là X") -> concept boundary; short list item ->
+ *   quick beat; exclamation -> punch; before an example / a contrast -> a clear turn; end of the page ->
+ *   section transition (longer after a closing line). Long sentences get a little extra breath.
+ */
+function contextualPostPause(text: string, wordCount: number, isLast: boolean, next?: string): { ms: number; type: PauseType } {
+  const t = text.trim();
+  const n = (next || '').trim();
+  if (isLast) return CLOSING.test(t) ? { ms: 1100, type: 'section_transition' } : { ms: 900, type: 'section_transition' };
+  if (EXAMPLE_START.test(n)) return { ms: 750, type: 'example_transition' };
+  if (t.endsWith('?')) return { ms: 700, type: 'concept_boundary' };
+  if (TERM_LANDING.test(t)) return { ms: 650, type: 'concept_boundary' };
+  if (CONTRAST_START.test(n)) return { ms: 600, type: 'concept_boundary' };
+  if (t.endsWith('!')) return { ms: 500, type: 'concept_boundary' };
+  if (wordCount <= 8) return { ms: 350, type: 'semantic' };
+  return { ms: Math.min(700, 450 + (wordCount > 22 ? 100 : 0)), type: 'semantic' };
+}
+
 export class ProsodyPlanner {
   private technicalKeywords = new Set([
     'convolution',
@@ -82,7 +109,8 @@ export class ProsodyPlanner {
         sText,
         words,
         isLast,
-        emphasisTerms
+        emphasisTerms,
+        rawSentences[sIdx + 1]
       );
 
       const sPauseMs = pauses.reduce((sum, p) => sum + p.duration_ms, 0) + postPauseMs;
@@ -137,7 +165,8 @@ export class ProsodyPlanner {
     text: string,
     words: string[],
     isLastSentence: boolean,
-    emphasisTerms: Set<string> = this.technicalKeywords
+    emphasisTerms: Set<string> = this.technicalKeywords,
+    nextSentence?: string
   ) {
     let lastEmphasisIdx = -10;
     const pauses: WordPause[] = [];
@@ -164,28 +193,24 @@ export class ProsodyPlanner {
 
       ssmlTokens.push(escapeXml(w));
 
-      // Check syntactic micro-pause after clause boundary (comma, semicolon)
-      if (w.endsWith(',') || w.endsWith(';') || w.endsWith(':')) {
+      // Syntactic micro-pause at a clause boundary. A colon announces what follows (a little longer);
+      // a comma before a contrast/addition word ("..., nhưng", "..., còn") lets the turn be heard.
+      if (idx < words.length - 1 && (w.endsWith(',') || w.endsWith(';') || w.endsWith(':'))) {
+        const next = (words[idx + 1] || '').toLowerCase();
+        const ms = w.endsWith(':') ? 250 : /^(nhưng|còn|mà|song|but|while|whereas)$/.test(next) ? 240 : 200;
         pauses.push({
           pause_id: `p_syn_${idx}`,
           pause_type: 'syntactic',
           after_word: w,
           word_index: idx,
-          duration_ms: 220,
-          justification: 'Ngắt nhịp cú pháp tại ranh giới mệnh đề nhằm giảm tải nhận thức'
+          duration_ms: ms,
+          justification: w.endsWith(':') ? 'Ngắt trước phần được liệt kê/giải thích' : 'Ngắt nhịp cú pháp tại ranh giới mệnh đề'
         });
-        ssmlTokens.push('<break time="220ms"/>');
+        ssmlTokens.push(`<break time="${ms}ms"/>`);
       }
     });
 
-    // Terminal pause: concept_boundary (600ms per Section 26 specification)
-    let postPauseMs = 600;
-    let postPauseType: PauseType = 'concept_boundary';
-
-    if (isLastSentence && (text.toLowerCase().includes('tổng kết') || text.toLowerCase().includes('in summary') || text.toLowerCase().includes('kết luận'))) {
-      postPauseMs = 1000;
-      postPauseType = 'section_transition';
-    }
+    const { ms: postPauseMs, type: postPauseType } = contextualPostPause(text, words.length, isLastSentence, nextSentence);
 
     return {
       pauses,

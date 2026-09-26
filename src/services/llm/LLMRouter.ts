@@ -15,13 +15,12 @@ import {
 } from '../../types';
 import { ILLMProvider, NarrationContext } from './LLMProvider';
 import { GeminiProvider } from './GeminiProvider';
-import { MockLLMProvider } from './MockLLMProvider';
 import { llmCache } from './llmCache';
 
 import { apiKeyService } from './apiKeyService';
 import { usageMeter } from './usageMeter';
 
-export class LLMRouter implements ILLMProvider {
+class LLMRouter implements ILLMProvider {
   private primaryProvider: ILLMProvider;
 
   constructor() {

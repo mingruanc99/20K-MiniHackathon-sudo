@@ -1,5 +1,5 @@
 // src/components/admin/AdminLayout.tsx
-import React, { useState, createContext, useContext, Suspense } from 'react';
+import React,{ useState, createContext, useContext, Suspense } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
@@ -17,9 +17,7 @@ import {
   Sliders,
   Settings,
   Search,
-  Bell,
-  LogOut,
-  ExternalLink,
+  Bell,ExternalLink,
   Shield,
   ArrowUpRight,
   Menu,
@@ -43,7 +41,7 @@ const AdminContext = createContext<AdminContextType>({
 export const useAdmin = () => useContext(AdminContext);
 
 export const AdminLayout: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('7d');

@@ -3,7 +3,7 @@ import React from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { rbacService, BOOTSTRAP_ADMIN_EMAIL } from '../../services/rbacService';
-import { ShieldAlert, ArrowLeft, Lock, UserCheck } from 'lucide-react';
+import { ArrowLeft, Lock, UserCheck } from 'lucide-react';
 
 export const AdminRoute: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const { user, loading, loginAsAdmin } = useAuth();

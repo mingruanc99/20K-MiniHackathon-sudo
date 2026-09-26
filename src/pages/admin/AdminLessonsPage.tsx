@@ -1,21 +1,14 @@
 // src/pages/admin/AdminLessonsPage.tsx
-import React, { useState, useEffect } from 'react';
+import React,{ useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
 import { Link } from 'react-router-dom';
 import {
-  BookOpen,
-  CheckCircle2,
-  Clock,
-  Layers,
+  BookOpen,Layers,
   Search,
   ExternalLink,
   Flame,
   ArrowUpRight,
-  X,
-  FileText,
-  DollarSign,
-  Cpu,
-  RefreshCw
+  X,RefreshCw
 } from 'lucide-react';
 import { LessonAdminItem } from '../../types';
 
@@ -301,7 +294,7 @@ export const AdminLessonsPage: React.FC = () => {
             {/* Modal Footer */}
             <div className="px-6 py-3 border-t border-rule bg-paper-band flex items-center justify-between">
               <Link
-                to={`/projects/${selectedLesson.id}`}
+                to={`/lectures/${selectedLesson.id}`}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-cover hover:bg-cover text-white font-medium text-xs rounded-xl transition shadow-xs"
               >
                 <span>Mở Trong Studio Bài Giảng</span>

@@ -17,7 +17,7 @@ import { countHeadingMentions, countLeadingConnectives, HeadingSpec, ConnectiveS
 import { tokenize } from '../../pipeline/services/keywordExtractor';
 import { BenchmarkMetrics, BenchmarkRunLog, BenchmarkRunSummary, BenchmarkTiming } from './benchmarkTypes';
 
-export const APP_VERSION = 'clsg-ir@1.1.0';
+const APP_VERSION = 'clsg-ir@1.1.0';
 const LOCAL_KEY = 'clsg_benchmark_runs';
 const LOCAL_MAX = 100;
 

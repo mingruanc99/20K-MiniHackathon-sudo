@@ -1,5 +1,5 @@
 // src/pages/RegisterPage.tsx
-import React, { useState } from 'react';
+import React,{ useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, User as UserIcon, AlertCircle } from 'lucide-react';

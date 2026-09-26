@@ -10,6 +10,8 @@ interface ImportMetaEnv {
   readonly VITE_CLOUDINARY_CLOUD_NAME?: string;
   readonly VITE_CLOUDINARY_UPLOAD_PRESET?: string;
   readonly OPENAI_API_KEY?: string;
+  /** Base URL of the VietOCR region OCR service (ocr_server/). Unset = tesseract only. */
+  readonly VITE_VIETOCR_URL?: string;
 }
 
 interface ImportMeta {

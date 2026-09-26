@@ -98,7 +98,7 @@ function canvasToImageInput(canvas: HTMLCanvasElement): LLMImageInput {
   return { mimeType: 'image/jpeg', data: dataUrl.slice(dataUrl.indexOf(',') + 1) };
 }
 
-export function cropCanvas(source: HTMLCanvasElement, bbox: number[], maxDim: number): LLMImageInput | null {
+function cropCanvas(source: HTMLCanvasElement, bbox: number[], maxDim: number): LLMImageInput | null {
   const [x1, y1, x2, y2] = bbox;
   const pad = 0.01;
   const sx = Math.max(0, Math.floor((x1 - pad) * source.width));
@@ -118,7 +118,7 @@ export function cropCanvas(source: HTMLCanvasElement, bbox: number[], maxDim: nu
   return canvasToImageInput(out);
 }
 
-export async function blobToImageInput(blob: Blob, maxDim: number): Promise<LLMImageInput | null> {
+async function blobToImageInput(blob: Blob, maxDim: number): Promise<LLMImageInput | null> {
   try {
     const bitmap = await createImageBitmap(blob);
     const ratio = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));

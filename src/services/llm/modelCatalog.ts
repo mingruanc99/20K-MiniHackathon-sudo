@@ -51,7 +51,7 @@ const CAPABILITIES: Record<string, ModelCapability> = {
 export const DEFAULT_MODEL = 'gemini-3.6-flash';
 
 /** Strip provider prefixes like "gemini:" or "google/" and version suffixes like "-001". */
-export function normalizeModelId(model: string): string {
+function normalizeModelId(model: string): string {
   return model
     .replace(/^[a-z]+:/i, '')
     .replace(/^(google|openai|anthropic)\//i, '')
@@ -59,11 +59,11 @@ export function normalizeModelId(model: string): string {
     .trim();
 }
 
-export function getModelPricing(model: string): ModelPricing | null {
+function getModelPricing(model: string): ModelPricing | null {
   return PRICING[normalizeModelId(model)] || null;
 }
 
-export function getModelCapability(model: string): ModelCapability {
+function getModelCapability(model: string): ModelCapability {
   return CAPABILITIES[normalizeModelId(model)] || CAPABILITIES[DEFAULT_MODEL];
 }
 
@@ -87,7 +87,7 @@ export interface ScanLimits {
   maxRegionsPerPage: number;
   /** Max visual regions OCR'd in the whole document. */
   maxRegionsTotal: number;
-  /** Max Gemini vision re-reads of regions tesseract could not read confidently. */
+  /** Max Gemini vision calls per scan: diagrams/charts plus re-reads of regions the text engine was unsure about. */
   maxVisionCalls: number;
   /** Wall-clock budget for the whole scan (ms). */
   budgetMs: number;
@@ -121,9 +121,9 @@ export function deriveScanLimits(model: string = DEFAULT_MODEL, budgetMs = 55_00
     pagesPerBatch,
     concurrency,
     maxRegionsPerPage: 3,
-    // OCR runs on local tesseract, so the region cap is about time, not API quota.
+    // Text OCR runs on VietOCR/tesseract, so the region cap is about time, not API quota.
     maxRegionsTotal: 40,
-    // Gemini vision only re-reads the few regions tesseract is unsure about.
+    // Gemini vision reads a few diagrams/charts and re-reads regions the text engine is unsure about.
     maxVisionCalls: cap.vision ? Math.min(3, requestsForOcr) : 0,
     budgetMs
   };

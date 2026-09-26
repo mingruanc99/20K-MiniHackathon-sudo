@@ -8,39 +8,41 @@
  * - Send all images to Vision LLM (Gemini 1.5 Pro / Flash)
  * - LLM returns a structured JSON identical to the legacy CanonicalDocumentTree
  * 
- * Replaces the brittle rule-based vector path extraction.
+ * Without a Gemini key, or when the Vision call fails (quota exhausted, 429, timeout), the whole
+ * document falls back to the rule-based text-layer extractor (pdfTextExtractor.ts): 0 tokens, and its
+ * located picture/table/scan regions are read by VietOCR/tesseract later in the scan.
  */
 import * as pdfjsLib from 'pdfjs-dist';
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.js?url';
-import { CanonicalDocumentTree, DocumentSection, ContentElement } from '../../types';
+import { CanonicalDocumentTree, DocumentSection } from '../../types';
 import { regionAssetStore } from './regionAssets';
 import { llmRouter } from '../../services/llm/LLMRouter';
-import { apiKeyService } from '../../services/llm/apiKeyService';
-
-if (typeof window !== 'undefined') {
-  try {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker || `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.js`;
-  } catch {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
-  }
-}
+import { PdfTextExtractor } from './pdfTextExtractor';
 
 export class PDFExtractor {
   async extract(fileData: ArrayBuffer | Blob | Uint8Array, filename: string): Promise<CanonicalDocumentTree> {
-    const startTime = performance.now();
-
-    const online = llmRouter.getOnlineProvider();
-    const canUseLLM = Boolean(online && online.hasApiKey());
-
-    if (!canUseLLM) {
-      throw new Error('Chưa cấu hình API Key. PDFExtractor phiên bản Vision AI bắt buộc phải có API Key để quét ảnh.');
-    }
-
     let uint8Array: Uint8Array;
     if (fileData instanceof Uint8Array) uint8Array = fileData;
     else if (fileData instanceof ArrayBuffer) uint8Array = new Uint8Array(fileData);
     else uint8Array = new Uint8Array(await fileData.arrayBuffer());
 
+    const online = llmRouter.getOnlineProvider();
+    if (!online || !online.hasApiKey()) return new PdfTextExtractor().extract(uint8Array, filename);
+    try {
+      // pdf.js transfers the buffer it is given to its worker: hand it a copy so the fallback can still read the file.
+      return await this.extractWithVision(uint8Array.slice(), filename, online);
+    } catch (err: any) {
+      console.warn('PDF Vision extraction failed, using the text layer instead:', err?.message || err);
+      const tree = await new PdfTextExtractor().extract(uint8Array, filename);
+      return { ...tree, metadata: { ...(tree.metadata || {}), vision_fallback: String(err?.message || err).slice(0, 200) } };
+    }
+  }
+
+  private async extractWithVision(
+    uint8Array: Uint8Array,
+    filename: string,
+    online: NonNullable<ReturnType<typeof llmRouter.getOnlineProvider>>
+  ): Promise<CanonicalDocumentTree> {
+    const startTime = performance.now();
     const pdfDoc = await pdfjsLib.getDocument({
       data: uint8Array,
       cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
@@ -103,7 +105,7 @@ Trả về BẮT BUỘC dưới định dạng JSON:
 }
 Lưu ý: Mảng 'sections' BẮT BUỘC phải có đúng ${numImagesInBatch} phần tử, tương ứng với ${numImagesInBatch} ảnh slide truyền vào.`;
 
-      const resultJson = await online!.generateJson<any>(
+      const resultJson = await online.generateJson<any>(
         prompt,
         systemInstruction,
         "PDF Vision Extraction",

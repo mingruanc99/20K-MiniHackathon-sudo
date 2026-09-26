@@ -4,7 +4,7 @@
  * (default 55 s, so the whole scan fits the 60 s envelope users expect).
  *
  *   extract (rule-based, ~1 s)
- *     ├─ OCR of located visual regions (Gemini vision / tesseract)  ┐ in parallel
+ *     ├─ OCR of located visual regions (VietOCR|tesseract / Gemini)  ┐ in parallel
  *     ├─ keyword weighting per page, batched to Gemini               │
  *     └─ chapter grouping from page titles (1 small Gemini call)     ┘
  *   merge OCR text -> local keywords for visual text -> build tree -> distribute durations
@@ -16,7 +16,7 @@ import { CanonicalDocumentTree, KnowledgeTree, KnowledgeTreeNode, UserConfigurat
 import { PPTXExtractor } from '../module1_extractor/pptxExtractor';
 import { PDFExtractor } from '../module1_extractor/pdfExtractor';
 import { MarkdownExtractor } from '../module1_extractor/markdownExtractor';
-import { ocrVisualRegions, mergeRegionsIntoTree, warmUpTesseract } from '../module1_extractor/visualRegionOcr';
+import { ocrVisualRegions, mergeRegionsIntoTree, warmUpOcr } from '../module1_extractor/visualRegionOcr';
 import { estimateDocumentContent } from './contentDuration';
 import { regionAssetStore } from '../module1_extractor/regionAssets';
 import {
@@ -31,6 +31,7 @@ import { llmRouter } from '../../services/llm/LLMRouter';
 import { deriveScanLimits, ScanLimits, DEFAULT_MODEL } from '../../services/llm/modelCatalog';
 import { usageMeter, summarizeCalls, LLMCallRecord } from '../../services/llm/usageMeter';
 import { apiKeyService } from '../../services/llm/apiKeyService';
+import { dropBoilerplate } from './boilerplate';
 
 export interface ScanProgress {
   stage: 'extract' | 'analyze' | 'build' | 'done';
@@ -127,7 +128,7 @@ async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Prom
   );
 }
 
-export async function extractSourceFile(file: File | Blob, filename: string): Promise<CanonicalDocumentTree> {
+async function extractSourceFile(file: File | Blob, filename: string): Promise<CanonicalDocumentTree> {
   const ext = filename.split('.').pop()?.toLowerCase() || '';
   if (ext === 'pptx') return new PPTXExtractor().extract(file, filename);
   if (ext === 'pdf') return new PDFExtractor().extract(file, filename);
@@ -188,10 +189,12 @@ export async function scanDocument(
     // 1. Extract
     progress('extract', 'Đang đọc cấu trúc tài liệu...', 5);
     let docTree = 'sections' in source ? source : await extractSourceFile(source, filename);
+    // Lines repeated on most pages ("Tổng quan nội dung phần N...", footers) are template, not content.
+    docTree = dropBoilerplate(docTree).tree;
     const tExtract = performance.now();
     const regions = docTree.visual_regions || [];
-    // Start loading tesseract now so it overlaps the analysis instead of eating the OCR budget.
-    if (regions.some((r) => !r.excluded && r.ocr?.engine !== 'native')) warmUpTesseract();
+    // Wake the OCR engine now so it overlaps the analysis instead of eating the OCR budget.
+    if (regions.some((r) => !r.excluded && r.ocr?.engine !== 'native')) warmUpOcr();
     progress('analyze', `Đã đọc ${docTree.total_sections} trang, ${regions.length} vùng hình ảnh. Đang phân tích...`, 20);
 
     const online = opts.useLLM !== false ? llmRouter.getOnlineProvider() : null;

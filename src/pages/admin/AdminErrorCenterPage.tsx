@@ -1,19 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React,{ useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
-import { ErrorRecord, ErrorSeverity } from '../../types';
+import { ErrorRecord } from '../../types';
 import {
   AlertOctagon,
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  Search,
-  Filter,
-  Flame,
+  AlertTriangle,Search,Flame,
   ArrowUpRight,
-  Check,
-  RotateCcw,
-  X,
-  RefreshCw
+  Check,X
 } from 'lucide-react';
 
 export const AdminErrorCenterPage: React.FC = () => {
@@ -22,16 +14,14 @@ export const AdminErrorCenterPage: React.FC = () => {
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [search, setSearch] = useState<string>('');
-  const [loading, setLoading] = useState(false);
-
   const refresh = async () => {
-    setLoading(true);
     await adminTelemetryService.syncRealData();
     setErrors([...adminTelemetryService.getErrorRecords()]);
-    setLoading(false);
   };
 
   useEffect(() => {
+    // Same as the other admin pages: pull fresh telemetry when the page opens.
+    refresh();
     const unsub = adminTelemetryService.subscribe(() => {
       setErrors([...adminTelemetryService.getErrorRecords()]);
     });

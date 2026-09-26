@@ -14,7 +14,7 @@
  * 8. Track decision trace explaining why terms were preserved or normalized
  */
 
-import technicalTermsData from '../..//config/technical_terms.json';
+import technicalTermsData from '../../config/technical_terms.json';
 
 export interface TermDefinition {
   canonical: string;
@@ -64,7 +64,7 @@ export interface NarrationValidationReport {
 const VIET_SYLLABLE =
   /^(ngh|ng|nh|ch|gh|gi|kh|ph|qu|th|tr|[bcdghklmnprstvx])?(uye|uya|uay|uoi|uou|ieu|yeu|oai|oay|oeo|uyu|ua|uo|ie|ye|ai|ao|au|ay|eo|eu|ia|iu|oa|oe|oi|ui|uu|uy|ue|[aeiouy])(ch|ng|nh|[cmnpt])?$/;
 
-export class TechnicalTerminologyService {
+class TechnicalTerminologyService {
   private static instance: TechnicalTerminologyService;
   private termsMap: Map<string, TermDefinition> = new Map();
   private awkwardTranslations: Map<string, string> = new Map();
@@ -404,7 +404,6 @@ export class TechnicalTerminologyService {
 
     // Check Vietnamese-first ratio
     const isMainlyVietnamese = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(sentence);
-    const hasExcessiveEnglish = unnecessaryEnglishFound.length > 0;
 
     let score = 1.0;
     if (!isMainlyVietnamese) score -= 0.6;

@@ -26,6 +26,11 @@ import { adminTelemetryService } from '../adminTelemetryService';
 import { usageMeter, estimateTokens, RecordCallInput } from './usageMeter';
 import { DEFAULT_MODEL } from './modelCatalog';
 
+/** Tried in order after the chosen model; each has its own free-tier quota (all verified on a 2026 free key). */
+const GEMINI_FALLBACK_MODELS = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest'];
+/** Longest wait for a rate limit to clear before giving up (free tier limits are per minute). */
+const MAX_RATE_LIMIT_WAIT_MS = 45_000;
+
 export interface LLMImageInput {
   mimeType: string;
   /** Base64 payload without the data: prefix. */
@@ -148,12 +153,22 @@ export class GeminiProvider implements ILLMProvider {
    * Google Gemini caller with a verified model pool.
    */
   private async callGemini<T>(key: string, requestedModel: string, req: LLMRequest): Promise<T> {
-    // 2.5 models are closed to new Google accounts; 3.6 Flash is the current default.
-    const candidateModels = Array.from(new Set([requestedModel || DEFAULT_MODEL, 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']));
+    // Free-tier quotas are per model, so on 429 the next model usually still answers. Only models that a
+    // new (2026) free key can call are listed: 2.5 Flash is closed to new accounts ("no longer available").
+    const candidateModels = Array.from(new Set([requestedModel || DEFAULT_MODEL, ...GEMINI_FALLBACK_MODELS]));
     const promptEstimate = estimateTokens(req.prompt + req.systemInstruction) + (req.images?.length || 0) * 258;
 
     let lastError: any = null;
+    let retryAfterMs = 0;
 
+    // Round 2 only runs when every model answered 429: wait what Google asked for, then try them again.
+    for (let round = 0; round < 2; round++) {
+      if (round === 1) {
+        if (!retryAfterMs || retryAfterMs > MAX_RATE_LIMIT_WAIT_MS) break;
+        console.warn(`Mọi model Gemini đang giới hạn tốc độ, chờ ${Math.round(retryAfterMs / 1000)}s rồi thử lại...`);
+        await new Promise((r) => setTimeout(r, retryAfterMs));
+        retryAfterMs = 0;
+      }
     for (const currentModel of candidateModels) {
       const tStart = performance.now();
 
@@ -165,8 +180,11 @@ export class GeminiProvider implements ILLMProvider {
         temperature: req.temperature ?? 0.2
       };
       if (req.maxOutputTokens) generationConfig.maxOutputTokens = req.maxOutputTokens;
-      // Only Gemini 2.5 Flash / Flash-Lite are known to accept thinkingBudget 0; newer models use their defaults.
-      if (!req.thinking && /^gemini-2\.5-flash/.test(currentModel)) {
+      // Flash models think by default and the thoughts count against maxOutputTokens: on gemini-3.6-flash a
+      // 300-token JSON budget went 287 to thoughts and the answer was cut (finishReason MAX_TOKENS).
+      // thinkingBudget 0 is accepted by the 3.x Flash models (verified on 3.6/3.8-flash) and 2.5 Flash;
+      // 3.x Flash-Lite rejects it with INVALID_ARGUMENT, and thinks little by default anyway.
+      if (!req.thinking && /^gemini-(2\.5|3(\.\d+)?)-flash|^gemini-flash-latest/.test(currentModel) && !/lite/.test(currentModel.replace(/^gemini-2\.5-flash-lite$/, ''))) {
         generationConfig.thinkingConfig = { thinkingBudget: 0 };
       }
 
@@ -215,7 +233,11 @@ export class GeminiProvider implements ILLMProvider {
           }
           if (res.status === 429) {
             console.warn(`Model ${currentModel} đạt giới hạn tốc độ (429). Đang chuyển sang model khác...`);
-            await new Promise((r) => setTimeout(r, 1000));
+            // Google puts the wait in the error details: {"@type": "...RetryInfo", "retryDelay": "23s"}.
+            const delay = Number(errText.match(/"retryDelay":\s*"(\d+(?:\.\d+)?)s"/)?.[1]);
+            if (delay) retryAfterMs = Math.max(retryAfterMs, Math.ceil(delay * 1000) + 500);
+            else if (!retryAfterMs) retryAfterMs = 20000;
+            lastError = new Error(`Gemini 429 (giới hạn tốc độ) trên ${currentModel}`);
             continue;
           }
           if (res.status === 404) continue;
@@ -251,6 +273,7 @@ export class GeminiProvider implements ILLMProvider {
         console.warn(`Thử nghiệm ${currentModel} thất bại: ${err.message}. Đang thử model kế tiếp...`);
         continue;
       }
+    }
     }
 
     throw lastError || new Error('Tất cả các model Gemini đều không khả dụng hoặc bị giới hạn tốc độ.');

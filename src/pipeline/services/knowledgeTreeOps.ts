@@ -33,15 +33,6 @@ export function findNode(root: KnowledgeTreeNode, id: string): KnowledgeTreeNode
   return null;
 }
 
-export function findParent(root: KnowledgeTreeNode, id: string): KnowledgeTreeNode | null {
-  for (const c of root.children) {
-    if (c.id === id) return root;
-    const hit = findParent(c, id);
-    if (hit) return hit;
-  }
-  return null;
-}
-
 function mapTree(node: KnowledgeTreeNode, fn: (n: KnowledgeTreeNode) => KnowledgeTreeNode): KnowledgeTreeNode {
   const mapped = fn(node);
   return { ...mapped, children: mapped.children.map((c) => mapTree(c, fn)) };

@@ -163,12 +163,15 @@ export class NarrationGenerator {
   private frame(plan: SectionPlan, role: SlideRole, composed: ComposedPage, context: NarrationContext | undefined, isVi: boolean, targetWords: number): string {
     const parts: string[] = [];
     let body = composed.body;
-    const countWords = (xs: string[]) => xs.join(' ').split(/s+/).filter(Boolean).length;
+    const countWords = (xs: string[]) => xs.join(' ').split(/\s+/).filter(Boolean).length;
     // Bridges are optional framing: they are only spoken if the page's own content leaves room for them.
     const roomForBridge = countWords([...body, ...composed.visuals]) < targetWords * 0.85;
 
     if (plan.order === 1 || role === 'INTRODUCTION') {
-      const lesson = isVi ? resolve(context?.lessonTitle || plan.title) : context?.lessonTitle || plan.title;
+      const lessonTitle = isVi ? resolve(context?.lessonTitle || plan.title) : context?.lessonTitle || plan.title;
+      // "bài học về Giới thiệu về X" -> "bài học về X"
+      const introPrefix = isVi ? /^(giới thiệu|tổng quan|nhập môn)(\s+(chung\s+)?về)?\s+/i : /^(introduction|overview)(\s+(to|of))?\s+/i;
+      const lesson = lessonTitle.replace(introPrefix, '') || lessonTitle;
       parts.push(isVi ? `Chào mừng các bạn đến với bài học về ${lesson}.` : `Welcome to this lecture on ${lesson}.`);
       // The generated goal sentence only fills in when the page itself has nothing to say.
       if (plan.instructional_goal && body.length === 0) {
@@ -280,5 +283,3 @@ export class NarrationGenerator {
     return result;
   }
 }
-
-export const narrationGenerator = new NarrationGenerator();

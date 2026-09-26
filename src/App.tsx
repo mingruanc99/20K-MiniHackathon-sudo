@@ -1,6 +1,6 @@
 // src/App.tsx
-import React, { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React,{ lazy, Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './pages/LoginPage';
@@ -13,9 +13,6 @@ import { AdminRoute } from './components/admin/AdminRoute';
 // Pages load on demand so the first visit only downloads the logbook and the login screen.
 const NewLecturePage = lazy(() => import('./pages/NewLecturePage').then((m) => ({ default: m.NewLecturePage })));
 const LecturePage = lazy(() => import('./pages/LecturePage').then((m) => ({ default: m.LecturePage })));
-const AdvancedPage = lazy(() => import('./pages/AdvancedPage').then((m) => ({ default: m.AdvancedPage })));
-const NewProjectPage = lazy(() => import('./pages/NewProjectPage').then((m) => ({ default: m.NewProjectPage })));
-const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage').then((m) => ({ default: m.ProjectDetailPage })));
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout').then((m) => ({ default: m.AdminLayout })));
 const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage').then((m) => ({ default: m.AdminOverviewPage })));
 const AdminContentQualityPage = lazy(() => import('./pages/admin/AdminContentQualityPage').then((m) => ({ default: m.AdminContentQualityPage })));
@@ -33,6 +30,13 @@ const KnowledgeInspectorPage = lazy(() => import('./pages/KnowledgeInspectorPage
 const PageFallback: React.FC = () => (
   <div className="flex min-h-[40vh] items-center justify-center text-sm text-ink-soft">Đang mở trang…</div>
 );
+
+/** /projects/:id(/:stage)?query -> /lectures/:id?query (same project id). */
+const LegacyProjectRedirect: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const { search } = useLocation();
+  return <Navigate to={`/lectures/${id}${search}`} replace />;
+};
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -110,40 +114,12 @@ export const App: React.FC = () => {
             }
           />
 
-          {/* Advanced: the full studio and detailed tools */}
-          <Route
-            path="/advanced"
-            element={
-              <ProtectedRoute>
-                <AdvancedPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* Links saved from the retired studio UI */}
+          <Route path="/advanced" element={<Navigate to="/knowledge" replace />} />
           <Route path="/dashboard" element={<Navigate to="/" replace />} />
-          <Route
-            path="/projects/new"
-            element={
-              <ProtectedRoute>
-                <NewProjectPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/projects/:id"
-            element={
-              <ProtectedRoute>
-                <ProjectDetailPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/projects/:id/:stage"
-            element={
-              <ProtectedRoute>
-                <ProjectDetailPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/projects/new" element={<Navigate to="/lectures/new" replace />} />
+          <Route path="/projects/:id" element={<LegacyProjectRedirect />} />
+          <Route path="/projects/:id/:stage" element={<LegacyProjectRedirect />} />
 
           {/* ========================================================= */}
           {/* ADMIN DASHBOARD - RBAC PROTECTED                          */}
@@ -178,4 +154,3 @@ export const App: React.FC = () => {
   );
 };
 
-export default App;

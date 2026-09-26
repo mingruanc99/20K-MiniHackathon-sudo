@@ -1,49 +1,42 @@
 # CLSG-IR Setup & Installation Guide
 
-This guide details the prerequisites and steps to run CLSG-IR locally on Windows, macOS, or Linux.
+How to run CLSG-IR locally on Windows, macOS, or Linux. Firebase, Cloudinary and Vercel configuration are covered in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ---
 
 ## 1. Prerequisites
 
-- Python 3.10+ (tested on Python 3.12 64-bit on Windows)
-- Modern web browser (Chrome, Edge, Firefox)
+- Node.js 18+ and npm 10+
+- A modern browser (Chrome, Edge, Firefox)
+- Optional: Python 3.12 for the VietOCR region OCR service (`ocr_server/`)
 
 ---
 
-## 2. Dependencies Installation
+## 2. Install and run
 
-Install required dependencies via pip:
 ```bash
-pip install fastapi uvicorn python-multipart pydantic python-pptx python-docx pymupdf matplotlib
+npm install
+cp .env.example .env.local   # then fill in the Firebase / Cloudinary values
+npm run dev
+```
+
+Open `http://localhost:5173`. The whole pipeline runs in the browser. `api/` only holds the Gemini proxy and the Langfuse relay, which run on Vercel (`npx vercel dev` serves them locally).
+
+---
+
+## 3. Optional: VietOCR for text and tables
+
+Without it, region OCR uses tesseract.js in the browser. With it, Vietnamese text and tables are read by VietOCR. Setup is in [ocr_server/README.md](../../ocr_server/README.md). Then set:
+
+```env
+VITE_VIETOCR_URL=http://localhost:8765
 ```
 
 ---
 
-## 3. Running the Server
+## 4. Tests and build
 
-Launch the application via the entrypoint script:
 ```bash
-python app.py
+npm test         # pipeline test suite (tests/ts/pipeline.test.js)
+npm run build    # type-check + production bundle in dist/
 ```
-
-The console will indicate that the server is active:
-```
-============================================================
-🚀 Starting CLSG-IR Studio Server...
-📡 Local URL: http://127.0.0.1:8000
-📖 API Docs: http://127.0.0.1:8000/docs
-============================================================
-```
-
-Visit `http://127.0.0.1:8000` in your web browser.
-
----
-
-## 4. Running Automated Tests
-
-Execute the full suite of unit and end-to-end integration tests:
-```bash
-python -m unittest discover -s tests
-```
-All tests should pass cleanly without errors.

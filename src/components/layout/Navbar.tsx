@@ -1,5 +1,5 @@
 // src/components/layout/Navbar.tsx
-import React, { useEffect, useState } from 'react';
+import React,{ useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { LogOut, ShieldCheck, SlidersHorizontal, LayoutGrid, Cpu } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -40,7 +40,7 @@ export const Navbar: React.FC = () => {
               <LayoutGrid className="h-4 w-4" />
               <span className="hidden sm:inline">Sổ bài giảng</span>
             </NavLink>
-            <NavLink to="/advanced" className={navClass}>
+            <NavLink to="/knowledge" className={navClass}>
               <SlidersHorizontal className="h-4 w-4" />
               <span className="hidden sm:inline">Nâng cao</span>
             </NavLink>

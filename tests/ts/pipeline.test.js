@@ -228,8 +228,9 @@ test('Section 26 Demo Example: Convolution topic produces exact narration, proso
   const prosody = prosodyPlanner.planProsody(narration, plan, config);
   assert.ok(prosody.sentences.length >= 1);
   const firstSent = prosody.sentences[0];
-  assert.equal(firstSent.prosody.pause_after_ms, 600);
-  assert.equal(firstSent.prosody.pause_type, 'concept_boundary');
+  // A one-sentence scene ends the page: section transition (context rules in prosodyPlanner).
+  assert.equal(firstSent.prosody.pause_after_ms, 900);
+  assert.equal(firstSent.prosody.pause_type, 'section_transition');
   assert.equal(firstSent.prosody.rate, 'slow');
   assert.equal(firstSent.prosody.energy, 'medium');
 
@@ -777,7 +778,9 @@ test('Whole-Lesson Understanding: generates LessonModel, ContentPrioritization, 
   assert.ok(bp.lesson_model.lesson_goal.length > 10);
   assert.ok(bp.lesson_model.core_concepts.length >= 2);
   assert.ok(bp.lesson_model.concept_relationships.length >= 1);
-  assert.ok(bp.lesson_model.learning_needs.length >= 2);
+  // Offline there is no LLM to infer learning needs, and none are invented (no canned per-topic content).
+  assert.ok(Array.isArray(bp.lesson_model.learning_needs));
+  assert.doesNotMatch(bp.lesson_model.lesson_goal, /cơ chế quét kernel trích xuất feature map/);
 
   // 2. Verify ContentPrioritization
   assert.ok(bp.content_prioritization, 'ContentPrioritization must be present in blueprint');
@@ -1486,6 +1489,15 @@ test('OCR diagram labels split boxes on wide gaps and drop arrow noise', async (
   ]);
 });
 
+test('OCR formula detector routes math to vision, keeps prose and single metrics on the text engine', async () => {
+  const { looksLikeFormula } = await import('../../src/pipeline/module1_extractor/visualRegionOcr.ts');
+  assert.equal(looksLikeFormula('θ ← θ − α∇J(θ)'), true);
+  assert.equal(looksLikeFormula('σ(z) = 1 / (1 + e^{-z})'), true);
+  assert.equal(looksLikeFormula('Mạng nơ-ron tích chập dùng kernel để trích xuất đặc trưng'), false);
+  assert.equal(looksLikeFormula('Độ chính xác = 92%'), false);
+  assert.equal(looksLikeFormula(''), false);
+});
+
 test('Template composer: line shapes', async () => {
   const { analyzeLine } = await import('../../src/pipeline/module3_generator/templateComposer.ts');
   const shape = (text, type, lang = 'vi') => analyzeLine({ text, level: 2, type }, lang)?.shape;
@@ -1606,4 +1618,444 @@ test('Content duration: coverage sizes the lecture and follows pages switched of
   assert.equal(fullDurationOf(tree), 100, 'full length counts active pages only');
   assert.equal(tree.root.duration_sec, 50, '50% of the remaining content');
   assert.ok(Math.abs(currentCoverage(tree) - 0.5) < 0.01);
+});
+
+// ---------------------------------------------------------------------------
+// Formula integrity + narration styles
+// ---------------------------------------------------------------------------
+const GD_LATEX = String.raw`$\theta \leftarrow \theta - \alpha \nabla J(\theta)$`;
+function formulaDeck() {
+  const pages = [
+    ['Gradient Descent', [['paragraph', `Cập nhật tham số: ${GD_LATEX} với tốc độ học α`], ['bullet_point', 'Lặp lại đến khi hàm mất mát hội tụ']]],
+    ['Hàm kích hoạt', [['equation', 'σ(z) = 1 / (1 + e^{-z})'], ['bullet_point', 'ReLU: f(x) = max(0, x)'], ['bullet_point', 'Sigmoid bão hoà khi |z| lớn']]],
+    ['Tổng kết', [['bullet_point', 'Chọn tốc độ học phù hợp'], ['bullet_point', 'ReLU tránh bão hoà ở miền dương']]]
+  ];
+  const sections = pages.map(([title, items], i) => {
+    const sid = `F${i + 1}`;
+    const elements = [{ element_id: `${sid}_t`, type: 'title', text: title, level: 1 }, ...items.map(([type, text], k) => ({ element_id: `${sid}_${k}`, type, text, level: 2 }))];
+    return { section_id: sid, title, order: i + 1, elements, raw_text: elements.map((e) => e.text).join('\n') };
+  });
+  return { document_id: 'doc_formula', title: 'Tối ưu và kích hoạt', source_type: 'pptx', source_filename: 'formula.pptx', total_sections: 3, sections, visual_regions: [], extraction_time_ms: 1 };
+}
+
+/**
+ * Runs the pipeline with a stand-in online LLM that writes the studio script for the whole deck in one
+ * call. `narrations` lists the pages in deck order (F1, F2, F3): { formulas, narration }.
+ */
+async function runWithFakeLlm(narrations, style) {
+  const calls = [];
+  const fake = {
+    hasApiKey: () => true,
+    getActiveModel: () => 'fake-llm',
+    async generateJson(prompt, _system, feature) {
+      calls.push(feature);
+      if (feature !== 'Module 3A: Studio Script') throw new Error('offline in tests');
+      return {
+        pages: Object.values(narrations).map((n, i) => ({
+          id: `F${i + 1}`,
+          cong_thuc: n.formulas,
+          cau: n.narration.split(/(?<=[.!?])\s+/).map((s) => ({ kieu: /\?$/.test(s) ? 'hỏi' : 'giảng', loi: s, man_hinh: 'MÀN HÌNH', thanh_phan: 'Card' }))
+        })),
+        quiz: [
+          { hoi: 'Công thức nào cập nhật tham số?', lua_chon: { A: 'Gradient descent', B: 'Sigmoid', C: 'ReLU' }, dap_an: 'A', giai_thich: 'Gradient descent cập nhật tham số ngược hướng gradient.' }
+        ]
+      };
+    }
+  };
+  const original = llmRouter.getOnlineProvider;
+  llmRouter.getOnlineProvider = () => fake;
+  try {
+    return await new PipelineOrchestrator().runFullPipeline(formulaDeck(), 'formula.pptx', {
+      language: 'vi', learnerLevel: 'undergraduate', priorKnowledge: '', targetDurationSeconds: 120, targetWpm: 140,
+      narrationStyle: style, visualDensity: 'balanced', narrationEngine: 'llm'
+    });
+  } finally {
+    llmRouter.getOnlineProvider = original;
+  }
+}
+const checkOf = (res, id) => res.qualityReport.checks.find((c) => c.check_id === id);
+
+test('Formula integrity: source formulas extracted verbatim (LaTeX, equations, f(x) lines), prose with "=" ignored', async () => {
+  const { extractSourceFormulas } = await import('../../src/pipeline/services/formulaIntegrity.ts');
+  const deck = formulaDeck();
+  assert.deepEqual(extractSourceFormulas(deck.sections[0]), [GD_LATEX]);
+  assert.deepEqual(extractSourceFormulas(deck.sections[1]), ['σ(z) = 1 / (1 + e^{-z})', 'f(x) = max(0, x)']);
+  const prose = { elements: [{ type: 'bullet_point', text: 'Mạng nhiều lớp = rất nhiều tham số cần học' }, { type: 'bullet_point', text: 'Độ chính xác = 92%' }] };
+  assert.deepEqual(extractSourceFormulas(prose), []);
+});
+
+test('Formula integrity: re-typeset formula is restored to the source spelling, invented one is reported', async () => {
+  const { enforceFormulaIntegrity, extractSourceFormulas } = await import('../../src/pipeline/services/formulaIntegrity.ts');
+  const sec = formulaDeck().sections[0];
+  const f = extractSourceFormulas(sec);
+  const fixed = enforceFormulaIntegrity('Chiêu thức: θ ← θ − α∇J(θ), lặp đến khi hội tụ.', sec.raw_text, f);
+  assert.equal(fixed.text, `Chiêu thức: ${GD_LATEX}, lặp đến khi hội tụ.`);
+  assert.deepEqual(fixed.altered, []);
+  const spacing = enforceFormulaIntegrity('Hàm σ(z) = 1/(1+e^{-z}) nén về 0 đến 1.', formulaDeck().sections[1].raw_text, []);
+  assert.equal(spacing.repaired.length + spacing.altered.length, 0, 'spacing differences are still verbatim');
+  const invented = enforceFormulaIntegrity('Tốc độ học β quá lớn thì L = -∑ y log p nổ tung.', sec.raw_text, f);
+  assert.deepEqual(invented.altered, ['β', 'L = -∑']);
+});
+
+test('Guard: meme narration keeps source formulas verbatim on screen and in speech; style profile measured', async () => {
+  const res = await runWithFakeLlm(
+    {
+      gd: {
+        marker: 'Lặp lại đến khi',
+        core: 'Gradient descent cập nhật tham số ngược hướng gradient.',
+        formulas: ['θ ← θ − α∇J(θ)'],
+        narration: 'Chào các bạn, hôm nay chúng ta sẽ tìm hiểu gradient descent. Chiêu thức: θ ← θ − α∇J(θ). Lặp. Lặp nữa. Tới khi hội tụ.'
+      },
+      act: {
+        marker: 'Sigmoid bão hoà khi',
+        core: 'Sigmoid bão hoà, ReLU thì không ở miền dương.',
+        formulas: ['σ(z) = 1 / (1 + e^{-z})', 'f(x) = max(0, x)'],
+        narration: 'Sigmoid là Cheems. Bão hoà khi z lớn. ReLU là GigaChad. Dương là cho qua, âm là bay màu.'
+      },
+      end: { marker: 'Chọn tốc độ học', core: 'Chọn tốc độ học phù hợp, dùng ReLU.', formulas: [], narration: 'Tốc độ học chuẩn. ReLU lên sóng. Hết bài.' }
+    },
+    'meme'
+  );
+  const gd = res.verifiedIr.scenes.find((s) => s.section_id === 'F1');
+  assert.ok(gd.narration.text.includes(GD_LATEX), 'spoken formula restored to the source LaTeX');
+  assert.deepEqual(gd.formulas, [GD_LATEX], 'on-screen formula is the source spelling');
+  assert.equal(gd.narration_source, 'llm');
+  assert.ok(gd.studio_lines.length >= 2, 'per-sentence studio lines kept');
+  assert.equal(res.verifiedIr.studio_quiz.length, 1, 'LLM quiz kept');
+  const formula = checkOf(res, 'chk_formula_integrity');
+  assert.equal(formula.status, 'PASSED', formula.actual_value);
+  assert.equal(formula.auto_repaired, true);
+  assert.match(formula.actual_value, /LLM chép đúng 2\/3/);
+  const style = checkOf(res, 'chk_style_conformance');
+  assert.equal(style.status, 'WARNING', style.actual_value);
+  assert.match(style.actual_value, /hôm nay chúng ta sẽ tìm hiểu/);
+});
+
+test('Guard: an invented formula fails the lecture', async () => {
+  const res = await runWithFakeLlm(
+    {
+      gd: { marker: 'Lặp lại đến khi', core: 'x', formulas: [GD_LATEX], narration: `Công thức ${GD_LATEX} cập nhật tham số. Với momentum thì v ← βv + ∇J(θ) nhanh hơn.` },
+      act: { marker: 'Sigmoid bão hoà khi', core: 'x', formulas: [], narration: 'Sigmoid bão hoà khi z lớn, ReLU thì không bão hoà ở miền dương.' },
+      end: { marker: 'Chọn tốc độ học', core: 'x', formulas: [], narration: 'Chọn tốc độ học phù hợp và ưu tiên ReLU.' }
+    },
+    'academic'
+  );
+  const formula = checkOf(res, 'chk_formula_integrity');
+  assert.equal(formula.status, 'FAILED', formula.actual_value);
+  assert.match(formula.actual_value, /v ← βv \+ ∇J\(θ\)/);
+  assert.equal(res.qualityReport.decision, 'FAIL');
+});
+
+test('Guard: template engine is not held to a style and its formulas pass verbatim', async () => {
+  for (const deck of [formulaDeck(), (await import('./fixtures/templateDeck.js')).templateDeck]) {
+    const res = await new PipelineOrchestrator().runFullPipeline(deck, deck.source_filename, {
+      language: 'vi', learnerLevel: 'undergraduate', priorKnowledge: '', targetDurationSeconds: 180, targetWpm: 140,
+      narrationStyle: 'meme', visualDensity: 'balanced', narrationEngine: 'template'
+    });
+    assert.equal(checkOf(res, 'chk_formula_integrity').status, 'PASSED', `${deck.document_id}: ${checkOf(res, 'chk_formula_integrity').actual_value}`);
+    assert.match(checkOf(res, 'chk_style_conformance').actual_value, /Không áp dụng/);
+  }
+});
+
+test('Style profiles: every style has a prompt block and measurable limits', async () => {
+  const { STYLE_IDS, stylePromptBlock, measureStyle } = await import('../../src/pipeline/module3_generator/styleProfiles.ts');
+  assert.deepEqual([...STYLE_IDS].sort(), ['academic', 'conversational', 'engaging', 'engineering', 'meme', 'rigorous']);
+  for (const id of STYLE_IDS) assert.match(stylePromptBlock(id), /TONE EXAMPLE/);
+  assert.deepEqual(measureStyle('Ma sát bay màu. Xe trôi.', 'academic').bannedHits, ['bay màu']);
+  assert.equal(measureStyle('Ma sát bay màu. Xe trôi.', 'meme').bannedHits.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Lesson index (whole-lesson formulas & definitions) + Studio script export
+// ---------------------------------------------------------------------------
+test('Lesson index: formulas and definitions of every page, first appearance only, referenced from later pages', async () => {
+  const { buildLessonIndex, referencedEarlierEntries } = await import('../../src/pipeline/services/lessonIndex.ts');
+  const deck = formulaDeck();
+  deck.sections[2].elements.push({ element_id: 'F3_x', type: 'bullet_point', text: 'Nhắc lại: σ(z) bão hoà, còn f(x) = max(0, x) thì không', level: 2 });
+  deck.sections[2].raw_text = deck.sections[2].elements.map((e) => e.text).join('\n');
+  const index = buildLessonIndex(deck, 'vi');
+  assert.deepEqual(index.entries.filter((e) => e.kind === 'formula').map((e) => [e.order, e.text]), [
+    [1, GD_LATEX],
+    [2, 'σ(z) = 1 / (1 + e^{-z})'],
+    [2, 'f(x) = max(0, x)']
+  ], 'a formula repeated on page 3 keeps its first page');
+  const refs = referencedEarlierEntries(index, deck.sections[2], 3).map((e) => e.text);
+  assert.ok(refs.includes('σ(z) = 1 / (1 + e^{-z})') && refs.includes('f(x) = max(0, x)'));
+  assert.deepEqual(referencedEarlierEntries(index, deck.sections[0], 1), [], 'page 1 has nothing earlier');
+  const { templateDeck } = await import('./fixtures/templateDeck.js');
+  assert.deepEqual(buildLessonIndex(templateDeck).entries.filter((e) => e.kind === 'definition').map((e) => e.term), ['Kernel', 'Padding', 'ReLU']);
+});
+
+test('Guard: a page may repeat a formula introduced on an earlier page (lesson-wide grounding)', async () => {
+  const res = await runWithFakeLlm(
+    {
+      gd: { marker: 'Lặp lại đến khi', core: 'x', formulas: [GD_LATEX], narration: `Công thức ${GD_LATEX} cập nhật tham số.` },
+      act: { marker: 'Sigmoid bão hoà khi', core: 'x', formulas: [], narration: 'Sigmoid σ(z) = 1 / (1 + e^{-z}) bão hoà khi z lớn.' },
+      end: { marker: 'Chọn tốc độ học', core: 'x', formulas: [], narration: 'Nhớ lại σ(z) = 1/(1+e^{-z}) và quy tắc θ ← θ − α∇J(θ) từ các trang trước.' }
+    },
+    'academic'
+  );
+  const formula = checkOf(res, 'chk_formula_integrity');
+  assert.equal(formula.status, 'PASSED', formula.actual_value);
+  assert.ok(res.verifiedIr.scenes[2].narration.text.includes(GD_LATEX), 'earlier-page formula restored to its source spelling');
+  assert.ok(res.verifiedIr.lesson_index.entries.length >= 3);
+});
+
+test('Studio numbers: spoken Vietnamese, names with digits untouched, numbers kept for the screen', async () => {
+  const { speakNumbers, integerToVietnamese } = await import('../../src/pipeline/export/vietnameseNumbers.ts');
+  // The handoff document's own example.
+  assert.deepEqual(speakNumbers('Hệ thống có 3 lớp bảo vệ, áp dụng từ năm 2024 với tỷ lệ lỗi dưới 5%.'), {
+    text: 'Hệ thống có ba lớp bảo vệ, áp dụng từ năm hai nghìn không trăm hai mươi tư với tỷ lệ lỗi dưới năm phần trăm.',
+    numbers: ['3 lớp', '2024', '5%']
+  });
+  assert.equal(integerToVietnamese(2025), 'hai nghìn không trăm hai mươi lăm');
+  assert.equal(integerToVietnamese(105), 'một trăm linh năm');
+  const s = speakNumbers('GPT-4 và ResNet-50 trên ảnh 32x32, độ chính xác 92,5%, OWASP Top 10 năm 2025.');
+  assert.equal(s.text, 'GPT-4 và ResNet-50 trên ảnh ba mươi hai nhân ba mươi hai, độ chính xác chín mươi hai phẩy năm phần trăm, OWASP Top mười năm hai nghìn không trăm hai mươi lăm.');
+});
+
+test('Studio script: handoff format, no digits or formulas in speech, components, 3 quizzes, lint clean', async () => {
+  const { exportStudioScript } = await import('../../src/pipeline/export/scriptMarkdown.ts');
+  const { STUDIO_COMPONENT_IDS } = await import('../../src/pipeline/export/studioComponents.ts');
+  const { templateDeck } = await import('./fixtures/templateDeck.js');
+  const res = await new PipelineOrchestrator().runFullPipeline(templateDeck, templateDeck.source_filename, {
+    language: 'vi', learnerLevel: 'undergraduate', priorKnowledge: '', targetDurationSeconds: 300, targetWpm: 140,
+    narrationStyle: 'academic', visualDensity: 'balanced', narrationEngine: 'template'
+  });
+  const { markdown, issues } = exportStudioScript(res.verifiedIr, { sourceFileName: 'd01-03-cnn.pptx' });
+  assert.deepEqual(issues, []);
+  const lines = markdown.split('\n');
+  assert.equal(lines[0], '# D01-03-CNN · Mạng nơ-ron tích chập');
+  assert.match(markdown, /- \*\*Thời lượng dự kiến:\*\* khoảng [\p{L} ]+ phút( rưỡi)?\./u);
+  const speech = lines.filter((l) => l.startsWith('- **Lời:**'));
+  for (const l of speech) assert.doesNotMatch(l.replace(/[\p{L}_-]+\d[\p{L}\d_.-]*/gu, ''), /\d/, l);
+  const components = lines.filter((l) => l.startsWith('- **Thành phần:**')).map((l) => l.split('** ')[1]);
+  assert.ok(components.every((c) => STUDIO_COMPONENT_IDS.includes(c)));
+  assert.equal(lines.filter((l) => /^### Dừng \d+$/.test(l)).length, 3);
+  assert.match(markdown, /- \*\*Trên màn hình:\*\* y = max\(0, x\)/, 'formula verbatim on screen');
+  assert.match(markdown, /- \*\*Trên màn hình:\*\* Kết quả thực nghiệm · 92,5%/);
+});
+
+test('Studio lint: catches the handoff document error table', async () => {
+  const { lintStudioScript } = await import('../../src/pipeline/export/scriptMarkdown.ts');
+  const md = [
+    '# D11-05 · Khiên chắn đầu ra',
+    '## 1 · Mở đầu',
+    '### Câu 1', '- **Kiểu:** giảng', '- **Lời:** Hệ thống có 3 lớp bảo vệ ra đời từ năm 2024 để kiểm soát đầu ra.',
+    '### Câu 3', '- **Kiểu:** giảng', '- **Lời:** Tỷ lệ lỗi giảm còn bốn mươi phần trăm sau khi áp dụng khiên chắn đầu ra.',
+    '### Câu 4', '- **Kiểu:** giảng', '- **Lời:** Mô hình Cát Gi Pi Ti trả lời mọi câu hỏi của người dùng rất nhanh.',
+    '### Dừng 1', '- **Dừng:** 30 giây',
+    '### Câu 5', '- **Kiểu:** giảng', '- **Lời:** Hết giờ, đáp án là phương án B.'
+  ].join('\n');
+  const msgs = lintStudioScript(md).map((i) => i.message);
+  for (const expected of [
+    'lời đọc có số viết bằng chữ số',
+    'đánh số không liên tục (mong đợi Câu 2)',
+    'lời đọc có con số nhưng thiếu dòng Trên màn hình',
+    'có thể là tên riêng bị phiên âm từng chữ cái',
+    'chỗ dừng không có câu hỏi ngay trước',
+    'câu chữa bài nằm ngay sau khoảng chờ là câu đệm'
+  ]) assert.ok(msgs.includes(expected), `missing: ${expected}\n${msgs.join('\n')}`);
+});
+
+// ---------------------------------------------------------------------------
+// Regressions found by running the real app (Pose_Estimation.pptx)
+// ---------------------------------------------------------------------------
+test('cleanLine: "Slide N:" labels go with their separator; leading numbers that are content stay', async () => {
+  const c = contentPurifierService;
+  assert.equal(c.cleanLine('Slide 1: Giới thiệu về Human Pose Estimation'), 'Giới thiệu về Human Pose Estimation');
+  assert.equal(c.cleanLine('17 điểm có tên — và 19 đường nối'), '17 điểm có tên — và 19 đường nối');
+  assert.equal(c.cleanLine('33 Landmarks 3D'), '33 Landmarks 3D');
+  assert.equal(c.cleanLine('1. Chuẩn hoá dữ liệu'), 'Chuẩn hoá dữ liệu');
+  assert.equal(c.cleanLine('• Học đặc trưng'), 'Học đặc trưng');
+});
+
+test('Keywords: no sliding-window fragments across English terms and Vietnamese words', async () => {
+  const { extractLocalKeywords } = await import('../../src/pipeline/services/keywordExtractor.ts');
+  const r = extractLocalKeywords(
+    [
+      { section_id: 'S1', title: 'Giới thiệu về Human Pose Estimation', body: 'Thị giác Máy tính & Ước lượng Tư thế' },
+      { section_id: 'S2', title: 'Part Affinity Fields (PAF) trong OpenPose', body: 'Trường vector định hướng liên kết các chi' }
+    ],
+    { maxPerPage: 6, minWeight: 0.1 }
+  );
+  const s1 = r.get('S1').map((k) => k.term);
+  assert.ok(s1.includes('Human Pose Estimation') && s1.includes('Thị giác Máy tính') && s1.includes('Ước lượng Tư thế'), s1.join(' | '));
+  for (const bad of ['thiệu về Human', 'Pose Estimation Thị', 'Estimation Thị giác']) assert.ok(!s1.includes(bad), bad);
+  assert.ok(r.get('S2').map((k) => k.term).includes('Part Affinity Fields'));
+  // A capitalized Vietnamese syllable without diacritics ("Thao") is not an English term.
+  const vi = extractLocalKeywords([{ section_id: 'P', title: 'Thao tác dữ liệu với Pandas', body: 'DataFrame là bảng dữ liệu' }, { section_id: 'Q', title: 'Tensor', body: 'GPU' }], { maxPerPage: 6, minWeight: 0.1 });
+  const pk = vi.get('P').map((k) => k.term);
+  assert.ok(pk.includes('Thao tác dữ liệu') && !pk.includes('Thao'), pk.join(' | '));
+});
+
+test('Boilerplate: a line repeated on most pages (numbers aside) is dropped, page content stays', async () => {
+  const { dropBoilerplate } = await import('../../src/pipeline/services/boilerplate.ts');
+  const page = (i, body) => ({
+    section_id: `S${i}`, title: `T${i}`, order: i, raw_text: '',
+    elements: [{ element_id: `S${i}_t`, type: 'title', text: `Trang ${i}` }, ...body.map((text, k) => ({ element_id: `S${i}_${k}`, type: 'bullet_point', text }))]
+  });
+  const deck = { sections: [1, 2, 3, 4].map((i) => page(i, [`Tổng quan nội dung phần ${i}: Cơ sở lý thuyết và ứng dụng thực tiễn.`, `Ý riêng số ${i} của trang này về chủ đề ${'ABCD'[i - 1]}`])) };
+  const { tree, removed } = dropBoilerplate(deck);
+  assert.equal(removed.length, 4);
+  assert.deepEqual(tree.sections[0].elements.map((e) => e.text), ['Trang 1', 'Ý riêng số 1 của trang này về chủ đề A']);
+  const { templateDeck } = await import('./fixtures/templateDeck.js');
+  assert.deepEqual(dropBoilerplate(templateDeck).removed, [], 'no false positives on a normal deck');
+});
+
+test('Template narration: no canned per-topic content and no catalog analogies', async () => {
+  const res = await new PipelineOrchestrator().runFullPipeline(formulaDeck(), 'formula.pptx', {
+    language: 'vi', learnerLevel: 'undergraduate', priorKnowledge: '', targetDurationSeconds: 120, targetWpm: 140,
+    narrationStyle: 'academic', visualDensity: 'balanced', narrationEngine: 'template'
+  });
+  const all = res.verifiedIr.scenes.map((s) => s.narration.text).join(' ');
+  assert.doesNotMatch(all, /Có thể hình dung .* giống như/);
+  assert.ok(res.verifiedIr.scenes.every((s) => s.narration_source === 'template'));
+});
+
+test('AI script: one call for the whole deck; studio lines and quiz reach the .md export', async () => {
+  const { exportStudioScript } = await import('../../src/pipeline/export/scriptMarkdown.ts');
+  const res = await runWithFakeLlm(
+    {
+      gd: { formulas: [GD_LATEX], narration: 'Gradient descent cập nhật tham số theo hướng ngược với độ dốc của hàm mất mát.' },
+      act: { formulas: [], narration: 'Hàm sigmoid bị bão hoà khi giá trị đầu vào rất lớn nên đạo hàm gần bằng không.' },
+      end: { formulas: [], narration: 'Tóm lại, cần chọn tốc độ học phù hợp và ưu tiên ReLU cho mạng sâu.' }
+    },
+    'academic'
+  );
+  assert.ok(res.verifiedIr.scenes.every((s) => s.narration_source === 'llm'));
+  assert.ok(!(res.verifiedIr.generation_notes || []).some((n) => /AI|429|API/.test(n)), 'no AI problem to report');
+  const { markdown } = exportStudioScript(res.verifiedIr, { sourceFileName: 'f.pptx' });
+  assert.match(markdown, /- \*\*Trên màn hình:\*\* MÀN HÌNH/, 'screen text written by the model is kept');
+  assert.match(markdown, /Công thức nào cập nhật tham số\?/, 'LLM quiz used');
+});
+
+test('AI script: a rate-limited call is reported to the user, pages fall back to the template', async () => {
+  const fake = { hasApiKey: () => true, getActiveModel: () => 'fake', generateJson: async () => { throw new Error('Gemini 429 (giới hạn tốc độ) trên gemini-3.6-flash'); } };
+  const original = llmRouter.getOnlineProvider;
+  llmRouter.getOnlineProvider = () => fake;
+  try {
+    const res = await new PipelineOrchestrator().runFullPipeline(formulaDeck(), 'formula.pptx', {
+      language: 'vi', learnerLevel: 'undergraduate', priorKnowledge: '', targetDurationSeconds: 120, targetWpm: 140,
+      narrationStyle: 'academic', visualDensity: 'balanced', narrationEngine: 'llm'
+    });
+    assert.ok(res.verifiedIr.scenes.every((s) => s.narration_source === 'template'));
+    assert.ok(res.verifiedIr.generation_notes.some((n) => /429/.test(n)), res.verifiedIr.generation_notes.join(' | '));
+  } finally {
+    llmRouter.getOnlineProvider = original;
+  }
+});
+
+test('Prosody: pauses follow context and rhythm (question, term, list item, example, page end)', () => {
+  const planner = new ProsodyPlanner();
+  const plan = { section_id: 'P', title: 'T', order: 1, pedagogical_function: 'definition', bloom_level: 'Understand', target_duration_sec: 60, target_word_budget: 120, key_concepts: [], instructional_goal: '' };
+  const text = [
+    'Làm sao biết đường thẳng nào là chuẩn nhất?',
+    'Ta tính khoảng cách từ mỗi điểm tới đường thẳng dự đoán, bình phương lên và lấy trung bình, đó chính là hàm mất mát MSE.',
+    'Càng nhỏ càng tốt.',
+    'Mô hình cần một thước đo để biết mình đang sai ở đâu và sai bao nhiêu.',
+    'Hãy tưởng tượng bạn đang đứng trên đỉnh núi trong sương mù.',
+    'Cảm ơn bạn đã theo dõi.'
+  ].join(' ');
+  const p = planner.planProsody(text, plan, { targetWpm: 140, language: 'vi' });
+  const got = p.sentences.map((s) => [s.prosody.pause_type, s.prosody.pause_after_ms]);
+  assert.deepEqual(got, [
+    ['concept_boundary', 700],   // question: time to think
+    ['concept_boundary', 650],   // "đó chính là ..." lands a term
+    ['semantic', 350],           // short beat
+    ['example_transition', 750], // an example follows
+    ['semantic', 450],
+    ['section_transition', 1100] // closing line ends the page
+  ]);
+  assert.ok(p.sentences[1].word_pauses.some((w) => w.pause_type === 'syntactic'), 'comma pauses inside the sentence');
+});
+
+test('Template script (sample.md voice): framing fills the page budget without overshooting, pauses vary', async () => {
+  const { templateDeck } = await import('./fixtures/templateDeck.js');
+  const { exportStudioScript } = await import('../../src/pipeline/export/scriptMarkdown.ts');
+  const res = await new PipelineOrchestrator().runFullPipeline(templateDeck, templateDeck.source_filename, {
+    language: 'vi', learnerLevel: 'undergraduate', priorKnowledge: '', targetDurationSeconds: 300, targetWpm: 140,
+    narrationStyle: 'engaging', visualDensity: 'balanced', narrationEngine: 'template'
+  });
+  const scenes = res.verifiedIr.scenes;
+  const all = scenes.map((s) => s.narration.text).join(' ');
+  assert.match(all, /Chào mừng bạn đến với bài học về/, 'presenter greets one viewer');
+  assert.match(all, /Cảm ơn bạn đã theo dõi!/, 'presenter closing');
+  assert.ok(scenes.every((s) => s.studio_lines), 'framing lines carry delivery, screen and component');
+  assert.doesNotMatch(all, /\bDIAGRAM\b|\bTABLE\b/);
+  // Framing never pushes a page far past its budget.
+  for (const s of scenes) {
+    const plan = res.blueprint.sections.find((p) => p.section_id === s.section_id);
+    assert.ok(s.narration.word_count <= plan.target_word_budget * 1.7 + 25, `${s.section_id}: ${s.narration.word_count} vs ${plan.target_word_budget}`);
+  }
+  const { markdown } = exportStudioScript(res.verifiedIr, { sourceFileName: 'deck.pptx' });
+  const pauses = new Set([...markdown.matchAll(/- \*\*Ngắt:\*\* ([\d,]+) giây/g)].map((m) => m[1]));
+  assert.ok(pauses.size >= 4, `pauses should vary with context, got ${[...pauses].join(' | ')}`);
+});
+
+test('Study calibration: pages the learner failed never lose time; mistakes weigh on their own page', async () => {
+  const fs = await import('node:fs');
+  const { parseQuizResults, parseSyllabusFile } = await import('../../src/pipeline/services/studySignals.ts');
+  const { calibrateWithStudySignals } = await import('../../src/pipeline/services/studyCalibration.ts');
+  const ops = await import('../../src/pipeline/services/knowledgeTreeOps.ts');
+  const quiz = parseQuizResults(fs.readFileSync('source/quiz_results_analysis.md', 'utf8'), 'quiz.md');
+  const syllabus = await parseSyllabusFile(new File(['# Đề cương ôn tập cuối kỳ\n\n## Chương 3: Deep Learning với PyTorch\n- **Tensor**, **Autograd**, **GPU**\n'], 'de-cuong.md'));
+  assert.deepEqual(syllabus.topics.map((t) => t.title), ['Chương 3: Deep Learning với PyTorch'], 'the document title is not a topic');
+
+  const sections = [
+    { section_id: 'S1', title: 'Xếp chồng mảng trong NumPy', raw_text: 'np.vstack xếp theo hàng; np.column_stack ghép mảng 1D thành cột', elements: [] },
+    { section_id: 'S2', title: 'Thao tác dữ liệu với Pandas', raw_text: 'df.drop axis=1 xóa cột; df.describe() thống kê tóm tắt; df.count()', elements: [] },
+    { section_id: 'S3', title: 'Tensor trong PyTorch', raw_text: 'Tensor giống ndarray, chạy trên GPU, Autograd tự tính đạo hàm', elements: [] },
+    { section_id: 'S4', title: 'Giới thiệu khóa học', raw_text: 'Mục tiêu và cách đánh giá của khóa học', elements: [] },
+    { section_id: 'S5', title: 'Tổng kết', raw_text: 'Ôn lại các ý chính của buổi học', elements: [] }
+  ];
+  const docTree = { document_id: 'd', title: 'ML', source_type: 'md', source_filename: 'ml.md', total_sections: 5, extraction_time_ms: 1, sections };
+  const page = (s) => ({ id: `pg_${s.section_id}`, kind: 'page', title: s.title, section_id: s.section_id, duration_sec: 60, children: [] });
+  const tree = ops.recompute({
+    tree_id: 't', document_id: 'd', created_at: '', updated_at: '', model: 'local',
+    settings: { min_keyword_weight: 0.3, max_keywords_per_page: 5, max_pages: 50, target_duration_sec: 300 },
+    stats: {},
+    root: { id: 'doc_root', kind: 'document', title: 'ML', children: [{ id: 'ch_1', kind: 'chapter', title: 'A', children: sections.map(page) }] }
+  });
+  const res = await calibrateWithStudySignals(tree, docTree, { quiz, syllabus }, undefined, { useLLM: false });
+  const dur = (id) => ops.findNode(res.tree.root, id).duration_sec;
+  assert.equal(res.tree.root.duration_sec, 300, 'total kept');
+  // Pandas has only quiz mistakes (no syllabus): it must still gain time, not lose it to PyTorch.
+  for (const id of ['pg_S1', 'pg_S2', 'pg_S3']) assert.ok(dur(id) > 60, `${id} should gain: ${dur(id)}`);
+  for (const id of ['pg_S4', 'pg_S5']) assert.ok(dur(id) < 60 && dur(id) >= 23, `${id} donates but keeps >= 40%: ${dur(id)}`);
+  const numpy = res.changes.find((c) => c.sectionId === 'S1');
+  assert.ok(!numpy.reasons.some((r) => /PyTorch/.test(r)), `PyTorch mistake counted on the NumPy page: ${numpy.reasons.join(' | ')}`);
+});
+
+test('Template script: a short page is filled closer to its budget, naming the next topic by keyword', async () => {
+  const { dressTemplatePage } = await import('../../src/pipeline/module3_generator/templateScriptWriter.ts');
+  const titles = ['Giới thiệu Pose Estimation', 'Heatmap Regression trong Pose Estimation', 'Kiến trúc OpenPose với Part Affinity Fields', 'Tổng kết'];
+  const plan = { section_id: 'S2', order: 2, title: titles[1], target_word_budget: 120, key_concepts: ['Heatmap Regression', 'heatmap'], slide_analysis: { slide_role: 'KEY_EXPLANATION' } };
+  const out = dressTemplatePage({
+    body: 'Heatmap Regression dự đoán một bản đồ nhiệt cho mỗi khớp. Điểm sáng nhất là vị trí của khớp.',
+    plan, index: 1, total: 4, titles,
+    prevKeywords: ['Pose Estimation'], nextKeywords: ['OpenPose', 'Part Affinity Fields'],
+    keywords: plan.key_concepts, style: 'engaging', lang: 'vi', used: new Set()
+  });
+  const n = out.narration.split(/\s+/).length;
+  assert.ok(n >= 120 * 0.75 && n <= 120 * 1.1, `fills near the budget: ${n}/120 — ${out.narration}`);
+  assert.match(out.narration, /OpenPose/, 'previews the next topic by its keyword');
+  assert.doesNotMatch(out.narration, /Kiến trúc OpenPose với Part Affinity Fields/, 'never speaks the next page title');
+});
+
+test('Guard: unnecessary English is an optional warning, never a failure or a required fix', async () => {
+  const { templateDeck } = await import('./fixtures/templateDeck.js');
+  const { diagnoseLecture } = await import('../../src/services/qualityFixes.ts');
+  const res = await new PipelineOrchestrator().runFullPipeline(templateDeck, templateDeck.source_filename, {
+    language: 'vi', learnerLevel: 'undergraduate', priorKnowledge: '', targetDurationSeconds: 300, targetWpm: 140,
+    narrationStyle: 'academic', visualDensity: 'balanced', narrationEngine: 'template'
+  });
+  const ir = res.verifiedIr;
+  ir.scenes[0].narration.text += ' Chúng ta sẽ scan image và process data rồi check output nhé.';
+  const report = ir.quality_report;
+  const lang = report.checks.find((c) => c.check_id === 'chk_language_terminology');
+  assert.ok(lang.optional && lang.status !== 'FAILED');
+  lang.status = 'WARNING';
+  const fix = diagnoseLecture({ clsgIr: ir, qualityReport: report, configuration: { narrationEngine: 'template', language: 'vi' } }).find((f) => f.checkId === 'chk_language_terminology');
+  assert.ok(fix && fix.optional && fix.severity === 'WARNING' && !fix.actions.some((a) => a.primary));
 });

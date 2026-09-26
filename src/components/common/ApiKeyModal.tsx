@@ -1,5 +1,5 @@
 // src/components/common/ApiKeyModal.tsx
-import React, { useState, useEffect } from 'react';
+import React,{ useState, useEffect } from 'react';
 import {
   apiKeyService,
   PROVIDERS,
@@ -12,15 +12,12 @@ import {
   EyeOff,
   CheckCircle2,
   AlertCircle,
-  ExternalLink,
-  Sparkles,
-  X,
+  ExternalLink,X,
   Loader2,
   Trash2,
   Check,
   Cpu,
-  Zap,
-  Globe
+  Zap
 } from 'lucide-react';
 
 interface ApiKeyModalProps {

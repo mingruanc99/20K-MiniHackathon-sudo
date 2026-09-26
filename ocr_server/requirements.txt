@@ -1,0 +1,21 @@
+# torch/torchvision: install the CPU wheels first (see README / Dockerfile)
+vietocr==0.3.13
+onnxruntime>=1.17
+opencv-python-headless
+numpy
+pillow
+shapely
+pyclipper
+ruamel.yaml
+cachetools
+six
+huggingface_hub
+pdfplumber
+# imported at module load by deepdoc utils/__init__.py (RAGFlow leftovers), unused by this server
+pycryptodomex
+filelock
+requests
+StrEnum
+matplotlib
+fastapi
+uvicorn[standard]

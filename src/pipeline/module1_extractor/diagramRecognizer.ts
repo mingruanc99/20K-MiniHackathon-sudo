@@ -5,7 +5,7 @@
  */
 import { ContentElement, StructuredDiagram, DiagramNode, DiagramEdge } from '../../types';
 
-export const COCO_KEYPOINTS = [
+const COCO_KEYPOINTS = [
   { id: 'kp_0', label: '0', name: 'nose — mũi', region: 'head' },
   { id: 'kp_1', label: '1', name: 'left_eye — mắt trái', region: 'head' },
   { id: 'kp_2', label: '2', name: 'right_eye — mắt phải', region: 'head' },
@@ -25,7 +25,7 @@ export const COCO_KEYPOINTS = [
   { id: 'kp_16', label: '16', name: 'right_ankle — cổ chân phải', region: 'lower_body' },
 ];
 
-export const COCO_19_EDGES: [string, string, string][] = [
+const COCO_19_EDGES: [string, string, string][] = [
   ['kp_0', 'kp_1', 'nose_to_left_eye'],
   ['kp_0', 'kp_2', 'nose_to_right_eye'],
   ['kp_1', 'kp_3', 'left_eye_to_left_ear'],
@@ -47,7 +47,7 @@ export const COCO_19_EDGES: [string, string, string][] = [
   ['kp_1', 'kp_2', 'eye_cross'],
 ];
 
-export class DiagramRecognizer {
+class DiagramRecognizer {
   analyzeSlide(
     elements: ContentElement[],
     slideTitle: string,

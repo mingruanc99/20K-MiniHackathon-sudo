@@ -40,3 +40,6 @@ venv/
 .env*
 *.db
 *.sqlite
+
+# VietOCR service local venv
+ocr_server/.venv/

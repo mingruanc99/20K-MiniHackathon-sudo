@@ -14,14 +14,12 @@ import {
   getDoc,
   getDocs,
   query,
-  where,
-  updateDoc,
-  deleteDoc,
+  where,deleteDoc,
   serverTimestamp
 } from '../lib/firebase';
-import { Project, UserConfiguration, SourceAsset, ProjectProcessingStatus, CanonicalDocumentTree } from '../types';
+import { Project, UserConfiguration, SourceAsset, CanonicalDocumentTree } from '../types';
 
-export class ProjectService {
+class ProjectService {
   private getLocalKey(userId: string): string {
     return `clsg_projects_${userId}`;
   }

@@ -1,8 +1,8 @@
 // src/pages/LoginPage.tsx
-import React, { useState } from 'react';
+import React,{ useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Sparkles, ArrowRight, ShieldCheck, Mail, Lock, UserCheck, AlertCircle } from 'lucide-react';
+import { Sparkles, Mail, Lock, UserCheck, AlertCircle } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { signInWithGoogle, loginWithEmail, loginAsDemo } = useAuth();

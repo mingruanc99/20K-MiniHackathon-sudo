@@ -24,6 +24,9 @@
  *  Connective use   = 1 − max(0, density − 0.25) / 0.25   (density = sentence-initial connectives / sentences)
  *  Heading policy   = 1 − repeated heading mentions / max(1, heading mentions)
  *  Prosody validity = pauses within their type's range / pauses
+ *  Formula integrity = 1 − altered formula spans / formula spans in the narration
+ *                     (a span written with math symbols must appear verbatim in the section source)
+ *  Style conformance = 0.6 × (1 − scenes with banned phrases / styled scenes) + 0.4 × sentence-length fit
  */
 import {
   CLSGScene,
@@ -43,8 +46,11 @@ import { technicalTerminologyService } from '../services/technicalTerminologySer
 import { contentPurifierService } from '../services/contentPurifierService';
 import { applyConnectivePolicy, countLeadingConnectives, countHeadingMentions, HeadingSpec, splitSentences } from '../services/discoursePolicy';
 import { tokenize } from '../services/keywordExtractor';
+import { enforceFormulaIntegrity, extractSourceFormulas, formulaCopyFidelity } from '../services/formulaIntegrity';
+import { getStyleProfile, measureStyle } from '../module3_generator/styleProfiles';
+import { buildLessonIndex, lessonFormulas } from '../services/lessonIndex';
 
-export const PAUSE_RANGES_MS: Record<PauseType, [number, number]> = {
+const PAUSE_RANGES_MS: Record<PauseType, [number, number]> = {
   syntactic: [150, 250],
   emphasis: [300, 450],
   concept_boundary: [500, 700],
@@ -56,6 +62,8 @@ export const PAUSE_RANGES_MS: Record<PauseType, [number, number]> = {
 
 export interface GuardExtras {
   headingSpecs?: HeadingSpec[];
+  /** Scenes written by the LLM in `config.narrationStyle`; only these are held to the style profile. */
+  styledSceneIds?: Set<string>;
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -70,6 +78,18 @@ function jaccard(a: string, b: string): number {
 }
 
 const normSentence = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+
+/**
+ * Moves a pause toward the target while staying in its range. Shrinking pulls it toward the range floor
+ * in proportion to how far above the floor it was (a 700 ms question pause and a 350 ms beat both shrink,
+ * but the question stays longer); growing pulls it toward the ceiling the same way. A plain multiply and
+ * clamp would flatten every pause of a type to the same floor value.
+ */
+function scaleInRange(ms: number, lo: number, hi: number, factor: number): number {
+  const v = Math.max(lo, Math.min(hi, ms));
+  const scaled = factor < 1 ? lo + (v - lo) * factor : hi - (hi - v) / Math.max(1, factor);
+  return Math.round(Math.max(lo, Math.min(hi, scaled)));
+}
 
 export class QualityVisualGuard {
   private allowedTaxonomies = new Set(VisualIntentGenerator.ALLOWED_TAXONOMIES);
@@ -87,6 +107,17 @@ export class QualityVisualGuard {
     const autoRepairs: string[] = [];
     const planById = new Map(blueprint.sections.map((p) => [p.section_id, p]));
     const isEn = (config.narration_language || config.language) === 'en';
+    const docById = new Map(docTree.sections.map((s) => [s.section_id, s]));
+    const sourceTextOf = (id: string) => {
+      const sec = docById.get(id);
+      return sec ? sec.raw_text || sec.elements.map((e) => e.text).join('\n') : '';
+    };
+    const sourceFormulasOf = new Map(docTree.sections.map((s) => [s.section_id, extractSourceFormulas(s)]));
+    // A formula is grounded if it appears verbatim anywhere in the lesson (pages refer back to earlier ones).
+    const allFormulas = lessonFormulas(buildLessonIndex(docTree, isEn ? 'en' : 'vi'));
+    let formulaSpans = 0;
+    const formulaRepairs: string[] = [];
+    const alteredFormulas: { scene: string; span: string }[] = [];
 
     // ------------------------------------------------------------------
     // A. Text repairs
@@ -111,6 +142,13 @@ export class QualityVisualGuard {
         autoRepairs.push(`${scene.section_id}: METADATA_LEAK — loại bỏ ${purification.removedElements.join(', ')}.`);
         text = purification.cleanedText;
       }
+
+      // Formulas: a math-written span must be the source's own spelling.
+      const formulaCheck = enforceFormulaIntegrity(text, `${sourceTextOf(scene.section_id)}\n${allFormulas.join('\n')}`, allFormulas);
+      formulaSpans += formulaCheck.spans;
+      formulaCheck.repaired.forEach((r) => formulaRepairs.push(`${scene.section_id}: "${r.from}" → "${r.to}"`));
+      formulaCheck.altered.forEach((span) => alteredFormulas.push({ scene: scene.section_id, span }));
+      text = formulaCheck.text;
 
       for (const tok of plan?.slide_analysis?.excluded_content || []) {
         if (tok && tok.length > 2 && text.toLowerCase().includes(tok.toLowerCase())) {
@@ -199,6 +237,25 @@ export class QualityVisualGuard {
         scene_duration_sec: prosody.effective_scene_duration_sec
       };
     });
+
+    // On-screen formulas are always the source's own spelling; measure how well the model copied them.
+    let modelCopied = 0;
+    let modelTotal = 0;
+    let screenRepairs = 0;
+    workingScenes = workingScenes.map((scene) => {
+      const source = sourceFormulasOf.get(scene.section_id) || [];
+      if (scene.narration_source === 'llm' || extras.styledSceneIds?.has(scene.section_id)) {
+        const fid = formulaCopyFidelity(scene.formulas, source);
+        modelCopied += fid.copied;
+        modelTotal += fid.total;
+      }
+      const same = (scene.formulas || []).length === source.length && (scene.formulas || []).every((f, i) => f === source[i]);
+      if (same) return scene;
+      screenRepairs++;
+      return { ...scene, formulas: source };
+    });
+    if (formulaRepairs.length) autoRepairs.push(`FORMULA_VERBATIM — khôi phục ${formulaRepairs.length} công thức về đúng ký hiệu gốc: ${formulaRepairs.slice(0, 3).join('; ')}.`);
+    if (screenRepairs) autoRepairs.push(`FORMULA_VERBATIM — ${screenRepairs} cảnh: công thức trên màn hình lấy nguyên văn từ tài liệu.`);
 
     // ------------------------------------------------------------------
     // C. DAR-P (+ pause-only repair)
@@ -307,12 +364,14 @@ export class QualityVisualGuard {
       check_id: 'chk_language_terminology',
       rule_name: 'Chính sách ngôn ngữ: tiếng Việt + thuật ngữ tiếng Anh chuẩn',
       category: 'language_terminology',
-      status: statusFor(langScore, 0.85, 0.7),
+      // Style advice, not an error: English words the lecturer chose are allowed.
+      status: langScore >= 0.85 ? 'PASSED' : 'WARNING',
       score: round2(langScore),
       threshold: 0.85,
       actual_value: isEn ? 'Không áp dụng (lời giảng tiếng Anh)' : `${validSentences}/${totalSentences} câu đạt`,
-      message: 'Câu tiếng Việt tự nhiên, giữ thuật ngữ kỹ thuật tiếng Anh, không chêm từ tiếng Anh thừa.',
-      auto_repaired: terminologyRepairs > 0
+      message: 'Câu tiếng Việt tự nhiên, giữ thuật ngữ kỹ thuật tiếng Anh, không chêm từ tiếng Anh thừa. Chỉ là gợi ý, không bắt buộc sửa.',
+      auto_repaired: terminologyRepairs > 0,
+      optional: true
     });
 
     // ------------------------------------------------------------------
@@ -391,6 +450,63 @@ export class QualityVisualGuard {
       message: 'Không có ký tự ô vuông, PUA/Wingdings hay khoảng số lỗi (1^-4).'
     });
 
+    // Formulas & symbols reach the lecture verbatim. Altered/invented formulas cannot be repaired
+    // without guessing, so they fail the lecture (a wrong formula is worse than a missing one).
+    const totalScreenFormulas = workingScenes.reduce((n, s) => n + (s.formulas?.length || 0), 0);
+    const formulaScore = formulaSpans === 0 ? 1 : Math.max(0, 1 - alteredFormulas.length / formulaSpans);
+    checks.push({
+      check_id: 'chk_formula_integrity',
+      rule_name: 'Công thức & ký hiệu giữ nguyên văn tài liệu',
+      category: 'factual_consistency',
+      status: alteredFormulas.length === 0 ? 'PASSED' : 'FAILED',
+      score: round2(formulaScore),
+      threshold: 1,
+      actual_value:
+        `${formulaSpans} đoạn ký hiệu trong lời giảng • ${formulaRepairs.length} đã sửa về dạng gốc • ${alteredFormulas.length} sai/bịa` +
+        (alteredFormulas.length ? ` (${alteredFormulas.slice(0, 3).map((a) => `${a.scene}: "${a.span}"`).join(', ')})` : '') +
+        ` • ${totalScreenFormulas} công thức trên màn hình` +
+        (modelTotal ? ` • LLM chép đúng ${modelCopied}/${modelTotal}` : ''),
+      message: 'Ký hiệu toán/LaTeX trong lời giảng phải xuất hiện y nguyên trong tài liệu; công thức hiển thị luôn lấy nguyên văn từ nguồn.',
+      auto_repaired: formulaRepairs.length > 0 || screenRepairs > 0
+    });
+
+    // Style: measured only on scenes the LLM wrote in the chosen style. Soft: never FAILED.
+    const styled = workingScenes.filter((s) => extras.styledSceneIds?.has(s.section_id));
+    const profile = getStyleProfile(config.narrationStyle);
+    if (styled.length) {
+      const measures = styled.map((s) => ({ id: s.section_id, m: measureStyle(s.narration.text, config.narrationStyle) }));
+      const bannedScenes = measures.filter((x) => x.m.bannedHits.length);
+      const sentences = measures.reduce((n, x) => n + x.m.sentences, 0);
+      const avg = sentences ? measures.reduce((n, x) => n + x.m.avgSentenceWords * x.m.sentences, 0) / sentences : 0;
+      const [lo, hi] = profile.sentenceWords;
+      const lengthFit = avg >= lo && avg <= hi ? 1 : Math.max(0, 1 - (avg < lo ? lo - avg : avg - hi) / lo);
+      const styleScore = 0.6 * (1 - bannedScenes.length / styled.length) + 0.4 * lengthFit;
+      const hits = Array.from(new Set(bannedScenes.flatMap((x) => x.m.bannedHits)));
+      checks.push({
+        check_id: 'chk_style_conformance',
+        rule_name: `Đúng phong cách lời giảng: ${profile.label}`,
+        category: 'narrative_coherence',
+        status: styleScore >= 0.9 ? 'PASSED' : 'WARNING',
+        score: round2(styleScore),
+        threshold: 0.9,
+        actual_value:
+          `${styled.length} cảnh • TB ${avg.toFixed(1)} từ/câu (khoảng ${lo}–${hi})` +
+          ` • ${bannedScenes.length} cảnh có cụm từ cấm${hits.length ? `: ${hits.slice(0, 4).map((h) => `"${h}"`).join(', ')}` : ''}`,
+        message: 'Đo từ vựng cấm và độ dài câu trung bình theo hồ sơ phong cách. Phong cách chỉ đổi cách nói, không đổi kiến thức.'
+      });
+    } else {
+      checks.push({
+        check_id: 'chk_style_conformance',
+        rule_name: `Đúng phong cách lời giảng: ${profile.label}`,
+        category: 'narrative_coherence',
+        status: 'PASSED',
+        score: 1,
+        threshold: 0.9,
+        actual_value: 'Không áp dụng (lời giảng theo mẫu có giọng cố định)',
+        message: 'Phong cách chỉ áp dụng khi AI viết lời giảng.'
+      });
+    }
+
     const narrativeScore = (repetitionScore + connectiveScore + headingScore + purificationScore) / 4;
 
     // ------------------------------------------------------------------
@@ -424,7 +540,7 @@ export class QualityVisualGuard {
     const overallDim = round2(contentDim * 0.25 + pedagogyDim * 0.2 + narrativeDim * 0.2 + visualDim * 0.2 + technicalDim * 0.15);
 
     const detectedIssues: import('../../types').QualityIssue[] = checks
-      .filter((c) => c.status !== 'PASSED')
+      .filter((c) => c.status !== 'PASSED' && !c.optional)
       .map((c) => ({
         issue_id: `iss_${c.check_id}_${Date.now().toString(36)}`,
         category: c.category.includes('visual') ? 'visual' : c.category.includes('factual') ? 'content' : c.category.includes('temporal') ? 'technical' : 'narrative',
@@ -525,7 +641,8 @@ export class QualityVisualGuard {
   }
 
   /**
-   * Scales every planned pause toward the target but clamps each one to its type's range.
+   * Scales every planned pause toward the target inside its type's range, keeping the rhythm: a pause
+   * that was longer than another of its type stays longer (scaleInRange).
    * If the words alone are too long/short for the target, DAR-P stays off: that is the honest result.
    */
   private rescalePauses(scenes: CLSGScene[], targetSec: number): CLSGScene[] {
@@ -539,12 +656,12 @@ export class QualityVisualGuard {
       const sentences = s.prosody_plan.sentences.map((sent) => {
         const wordPauses = (sent.word_pauses || []).map((p) => {
           const [lo, hi] = PAUSE_RANGES_MS[p.pause_type] || [p.duration_ms, p.duration_ms];
-          const ms = Math.round(Math.max(lo, Math.min(hi, p.duration_ms * factor)));
+          const ms = scaleInRange(p.duration_ms, lo, hi, factor);
           pauseMs += ms;
           return { ...p, duration_ms: ms };
         });
         const [lo, hi] = PAUSE_RANGES_MS[sent.prosody.pause_type] || [sent.prosody.pause_after_ms, sent.prosody.pause_after_ms];
-        const after = Math.round(Math.max(lo, Math.min(hi, sent.prosody.pause_after_ms * factor)));
+        const after = scaleInRange(sent.prosody.pause_after_ms, lo, hi, factor);
         pauseMs += after;
         return { ...sent, word_pauses: wordPauses, prosody: { ...sent.prosody, pause_after_ms: after } };
       });

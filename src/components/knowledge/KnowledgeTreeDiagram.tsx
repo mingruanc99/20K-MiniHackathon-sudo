@@ -4,7 +4,7 @@
  * Structural nodes show their lecture time and share of the parent; keyword nodes show weight.
  * Clicking a node selects it (editing happens in the side panel); the chevron expands/collapses.
  */
-import React, { useMemo } from 'react';
+import React,{ useMemo } from 'react';
 import { ChevronRight, ChevronDown, Lock, EyeOff } from 'lucide-react';
 import { KnowledgeTreeNode } from '../../types';
 

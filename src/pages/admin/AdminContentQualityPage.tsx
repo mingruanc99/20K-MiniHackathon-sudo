@@ -1,23 +1,15 @@
 // src/pages/admin/AdminContentQualityPage.tsx
-import React, { useState, useEffect } from 'react';
+import React,{ useState, useEffect } from 'react';
 import { adminTelemetryService } from '../../services/adminTelemetryService';
-import { ContentQualityIssue, QualityIssueType, ErrorSeverity } from '../../types';
+import { ContentQualityIssue } from '../../types';
 import { CompactChart } from '../../components/admin/CompactChart';
 import {
   CheckCircle2,
   AlertTriangle,
   Flame,
-  ArrowUpRight,
-  Filter,
-  Eye,
-  X,
+  ArrowUpRight,X,
   Search,
-  Check,
-  ShieldCheck,
-  SplitSquareVertical,
-  Layers,
-  Sparkles,
-  RefreshCw
+  Check,SplitSquareVertical,RefreshCw
 } from 'lucide-react';
 
 export const AdminContentQualityPage: React.FC = () => {

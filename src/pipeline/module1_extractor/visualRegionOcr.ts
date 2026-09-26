@@ -2,11 +2,16 @@
 /**
  * Region OCR: reads only the located visual regions (never whole documents).
  *
- * Engine routing (preference "auto"): tesseract.js first for every region kind (free, local, exact
- * characters). Gemini vision re-reads a crop only when tesseract failed or is unsure, the region is
- * not a plain picture, and the scan's small vision budget (`maxLlmCalls`) is not spent. LLM quota is
- * limited, so OCR must stand on tesseract alone.
- * Preferences "tesseract" / "gemini" force one engine (with the other as fallback).
+ * Engine routing (preference "auto"):
+ *   - diagrams / charts: Gemini vision first (structure, not just labels), within the scan's small
+ *     vision budget (`maxLlmCalls`); the text engine reads their labels once the budget is spent.
+ *   - text, tables, scanned pages, manual regions, pictures: the text engine first. That is VietOCR
+ *     (ocr_server/, trained for Vietnamese diacritics, table structure model) when VITE_VIETOCR_URL is
+ *     set and the server answers, else tesseract.js. Gemini re-reads a crop only when the text engine
+ *     failed, is unsure, or the reading looks like a formula (neither text engine reads math), and
+ *     never for plain pictures.
+ * Preferences "vietocr" / "tesseract" / "gemini" force one engine (with the others as fallback).
+ * Every Gemini/VietOCR reading is cached by crop hash (regionOcrCache), so an image is paid for once.
  * Native regions (PPTX tables, chart XML, SmartArt) already carry their data and are skipped.
  *
  * Before tesseract, crops are upscaled so text reaches ~30px x-height, converted to grayscale,
@@ -20,8 +25,9 @@ import { CanonicalDocumentTree, ContentElement, RegionOcrResult, VisualRegion } 
 import { llmRouter } from '../../services/llm/LLMRouter';
 import type { LLMImageInput } from '../../services/llm/GeminiProvider';
 import { regionAssetStore } from './regionAssets';
+import { getCachedReading, putCachedReading, regionImageKey } from './regionOcrCache';
 
-export type OcrPreference = 'auto' | 'tesseract' | 'gemini';
+export type OcrPreference = 'auto' | 'vietocr' | 'tesseract' | 'gemini';
 
 export interface RegionOcrOptions {
   concurrency: number;
@@ -56,6 +62,94 @@ const TESSERACT_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tess
 const TESSERACT_POOL = 2;
 /** Below this mean word confidence (0-100) a tesseract reading is considered unreliable. */
 const LOW_CONFIDENCE = 62;
+/** Below this mean line probability (0-1) a VietOCR reading is considered unreliable. */
+const VIETOCR_LOW_CONFIDENCE = 0.8;
+const VIETOCR_URL = (import.meta.env?.VITE_VIETOCR_URL || '').replace(/\/+$/, '');
+const VIETOCR_TIMEOUT_MS = 45_000;
+/** After a failed health check, wait this long before trying the server again. */
+const VIETOCR_RETRY_MS = 60_000;
+
+// ---------------------------------------------------------------------------
+// VietOCR service (ocr_server/)
+// ---------------------------------------------------------------------------
+let vietOcrHealth: { at: number; up: Promise<boolean>; ok?: boolean } | null = null;
+
+/** Health check, shared by all regions of a scan; also wakes a sleeping free-tier host. */
+function vietOcrAvailable(): Promise<boolean> {
+  if (!VIETOCR_URL) return Promise.resolve(false);
+  const now = Date.now();
+  if (!vietOcrHealth || (vietOcrHealth.ok === false && now - vietOcrHealth.at > VIETOCR_RETRY_MS)) {
+    const health: { at: number; up: Promise<boolean>; ok?: boolean } = {
+      at: now,
+      up: fetch(`${VIETOCR_URL}/health`, { signal: AbortSignal.timeout(VIETOCR_TIMEOUT_MS) })
+        .then((r) => r.ok)
+        .catch(() => false)
+    };
+    health.up.then((ok) => {
+      health.ok = ok;
+      if (!ok) {
+        console.warn(`VietOCR server ${VIETOCR_URL} unreachable, using tesseract`);
+        getScheduler().catch(() => undefined);
+      }
+    });
+    vietOcrHealth = health;
+  }
+  return vietOcrHealth.up;
+}
+
+/**
+ * Warms the OCR engines before a scan: pings VietOCR (wakes a sleeping host) and only downloads
+ * tesseract (~20 MB) when VietOCR is not configured or not answering.
+ */
+export function warmUpOcr(): void {
+  if (typeof window === 'undefined') return;
+  if (VIETOCR_URL) vietOcrAvailable();
+  else warmUpTesseract();
+}
+
+async function ocrWithVietOcr(image: LLMImageInput, region: VisualRegion): Promise<RegionOcrResult> {
+  const t0 = performance.now();
+  const mode = region.kind === 'table' || region.kind === 'manual' ? 'table' : 'text';
+  const res = await fetch(`${VIETOCR_URL}/ocr`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: image.data, mode }),
+    signal: AbortSignal.timeout(VIETOCR_TIMEOUT_MS)
+  });
+  if (!res.ok) throw new Error(`VietOCR HTTP ${res.status}`);
+  const data: { text?: string; lines?: { text: string }[]; table?: string[][]; confidence?: number } = await res.json();
+
+  const table = Array.isArray(data.table) ? data.table.filter((r) => Array.isArray(r) && r.some((c) => c)) : [];
+  const isTable = table.length >= 2 && table[0].length >= 2;
+  const sparse = region.kind === 'diagram' || region.kind === 'chart' || region.kind === 'picture';
+  const lineTexts = (data.lines || []).map((l) => l.text.trim()).filter((t) => t && !NOISE_TOKEN.test(t));
+  const nodes = sparse && !isTable ? lineTexts.filter((t) => t.length > 1) : [];
+  const text = isTable ? table.map((r) => r.join(' | ')).join('\n') : lineTexts.join('\n');
+  const noTextPicture = !text && region.kind === 'picture';
+  return {
+    engine: 'vietocr',
+    status: text || noTextPicture ? 'done' : 'failed',
+    content_type: isTable ? 'table' : nodes.length ? 'diagram' : noTextPicture ? 'photo' : 'text',
+    text,
+    table: isTable ? table : undefined,
+    nodes: nodes.length ? nodes.slice(0, 30) : undefined,
+    confidence: typeof data.confidence === 'number' ? data.confidence : undefined,
+    error: text || noTextPicture ? undefined : 'Không nhận diện được chữ',
+    latency_ms: Math.round(performance.now() - t0)
+  };
+}
+
+/**
+ * Math that a line-based text engine mangles: operators next to letters/Greek, sub/superscripts,
+ * fraction or summation marks. Short readings only; a paragraph that mentions "x = 1" is still prose.
+ */
+export function looksLikeFormula(text: string): boolean {
+  const t = text.trim();
+  if (!t || t.length > 220) return false;
+  const mathMarks = (t.match(/[=≈≠≤≥∑∏∫√∂∇±×÷^_∈∀∃→←⇒αβγδεηθλμπσφωΣΔΘΛΠΦΩ]/g) || []).length;
+  const letters = (t.match(/\p{L}/gu) || []).length;
+  return mathMarks >= 2 && mathMarks / Math.max(1, letters) > 0.15;
+}
 
 // ---------------------------------------------------------------------------
 // tesseract.js (lazy CDN load, small scheduler pool)
@@ -102,7 +196,7 @@ async function getScheduler(): Promise<any> {
  * Starts loading tesseract (core + vie/eng traineddata) in the background. The first load downloads
  * ~20 MB and takes ~20 s; later loads come from the browser cache in well under a second.
  */
-export function warmUpTesseract(): void {
+function warmUpTesseract(): void {
   if (typeof window === 'undefined') return;
   getScheduler().catch((err) => console.warn('tesseract warm-up failed:', err));
 }
@@ -488,7 +582,10 @@ async function ocrOneRegion(
   if (!image) {
     return { engine: 'native', status: 'skipped', error: 'Không cắt được ảnh vùng này (định dạng EMF/WMF hoặc thiếu file nguồn)' };
   }
-  const tesseractFirst = preference !== 'gemini';
+  const cacheKey = await regionImageKey(image).catch(() => null);
+  const cached = await getCachedReading(cacheKey);
+  // A forced engine only reuses that engine's reading (the user asked for a re-read with it).
+  if (cached && (preference === 'auto' || preference === cached.engine)) return { ...cached, cached: true, latency_ms: 0 };
 
   const tryGemini = async (): Promise<RegionOcrResult | null> => {
     if (!takeLlmCall()) return null;
@@ -507,26 +604,46 @@ async function ocrOneRegion(
       return null;
     }
   };
-
-  if (tesseractFirst) {
-    const t = await tryTesseract();
-    const unreliable = !t || t.status !== 'done' || (Boolean(t.text) && (t.confidence ?? 0) * 100 < LOW_CONFIDENCE);
-    // Pictures rarely hold teachable text; they never spend the vision budget under "auto".
-    if (!unreliable || preference === 'tesseract' || region.kind === 'picture') {
-      return t || { engine: 'tesseract', status: 'failed', error: 'tesseract không chạy được' };
+  /** VietOCR when the server is up, else tesseract (unless tesseract was explicitly excluded). */
+  const tryTextEngine = async (): Promise<RegionOcrResult | null> => {
+    if (preference !== 'tesseract' && (await vietOcrAvailable())) {
+      try {
+        return await ocrWithVietOcr(image, region);
+      } catch (err: any) {
+        console.warn(`VietOCR failed for ${region.region_id}, using tesseract:`, err);
+      }
     }
-    const g = await tryGemini();
-    // Keep tesseract's characters as the reading if Gemini is unavailable.
-    return g || t || { engine: 'tesseract', status: 'failed', error: 'Không đọc được vùng này' };
-  }
+    return tryTesseract();
+  };
+  const isUnreliable = (r: RegionOcrResult | null) => {
+    if (!r || r.status !== 'done') return true;
+    if (!r.text) return false;
+    const conf = r.confidence ?? 0;
+    return (r.engine === 'vietocr' ? conf < VIETOCR_LOW_CONFIDENCE : conf * 100 < LOW_CONFIDENCE) || looksLikeFormula(r.text);
+  };
+  const failed = (): RegionOcrResult => ({ engine: 'tesseract', status: 'failed', error: 'Không đọc được vùng này' });
 
-  const g = await tryGemini();
-  if (g) return g;
-  return (await tryTesseract()) || { engine: 'tesseract', status: 'failed', error: 'Không đọc được vùng này' };
+  let result: RegionOcrResult;
+  const visualFirst = preference === 'gemini' || (preference === 'auto' && (region.kind === 'diagram' || region.kind === 'chart'));
+  if (visualFirst) {
+    result = (await tryGemini()) || (await tryTextEngine()) || failed();
+  } else {
+    const t = await tryTextEngine();
+    // Pictures rarely hold teachable text; they never spend the vision budget under "auto".
+    if (!isUnreliable(t) || preference !== 'auto' || region.kind === 'picture') {
+      result = t || failed();
+    } else {
+      // Keep the text engine's characters as the reading if Gemini is unavailable.
+      result = (await tryGemini()) || t || failed();
+    }
+  }
+  // An unsure VietOCR reading (vision budget spent this run) must stay eligible for a Gemini re-read later.
+  if (result.engine === 'gemini' || !isUnreliable(result)) await putCachedReading(cacheKey, result);
+  return result;
 }
 
 /** Picks which regions get OCR'd under the page/document caps (largest regions first). */
-export function selectRegionsForOcr(regions: VisualRegion[], opts: Pick<RegionOcrOptions, 'maxRegionsPerPage' | 'maxRegionsTotal'>): VisualRegion[] {
+function selectRegionsForOcr(regions: VisualRegion[], opts: Pick<RegionOcrOptions, 'maxRegionsPerPage' | 'maxRegionsTotal'>): VisualRegion[] {
   const needs = regions.filter((r) => !r.excluded && (!r.ocr || r.ocr.status === 'pending' || r.ocr.status === 'failed') && r.ocr?.engine !== 'native');
   const byPage = new Map<number, VisualRegion[]>();
   needs.forEach((r) => byPage.set(r.page_number, [...(byPage.get(r.page_number) || []), r]));

@@ -1,5 +1,5 @@
 // src/components/admin/CompactChart.tsx
-import React, { useState } from 'react';
+import React,{ useState } from 'react';
 
 interface DataPoint {
   label: string;

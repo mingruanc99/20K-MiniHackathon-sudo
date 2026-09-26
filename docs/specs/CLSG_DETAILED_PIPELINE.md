@@ -1,6 +1,8 @@
 # TÀI LIỆU ĐẶC TẢ PIPELINE CHI TIẾT CỦA HỆ THỐNG CLSG-IR
 *(Configurable Lecture Script & Visual Intent Representation)*
 
+> **Lưu ý:** Tài liệu này mô tả bản cài đặt Python (`app/`, `scripts/run_pose_estimation_pipeline.py`) đã được gỡ khỏi repo; xem git history tại commit `35d4cab` nếu cần. Pipeline đang chạy là bản TypeScript trong `src/pipeline/` (module1_extractor → module2_planner → module3_generator → module4_guard), chỉ số đánh giá ở `docs/specs/EVALUATION.md`.
+
 ---
 
 ## 1. TỔNG QUAN HỆ THỐNG (SYSTEM OVERVIEW)

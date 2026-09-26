@@ -18,19 +18,24 @@ import {
   NarrativeIR,
   KnowledgeIR,
   CurriculumIR,
-  KnowledgeTree
+  KnowledgeTree,
+  StudioLine,
+  StudioQuizItem
 } from '../types';
 import { extractDocument } from './module1_extractor/extractorFactory';
 import { InstructionalPlanner } from './module2_planner/instructionalPlanner';
 import { narrativeIntelligenceEngine } from './services/narrativeIntelligenceEngine';
 import { knowledgeSpaceEngine } from './services/knowledgeSpaceEngine';
 import { NarrationGenerator } from './module3_generator/narrationGenerator';
-import { generateLlmNarrations } from './module3_generator/llmNarrationGenerator';
+import { ScriptPageResult, writeStudioScript } from './module3_generator/llmScriptWriter';
+import { dressTemplatePage } from './module3_generator/templateScriptWriter';
+import { extractSourceFormulas } from './services/formulaIntegrity';
+import { buildLessonIndex, referencedEarlierEntries } from './services/lessonIndex';
 import { ProsodyPlanner } from './module3_generator/prosodyPlanner';
 import { VisualIntentGenerator } from './module3_generator/visualIntentGenerator';
 import { QualityVisualGuard } from './module4_guard/qualityGuard';
 import { treeToPipelineOverrides, TreePipelineOverrides } from './services/knowledgeTreeOps';
-import { applyConnectivePolicy, applyHeadingPolicy, HeadingSpec, ConnectiveStats, HeadingStats } from './services/discoursePolicy';
+import { applyConnectivePolicy, applyHeadingPolicy, HeadingSpec } from './services/discoursePolicy';
 import { regionReadingText } from './module1_extractor/visualRegionOcr';
 import { usageMeter } from '../services/llm/usageMeter';
 import { llmRouter } from '../services/llm/LLMRouter';
@@ -54,6 +59,16 @@ export interface PipelineRunOptions {
   knowledgeTree?: KnowledgeTree;
   projectId?: string;
   projectTitle?: string;
+}
+
+/** Below this share of the target, the lecture length is set from the content (the slides say too little). */
+const FIT_TO_CONTENT_BELOW = 0.85;
+
+/** 80 -> "1 phút 20 giây", 45 -> "45 giây". */
+function spokenLength(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return m ? `${m} phút${s ? ` ${s} giây` : ''}` : `${s} giây`;
 }
 
 export class PipelineOrchestrator {
@@ -152,32 +167,44 @@ export class PipelineOrchestrator {
       return { sceneId: plan.section_id, sectionTitle: plan.title, chapterId: ch?.chapterId, chapterTitle: ch?.chapterTitle, isChapterFirstPage: ch?.isFirstPage };
     });
 
-    let llmTexts: (string | null)[] = blueprint.sections.map(() => null);
+    // Formulas & definitions of the whole lesson: cross-page references in prompts, grounding in the guard.
+    const lessonIndex = buildLessonIndex(docTree, lang);
+    let llmResults: (ScriptPageResult | null)[] = blueprint.sections.map(() => null);
+    let studioQuiz: StudioQuizItem[] = [];
+    const generationNotes: string[] = [];
+    if (effectiveConfig.narrationEngine === 'llm' && engine !== 'llm') {
+      generationNotes.push('Đã chọn "AI viết" nhưng chưa có API key: toàn bộ lời giảng dùng mẫu (Theo mẫu).');
+    }
     if (engine === 'llm') {
-      llmTexts = await generateLlmNarrations(
+      // The whole lecture in few calls (studio handoff format), see llmScriptWriter.ts.
+      const script = await writeStudioScript(
         blueprint.sections.map((plan, idx) => {
           const ch = overrides?.chapterOf[plan.section_id];
           return {
             plan,
             section: docMap.get(plan.section_id),
-            prevSection: idx > 0 ? docMap.get(blueprint.sections[idx - 1].section_id) : undefined,
-            nextTitle: blueprint.sections[idx + 1]?.title,
             chapter: ch && chapterCount > 1 ? { title: ch.chapterTitle, isFirstPage: ch.isFirstPage } : undefined,
             keywords: plan.key_concepts || [],
-            lessonTitle: blueprint.lecture_title || docTree.title,
-            isFirstScene: idx === 0
+            earlier: referencedEarlierEntries(lessonIndex, docMap.get(plan.section_id), idx + 1)
           };
         }),
+        blueprint.lecture_title || docTree.title,
         effectiveConfig
       );
+      llmResults = script.pages;
+      studioQuiz = script.quiz;
+      generationNotes.push(...script.errors);
     }
 
     const rawTexts: string[] = [];
     const generatedHistory: SectionSummaryInfo[] = [];
     const usedOpenings = new Set<string>();
     const usedPhrases = new Set<string>();
-    const usedAnalogies = new Set<string>();
     let llmFallbacks = 0;
+    // Template pages get spoken framing in the chosen style (templateScriptWriter.ts); phrases used once per lecture.
+    const templateLines: (StudioLine[] | undefined)[] = [];
+    const usedFraming = new Set<string>();
+    const pageTitles = blueprint.sections.map((p) => p.title);
 
     blueprint.sections.forEach((plan, idx) => {
       const docSec = docMap.get(plan.section_id);
@@ -186,7 +213,7 @@ export class PipelineOrchestrator {
       const ch = overrides?.chapterOf[plan.section_id];
       const role = plan.slide_analysis?.slide_role || 'KEY_EXPLANATION';
 
-      let text = llmTexts[idx];
+      let text = llmResults[idx]?.narration;
       if (!text) {
         if (engine === 'llm') llmFallbacks++;
         const globalContext: GlobalNarrativeContext = {
@@ -219,9 +246,25 @@ export class PipelineOrchestrator {
         });
         text = narrativeIntelligenceEngine.revoiceDraft(text, narrativeIr.narrative_beats[idx], isVi, {
           role,
-          isChapterStart: Boolean(ch?.isFirstPage),
-          usedAnalogies
+          isChapterStart: Boolean(ch?.isFirstPage)
         });
+        const visual = visualReadings[0]?.kind;
+        const dressed = dressTemplatePage({
+          body: text,
+          plan,
+          index: idx,
+          total: blueprint.sections.length,
+          titles: pageTitles,
+          prevKeywords: prevPlan?.key_concepts || [],
+          nextKeywords: nextPlan?.key_concepts || [],
+          keywords: plan.key_concepts || [],
+          style: effectiveConfig.narrationStyle,
+          lang,
+          visualKind: !visual ? undefined : isVi ? (visual === 'table' ? 'bảng' : visual === 'chart' ? 'biểu đồ' : visual === 'diagram' ? 'sơ đồ' : 'hình minh hoạ') : visual,
+          used: usedFraming
+        });
+        text = dressed.narration;
+        templateLines[idx] = dressed.lines;
       }
 
       const firstSentence = text.split(/[.!?\n]/)[0]?.trim();
@@ -287,6 +330,10 @@ export class PipelineOrchestrator {
         prosody_plan: prosodyPlan,
         visual_cues: visualCues,
         section_summary: plan.instructional_goal,
+        // The model's copy for LLM scenes (the guard measures it and restores the source spelling).
+        formulas: llmResults[idx]?.formulas ?? extractSourceFormulas(docMap.get(plan.section_id)),
+        narration_source: llmResults[idx] ? 'llm' : 'template',
+        studio_lines: llmResults[idx]?.lines ?? templateLines[idx],
         scene_start_time_sec: 0,
         scene_end_time_sec: prosodyPlan.effective_scene_duration_sec,
         scene_duration_sec: prosodyPlan.effective_scene_duration_sec
@@ -297,13 +344,37 @@ export class PipelineOrchestrator {
       visual_cues: draftScenes.reduce((s, sc) => s + sc.visual_cues.length, 0)
     });
 
+    // Slides with too little to say: after the framing has filled what it could, the lecture length
+    // follows the content (with a note) instead of failing the duration check for missing words.
+    const draftSec = draftScenes.reduce((s, sc) => s + sc.scene_duration_sec, 0);
+    let guardBlueprint = blueprint;
+    if (draftSec > 0 && draftSec < blueprint.total_target_duration_sec * FIT_TO_CONTENT_BELOW) {
+      guardBlueprint = { ...blueprint, total_target_duration_sec: Math.max(20, Math.round(draftSec)) };
+    }
+
     // Stage 4: Quality Guard
     onProgress?.('Kiểm định chất lượng...', 88);
     t = performance.now();
-    const { qualityReport, verifiedIr } = this.guard.validateAndCertify(draftScenes, blueprint, docTree, effectiveConfig, { headingSpecs });
+    const { qualityReport, verifiedIr } = this.guard.validateAndCertify(draftScenes, guardBlueprint, docTree, effectiveConfig, {
+      headingSpecs,
+      // Styles apply only to scenes the LLM actually wrote (template fallbacks keep the fixed voice).
+      styledSceneIds: new Set(blueprint.sections.filter((_, i) => llmResults[i]).map((p) => p.section_id))
+    });
     verifiedIr.lesson_model = blueprint.lesson_model;
     verifiedIr.content_prioritization = blueprint.content_prioritization;
     verifiedIr.teaching_units = blueprint.teaching_units;
+    verifiedIr.lesson_index = lessonIndex;
+    if (studioQuiz.length) verifiedIr.studio_quiz = studioQuiz;
+    if (guardBlueprint !== blueprint) {
+      // The length the lecturer will actually hear, after the guard's repairs.
+      const finalSec = verifiedIr.scenes.reduce((s, sc) => s + sc.scene_duration_sec, 0);
+      generationNotes.push(
+        `Slide chỉ đủ nội dung cho khoảng ${spokenLength(finalSec)}, nên thời lượng được đặt theo nội dung (mục tiêu ban đầu ${spokenLength(blueprint.total_target_duration_sec)}).` +
+          (engine === 'template' ? ' Muốn bài dài hơn với phần giải thích chi tiết, hãy chọn "AI viết".' : '')
+      );
+    }
+    if (engine === 'llm' && llmFallbacks) generationNotes.push(`${llmFallbacks}/${blueprint.sections.length} trang AI không viết được, đã dùng mẫu (Theo mẫu) cho các trang đó.`);
+    if (generationNotes.length) verifiedIr.generation_notes = Array.from(new Set(generationNotes));
     verifiedIr.narrative_ir = narrativeIr;
     verifiedIr.knowledge_ir = knowledgeIr;
     verifiedIr.curriculum_ir = curriculumIr;

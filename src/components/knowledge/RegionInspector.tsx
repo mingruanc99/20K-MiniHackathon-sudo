@@ -5,7 +5,7 @@
  * - regions are overlaid and colored by OCR status; users can switch regions off, draw new ones,
  *   and re-run OCR on the selection
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React,{ useEffect, useMemo, useRef, useState } from 'react';
 import { Crop, EyeOff, Eye, RefreshCw, Trash2, ScanText, Loader2 } from 'lucide-react';
 import { CanonicalDocumentTree, VisualRegion } from '../../types';
 import { regionAssetStore } from '../../pipeline/module1_extractor/regionAssets';
@@ -148,9 +148,10 @@ export const RegionInspector: React.FC<Props> = ({ docTree, sourceReady, busy, o
               value={preference}
               onChange={(e) => setPreference(e.target.value as OcrPreference)}
               className="rounded-lg border border-rule-strong bg-paper-sheet px-2 py-1 text-xs text-ink"
-              title="Tự động: tesseract cho mọi vùng; Gemini chỉ đọc lại vài vùng tesseract chưa chắc chắn (tối đa 3 lần mỗi lượt)"
+              title="Tự động: VietOCR (hoặc tesseract nếu server tắt) cho chữ và bảng; Gemini cho sơ đồ, biểu đồ, công thức và vùng đọc chưa chắc (tối đa 3 lần mỗi lượt). Kết quả được cache theo ảnh."
             >
               <option value="auto">Tự động</option>
+              <option value="vietocr">Chỉ VietOCR</option>
               <option value="tesseract">Chỉ tesseract</option>
               <option value="gemini">Ưu tiên Gemini</option>
             </select>

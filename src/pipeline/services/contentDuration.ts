@@ -20,7 +20,6 @@ import { regionReadingText } from '../module1_extractor/visualRegionOcr';
 import { MIN_NODE_SEC, rebalanceToTarget, toggleExclude } from './knowledgeTreeOps';
 
 export const COVERAGE_PRESETS = [0.25, 0.5, 0.75, 1, 1.25];
-export const DEFAULT_COVERAGE = 1;
 
 const PAUSE_PER_SENTENCE_SEC = 0.5;
 const DECORATIVE_SEC = 5;
@@ -29,6 +28,12 @@ const MIN_CONTENT_SEC = 10;
 const MIN_SCENE_WORDS = 15;
 /** Scene-boundary pause and opening that every generated scene carries (measured on the fixture decks). */
 const SCENE_OVERHEAD_SEC = 2.5;
+/**
+ * Spoken framing a lecturer adds around a page (a bridge into it, a guiding question or a takeaway):
+ * about one sentence. Without it the whole length goes to reading the slide text and the narration can
+ * only recite it (templateScriptWriter fills this room; the LLM uses it to explain).
+ */
+const FRAMING_SEC = 8;
 
 const NON_BODY = new Set(['title', 'note', 'table', 'diagram', 'image']);
 const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
@@ -70,7 +75,7 @@ export function estimatePageContent(
   const decorative = w < 6;
   const secOf = (text: string) => (words(text) / Math.max(60, opts.wpm)) * 60 + sentences(text) * PAUSE_PER_SENTENCE_SEC;
   const raw = secOf(spoken);
-  const full = decorative ? DECORATIVE_SEC : Math.max(MIN_CONTENT_SEC, Math.round(raw));
+  const full = decorative ? DECORATIVE_SEC : Math.max(MIN_CONTENT_SEC, Math.round(raw + FRAMING_SEC));
   const first = [...composed.body, ...composed.visuals][0] || '';
   return {
     section_id: sec.section_id,

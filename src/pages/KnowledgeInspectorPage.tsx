@@ -7,7 +7,7 @@
  *    re-OCR. OCR text is merged into the document so narration and keywords can use it.
  * Everything reads the user's own project; there is no demo/fallback data.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React,{ useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -78,7 +78,7 @@ const ProjectPicker: React.FC = () => {
         <div className="text-xs text-ink-faint">Đang tải...</div>
       ) : projects.length === 0 ? (
         <div className="rounded-xl border border-rule bg-paper-sheet p-6 text-xs text-ink-soft">
-          Chưa có bài giảng nào. <Link to="/projects/new" className="font-semibold text-navy">Tạo bài giảng mới</Link>
+          Chưa có bài giảng nào. <Link to="/lectures/new" className="font-semibold text-navy">Tạo bài giảng mới</Link>
         </div>
       ) : (
         <ul className="divide-y divide-rule rounded-xl border border-rule bg-paper-sheet">
@@ -411,7 +411,7 @@ const ProjectKnowledgeInspector: React.FC<{ projectId: string }> = ({ projectId 
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
-        <Link to={`/projects/${project.projectId}`} className="rounded-lg border border-rule-strong p-1.5 text-ink-soft hover:bg-paper-band" aria-label="Về bài giảng">
+        <Link to={`/lectures/${project.projectId}`} className="rounded-lg border border-rule-strong p-1.5 text-ink-soft hover:bg-paper-band" aria-label="Về bài giảng">
           <ArrowLeft className="w-4 h-4" />
         </Link>
         <div className="min-w-0">
@@ -452,7 +452,7 @@ const ProjectKnowledgeInspector: React.FC<{ projectId: string }> = ({ projectId 
             disabled={Boolean(busy) || !tree}
             onClick={async () => {
               const next = await save({ configuration: { ...project.configuration, targetDurationSeconds: Math.round(totalSec) || project.configuration.targetDurationSeconds } });
-              if (next) navigate(`/projects/${project.projectId}?rerun=1`);
+              if (next) navigate(`/lectures/${project.projectId}?rerun=1`);
             }}
             className="inline-flex items-center gap-1.5 rounded-lg bg-cover px-3 py-1.5 text-xs font-semibold text-white hover:bg-cover disabled:opacity-40"
           >
@@ -608,5 +608,3 @@ const ProjectKnowledgeInspector: React.FC<{ projectId: string }> = ({ projectId 
     </div>
   );
 };
-
-export default KnowledgeInspectorPage;

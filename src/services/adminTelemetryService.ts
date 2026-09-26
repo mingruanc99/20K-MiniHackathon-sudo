@@ -14,12 +14,8 @@ import {
   TTSMetric,
   EvaluationMetric,
   LangfuseTraceSummary,
-  QualityIssueType,
-  ErrorSeverity,
-  LessonAdminItem,
-  UserAdminRecord,
-  UserRole,
-  User,
+  QualityIssueType,LessonAdminItem,
+  UserAdminRecord,User,
   Project
 } from '../types';
 import { projectService } from './projectService';
@@ -56,9 +52,8 @@ export interface RealTTSRecord {
 
 type TelemetryListener = () => void;
 
-export class AdminTelemetryService {
+class AdminTelemetryService {
   private readonly DEFAULT_PROJECT_ID = 'cmucynwfb02llad0dhxexgdr2';
-  private readonly DEFAULT_BASE_URL = 'https://cloud.langfuse.com';
 
   public get LANGFUSE_PROJECT_ID(): string {
     const fromMeta = typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_LANGFUSE_PROJECT_ID;
@@ -91,7 +86,6 @@ export class AdminTelemetryService {
   private cachedTTS: RealTTSRecord[] = [];
 
   private listeners: Set<TelemetryListener> = new Set();
-  private isInitialized = false;
 
   constructor() {
     this.ensureBootstrapAdmin();
@@ -216,12 +210,6 @@ export class AdminTelemetryService {
   private saveErrorsToStorage() {
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.setItem(this.STORAGE_ERRORS, JSON.stringify(this.cachedErrors.slice(0, 100)));
-    }
-  }
-
-  private saveTTSToStorage() {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem(this.STORAGE_TTS, JSON.stringify(this.cachedTTS.slice(-100)));
     }
   }
 
@@ -387,7 +375,6 @@ export class AdminTelemetryService {
       // Update users project counts & activities
       this.updateUsersFromProjects(allProjects);
 
-      this.isInitialized = true;
       this.notifyListeners();
     } catch (err) {
       console.warn('Failed to sync real telemetry data:', err);
@@ -546,20 +533,6 @@ export class AdminTelemetryService {
   /**
    * Updates user role
    */
-  public changeUserRole(userId: string, newRole: UserRole): boolean {
-    const u = this.cachedUsers.find((x) => x.id === userId);
-    if (u) {
-      if (u.email.toLowerCase() === 'hkthien@husc.edu.vn' && newRole !== 'admin') {
-        return false; // Root Admin cannot be demoted
-      }
-      u.role = newRole;
-      this.saveUsersToStorage();
-      this.notifyListeners();
-      return true;
-    }
-    return false;
-  }
-
   /**
    * Resolves an error
    */

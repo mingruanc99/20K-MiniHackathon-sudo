@@ -70,7 +70,6 @@ export class VisualIntentGenerator {
 
     // Guarantee: Every scene must have at least 1 pedagogical visual cue
     if (cues.length === 0 && sentences.length > 0) {
-      const firstSent = sentences[0];
       const fallbackSpec = this.createPedagogicalFallbackCue(plan, 0);
       cues.push({
         cue_id: `vc_${plan.section_id}_01`,

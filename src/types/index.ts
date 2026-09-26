@@ -3,6 +3,10 @@
  * Shared TypeScript type definitions for CLSG-IR System
  */
 import { LearningNeed } from './lessonModel';
+import { LessonModel, ContentPrioritization, TeachingUnit } from './lessonModel';
+import { KnowledgeTree } from './knowledgeTree';
+import { NarrativeIR } from './narrative';
+import { KnowledgeIR, CurriculumIR } from './knowledgeSpace';
 
 export type UserRole = 'admin' | 'instructor' | 'student' | 'researcher';
 
@@ -27,7 +31,8 @@ export interface SourceAsset {
 }
 
 export type LearnerLevel = 'beginner' | 'undergraduate' | 'graduate' | 'professional';
-export type NarrationStyle = 'conversational' | 'academic' | 'rigorous' | 'engaging';
+/** 'meme' and 'engineering' only change the LLM engine's wording (styleProfiles.ts); facts and formulas never change. */
+export type NarrationStyle = 'conversational' | 'academic' | 'rigorous' | 'engaging' | 'meme' | 'engineering';
 export type VisualDensity = 'minimal' | 'balanced' | 'rich';
 
 export interface LanguagePolicy {
@@ -122,7 +127,9 @@ export interface ContentElement {
 export type VisualRegionKind = 'picture' | 'table' | 'chart' | 'diagram' | 'smartart' | 'scanned_page' | 'manual';
 
 export interface RegionOcrResult {
-  engine: 'gemini' | 'tesseract' | 'native';
+  engine: 'gemini' | 'vietocr' | 'tesseract' | 'native';
+  /** True when the reading came from the local OCR cache (no tokens or server time spent). */
+  cached?: boolean;
   status: 'pending' | 'done' | 'skipped' | 'failed';
   content_type?: 'table' | 'diagram' | 'chart' | 'text' | 'photo' | 'formula';
   /** Plain reading of the region (used by narration and keyword extraction). */
@@ -367,7 +374,6 @@ export interface SectionPlan {
 }
 
 export * from './lessonModel';
-import { LessonModel, ContentPrioritization, TeachingUnit } from './lessonModel';
 
 export interface LessonBlueprint {
   blueprint_id: string;
@@ -473,6 +479,12 @@ export interface CLSGScene {
   prosody_plan: ProsodyPlan;
   visual_cues: VisualCue[];
   section_summary?: string;
+  /** Formulas to show on screen, verbatim from the source (enforced by the guard). */
+  formulas?: string[];
+  /** Who wrote the narration: the LLM, or the template engine (also when the LLM call failed). */
+  narration_source?: 'llm' | 'template';
+  /** Per-sentence studio script lines written by the LLM (delivery, screen text, component). */
+  studio_lines?: StudioLine[];
   scene_start_time_sec: number;
   scene_end_time_sec: number;
   scene_duration_sec: number;
@@ -490,6 +502,8 @@ export interface ValidationCheck {
   actual_value: any;
   message: string;
   auto_repaired?: boolean;
+  /** Advisory only: at worst a WARNING, never lowers the verdict and never has to be fixed. */
+  optional?: boolean;
 }
 
 export * from './guard';
@@ -528,9 +542,39 @@ export interface QualityReport {
 export * from './narrative';
 export * from './knowledgeSpace';
 export * from './knowledgeTree';
-import { KnowledgeTree } from './knowledgeTree';
-import { NarrativeIR } from './narrative';
-import { KnowledgeIR, CurriculumIR } from './knowledgeSpace';
+
+/** One spoken sentence of the studio script (source/HANDOFF-TEAM-KICH-BAN.md). */
+export interface StudioLine {
+  delivery: 'kể' | 'giảng' | 'thân mật' | 'hỏi' | 'chốt';
+  speech: string;
+  screen: string;
+  /** Video Studio component id (pipeline/export/studioComponents.ts). */
+  component: string;
+}
+
+/** Review quiz written by the LLM: question -> pause -> model answer. */
+export interface StudioQuizItem {
+  question: string;
+  options: { A: string; B: string; C: string };
+  answer: 'A' | 'B' | 'C';
+  explanation: string;
+}
+
+/** Formulas and definitions of the whole lesson, first appearance only (pipeline/services/lessonIndex.ts). */
+export interface LessonIndexEntry {
+  kind: 'formula' | 'definition';
+  /** Verbatim source text: the formula, or the definition body. */
+  text: string;
+  /** Defined term (definitions) or left-hand side (formulas, when there is one). */
+  term?: string;
+  section_id: string;
+  /** 1-based page order of the first appearance. */
+  order: number;
+}
+
+export interface LessonIndex {
+  entries: LessonIndexEntry[];
+}
 
 export interface VerifiedCLSG_IR {
   ir_version: string;
@@ -549,6 +593,10 @@ export interface VerifiedCLSG_IR {
   lesson_model?: LessonModel;
   content_prioritization?: ContentPrioritization;
   teaching_units?: TeachingUnit[];
+  lesson_index?: LessonIndex;
+  studio_quiz?: StudioQuizItem[];
+  /** Problems the user must know about (LLM rate limit, fallback to the template engine...). */
+  generation_notes?: string[];
   quality_report: QualityReport;
   verified_at: string;
 }

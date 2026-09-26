@@ -109,23 +109,17 @@ npm run build
 
 ---
 
-## 🕹️ Experience the 1-Click CNN Demo
+## 🕹️ Demo Walkthrough
 
-1. Click **"⚡ 1-Click Demo Sign-In (Prof. Alex Rivers)"** on `/login`.
-2. On `/dashboard`, click **"New Project"**.
-3. Select the pre-loaded **"1-Click CNN Demo"** card (5 Slides, 180s target duration).
-4. Click **"Create & Launch Studio"** to execute all 4 stages:
-   - **Structure (M1)**: Rule-based extraction in $<4$ ms.
-   - **Instruction Plan (M2)**: $W_{\text{target}} = 344$ words at 140 WPM with Bloom's taxonomy.
-   - **Narration (3A)**: Spoken audio script with Web Speech audio player.
-   - **Prosody (3B)**: 4 pause types and W3C SSML.
-   - **Visual Intent (3C)**: 13 canonical taxonomies with necessity justifications.
-   - **Quality Guard (M4)**: measures DAR-P (target $\le 15\%$) and the other metrics on every run; results and token usage are in the run log.
-   - **CLSG-IR (OUT)**: Intermediate Representation JSON with copy and download.
-   - **Video Preview (SYN)**: Video simulation timeline synchronized to audio timestamps.
-5. Expand the **Instructional Decision Trace** at the bottom for cognitive audit explainability.
-
----
+1. On `/login`, use a demo sign-in (or Google / email).
+2. On the lecture board (`/`), click **new lecture** (`/lectures/new`) and upload a deck (`data/demo/cnn_intro.pptx` works). Pick coverage, learner level, language, and **Theo mẫu** (0 tokens) or **AI viết** + a narration style.
+3. The scan builds the weighted knowledge tree. On `/lectures/:id` review structure and time, then generate:
+   - **M1 Extraction**: slides, tables, charts; located regions OCR'd (VietOCR server if `VITE_VIETOCR_URL` is set, else tesseract.js; Gemini for diagrams/charts/formulas).
+   - **M2 Planning**: word budgets from duration × WPM.
+   - **M3 Narration / Prosody / Visual intent**: template or LLM narration, SSML pauses, visual cues.
+   - **M4 Quality Guard**: DAR-P, grounding, formula integrity, style conformance and more (`docs/specs/EVALUATION.md`).
+4. Download the **Studio script (.md)** (`source/HANDOFF-TEAM-KICH-BAN.md` format), plain script, SSML or CLSG-IR JSON.
+5. **Nâng cao** (`/knowledge`) opens the knowledge tree and region/OCR inspector.
 
 ---
 
@@ -133,11 +127,9 @@ npm run build
 
 ```
 T032/
-├── app/                  # FastAPI Python backend (endpoints & microservices)
-├── app.py                # Single-command Python backend launcher
-├── config/               # Shared domain configuration (technical_terms.json)
+├── api/                  # Vercel serverless functions (Gemini proxy, Langfuse relay)
 ├── data/                 # Sample presentations and demo test assets
-│   └── demo/             # CNN slide deck and demo JSON
+│   └── demo/             # Sample decks (CNN, pose estimation) and demo JSON
 ├── docs/                 # Comprehensive documentation categorized by topic
 │   ├── architecture/     # System architecture, schemas, and end-to-end data flow
 │   ├── audits/           # Technical audits (architecture, focus, narrative)
@@ -145,16 +137,18 @@ T032/
 │   ├── specs/            # API contracts, database, evaluation benchmarks
 │   ├── assets/           # Diagrams, architecture posters, and media
 │   └── reports/          # Formal proposal deliverables & Word documents
+├── ocr_server/           # Optional VietOCR region OCR service (Python, Docker)
 ├── references/           # Academic research papers (EduCraft, Prosodic)
+├── source/               # Studio script handoff spec and samples
 ├── scripts/              # Automation tools (diagram rendering, report compilation)
 ├── src/                  # React 18 + TypeScript Web Studio & Pipeline
 │   ├── components/       # UI components & Admin Control Center modules
 │   ├── contexts/         # Authentication & state management
-│   ├── pages/            # Studio, Dashboard, Player, Admin pages
-│   ├── pipeline/         # 4-stage CLSG-IR generation & purification engine
+│   ├── pages/            # Lecture board, new lecture, lecture, knowledge inspector, admin
+│   ├── pipeline/         # 4-stage CLSG-IR pipeline, guard, studio script export
 │   ├── services/         # Firebase, Cloudinary, Gemini, Admin Telemetry
 │   └── types/            # TypeScript interfaces & CLSG-IR schemas
-├── tests/                # Automated test suites (Python unit tests & 19 TS tests)
+├── tests/                # Pipeline test suite (npm test)
 │   └── ts/pipeline.test.js
 ├── README.md             # Project overview & local runbook
 └── package.json, vite.config.ts, tsconfig.json, tailwind.config.js
